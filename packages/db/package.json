@@ -1,0 +1,14 @@
+{
+  "name": "@testseed/db",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@testseed/types": "*",
+    "mongoose": "^8.0.0"
+  }
+}
