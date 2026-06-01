@@ -17,6 +17,8 @@ On macOS or Linux, use `cp .env.example .env`.
 ## Project Docs
 
 - [Design](DESIGN.md)
+- [Web UI design context](docs/ui-design.md)
+- [GitHub auth direction](docs/github-auth-design.md)
 - [Contributing](CONTRIBUTING.md)
 - [Architecture decisions](docs/adr/)
 - [Requirements](docs/requirements.md)

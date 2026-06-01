@@ -47,3 +47,7 @@ Owns the HTTP interface. It validates requests with Zod, authenticates with JWT 
 ### `@testseed/web`
 
 Owns the Next.js user experience. It displays forms, previews, auth flows, feedback loops, export controls, and rollback screens. It calls the API through `src/lib/api-client.ts`.
+
+## Web UI Direction
+
+The web UI uses the dark terminal-precision system documented in [`docs/ui-design.md`](docs/ui-design.md). Future screens should reuse the same tokens, shadcn-style primitives, Geist typography, 240px sidebar app shell, and API-client-only data access rule.
