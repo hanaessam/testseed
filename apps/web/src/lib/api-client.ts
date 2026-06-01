@@ -1,9 +1,26 @@
-import type { AuthRequest, AuthResponse } from "@testseed/types";
+import type {
+  AuthRequest,
+  AuthResponse,
+  RegistrationOtpRequest,
+  RegistrationOtpResponse,
+  VerifyRegistrationOtpRequest
+} from "@testseed/types";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-export async function register(request: AuthRequest): Promise<AuthResponse> {
-  return postAuth("/auth/register", request);
+export async function requestRegistrationOtp(
+  request: RegistrationOtpRequest
+): Promise<RegistrationOtpResponse> {
+  return postJson<RegistrationOtpRequest, RegistrationOtpResponse>(
+    "/auth/register/request-otp",
+    request
+  );
+}
+
+export async function verifyRegistrationOtp(
+  request: VerifyRegistrationOtpRequest
+): Promise<AuthResponse> {
+  return postAuth("/auth/register/verify-otp", request);
 }
 
 export async function login(request: AuthRequest): Promise<AuthResponse> {
@@ -14,7 +31,28 @@ export function getGitHubAuthUrl(): string {
   return `${apiBaseUrl}/auth/github`;
 }
 
-async function postAuth(path: string, request: AuthRequest): Promise<AuthResponse> {
+async function postAuth(
+  path: string,
+  request: AuthRequest | VerifyRegistrationOtpRequest
+): Promise<AuthResponse> {
+  const authResponse = await postJson<AuthRequest | VerifyRegistrationOtpRequest, AuthResponse>(
+    path,
+    request
+  );
+
+  return {
+    ...authResponse,
+    user: {
+      ...authResponse.user,
+      createdAt: new Date(authResponse.user.createdAt)
+    }
+  };
+}
+
+async function postJson<RequestBody, ResponseBody>(
+  path: string,
+  request: RequestBody
+): Promise<ResponseBody> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: "POST",
     headers: {
@@ -23,18 +61,12 @@ async function postAuth(path: string, request: AuthRequest): Promise<AuthRespons
     body: JSON.stringify(request)
   });
 
-  const body = (await response.json()) as AuthResponse | { message?: string };
+  const body = (await response.json()) as ResponseBody | { message?: string };
 
   if (!response.ok) {
-    throw new Error("message" in body && body.message ? body.message : "Authentication failed");
+    const errorBody = body as { message?: string };
+    throw new Error(errorBody.message ?? "Authentication failed");
   }
 
-  const authResponse = body as AuthResponse;
-  return {
-    ...authResponse,
-    user: {
-      ...authResponse.user,
-      createdAt: new Date(authResponse.user.createdAt)
-    }
-  };
+  return body as ResponseBody;
 }

@@ -1,27 +1,79 @@
-import { AuthError, loginUser, registerUser } from "@testseed/core";
-import type { createUserRepository } from "@testseed/db";
+import {
+  AuthError,
+  loginUser,
+  requestRegistrationOtp,
+  verifyRegistrationOtp,
+  type RegistrationOtpEmailMessage
+} from "@testseed/core";
+import type { createRegistrationOtpCache, createUserRepository } from "@testseed/db";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
 
 type UserRepository = ReturnType<typeof createUserRepository>;
+type RegistrationOtpCache = ReturnType<typeof createRegistrationOtpCache>;
 
 const authRequestSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1)
 });
 
-export function createAuthRouter(userRepository: UserRepository, jwtSecret: string): Router {
+const requestRegistrationOtpSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+  confirmPassword: z.string().min(1)
+});
+
+const verifyRegistrationOtpSchema = z.object({
+  email: z.string().email(),
+  otp: z.string().regex(/^\d{6}$/)
+});
+
+export interface AuthRouterConfig {
+  jwtSecret: string;
+  otpTtlSeconds: number;
+  otpMaxAttempts: number;
+}
+
+export function createAuthRouter(
+  userRepository: UserRepository,
+  registrationOtpCache: RegistrationOtpCache,
+  sendRegistrationOtpEmail: (message: RegistrationOtpEmailMessage) => Promise<void>,
+  config: AuthRouterConfig
+): Router {
   const router = Router();
 
   router.post(
-    "/register",
-    validateBody(authRequestSchema),
+    "/register/request-otp",
+    validateBody(requestRegistrationOtpSchema),
     async (request: Request, response: Response, next: NextFunction) => {
       try {
-        const result = await registerUser(request.body, {
-          jwtSecret,
+        const result = await requestRegistrationOtp(request.body, {
           findUserByEmail: userRepository.findUserByEmail,
+          savePendingRegistration: registrationOtpCache.savePendingRegistration,
+          sendRegistrationOtpEmail,
+          otpTtlSeconds: config.otpTtlSeconds,
+          otpMaxAttempts: config.otpMaxAttempts
+        });
+        response.status(202).json(result);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/register/verify-otp",
+    validateBody(verifyRegistrationOtpSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const result = await verifyRegistrationOtp(request.body, {
+          jwtSecret: config.jwtSecret,
+          findUserByEmail: userRepository.findUserByEmail,
+          findPendingRegistration: registrationOtpCache.findPendingRegistration,
+          consumePendingRegistrationAttempt:
+            registrationOtpCache.consumePendingRegistrationAttempt,
+          deletePendingRegistration: registrationOtpCache.deletePendingRegistration,
           createUser: userRepository.createUser
         });
         response.status(201).json(result);
@@ -37,7 +89,7 @@ export function createAuthRouter(userRepository: UserRepository, jwtSecret: stri
     async (request: Request, response: Response, next: NextFunction) => {
       try {
         const result = await loginUser(request.body, {
-          jwtSecret,
+          jwtSecret: config.jwtSecret,
           findUserByEmail: userRepository.findUserByEmail
         });
         response.status(200).json(result);

@@ -19,6 +19,7 @@ On macOS or Linux, use `cp .env.example .env`.
 - [Design](DESIGN.md)
 - [Web UI design context](docs/ui-design.md)
 - [GitHub auth direction](docs/github-auth-design.md)
+- [Email OTP registration](docs/auth-email-otp.md)
 - [Contributing](CONTRIBUTING.md)
 - [Architecture decisions](docs/adr/)
 - [Requirements](docs/requirements.md)
