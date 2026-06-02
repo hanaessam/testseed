@@ -67,6 +67,35 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
-export interface LogoutResponse {
+export type LogoutResponse = {
   message: string;
+};
+
+export interface SchemaField {
+  name: string;
+  type: string; // e.g., "String", "Number", "Boolean", "Date", "ObjectId", "Array", "Mixed"
+  required: boolean;
+  unique: boolean;
+  enum?: string[];
+  ref?: string; // Referenced collection/model name if ObjectId
+  defaultValue?: string;
 }
+
+export interface CollectionSchema {
+  name: string; // e.g. "User", "Product"
+  fields: SchemaField[];
+}
+
+export interface ParsedSchema {
+  collections: CollectionSchema[];
+}
+
+export interface ParseSchemaRequest {
+  schemaText: string;
+}
+
+export interface ParseSchemaResponse {
+  schema: ParsedSchema;
+  warnings?: string[];
+}
+

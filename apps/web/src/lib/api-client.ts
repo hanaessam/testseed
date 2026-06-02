@@ -4,7 +4,9 @@ import type {
   LogoutResponse,
   RegistrationOtpRequest,
   RegistrationOtpResponse,
-  VerifyRegistrationOtpRequest
+  VerifyRegistrationOtpRequest,
+  ParseSchemaRequest,
+  ParseSchemaResponse
 } from "@testseed/types";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -30,6 +32,17 @@ export async function login(request: AuthRequest): Promise<AuthResponse> {
 
 export async function logout(token: string): Promise<LogoutResponse> {
   return postJson<undefined, LogoutResponse>("/auth/logout", undefined, token);
+}
+
+export async function parseSchema(
+  request: ParseSchemaRequest,
+  token: string
+): Promise<ParseSchemaResponse> {
+  return postJson<ParseSchemaRequest, ParseSchemaResponse>(
+    "/schemas/parse",
+    request,
+    token
+  );
 }
 
 export function getGitHubAuthUrl(): string {

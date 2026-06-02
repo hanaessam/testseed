@@ -12,6 +12,7 @@ import path from "node:path";
 import { createRegistrationOtpEmailSender } from "./email/registration-otp-email";
 import { requireAuth } from "./middleware/auth";
 import { authErrorHandler, createAuthRouter } from "./routes/auth";
+import { createSchemaRouter } from "./routes/schema";
 
 dotenv.config({
   path: findRootEnvPath()
@@ -97,6 +98,7 @@ app.use(
     authRouterConfig
   )
 );
+app.use("/schemas", createSchemaRouter());
 app.use(authErrorHandler);
 app.use(
   (
