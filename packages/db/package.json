@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@testseed/types": "*",
+    "@upstash/redis": "^1.38.0",
     "mongoose": "^8.0.0"
   }
 }
