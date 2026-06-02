@@ -5,7 +5,8 @@ const publicAuthPaths = new Set([
   "/auth/register/request-otp",
   "/auth/register/verify-otp",
   "/auth/login",
-  "/auth/github"
+  "/auth/github",
+  "/auth/github/callback"
 ]);
 
 export function requireAuth(jwtSecret: string) {

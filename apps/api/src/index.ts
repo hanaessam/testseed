@@ -37,6 +37,10 @@ const smtpSecure = process.env.SMTP_SECURE === "true";
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
 const smtpFrom = process.env.SMTP_FROM;
+const githubClientId = process.env.GITHUB_CLIENT_ID;
+const githubClientSecret = process.env.GITHUB_CLIENT_SECRET;
+const githubCallbackUrl = process.env.GITHUB_CALLBACK_URL;
+const webAppUrl = process.env.WEB_APP_URL;
 
 if (!mongoUri) {
   throw new Error("MONGODB_URI is required");
@@ -72,7 +76,11 @@ const sendRegistrationOtpEmail = createRegistrationOtpEmailSender({
 const authRouterConfig = {
   jwtSecret,
   otpTtlSeconds: Number(process.env.OTP_TTL_SECONDS ?? 600),
-  otpMaxAttempts: Number(process.env.OTP_MAX_ATTEMPTS ?? 5)
+  otpMaxAttempts: Number(process.env.OTP_MAX_ATTEMPTS ?? 5),
+  githubClientId,
+  githubClientSecret,
+  githubCallbackUrl,
+  webAppUrl
 };
 
 export const app = express();

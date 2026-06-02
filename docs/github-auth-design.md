@@ -16,13 +16,16 @@ TestSeed already protects API routes with JWT middleware. Keeping GitHub auth in
 4. Express exchanges the code using `GITHUB_CLIENT_SECRET`.
 5. Express fetches the GitHub profile email.
 6. Core resolves or creates a TestSeed user through injected dependencies.
-7. Express returns or redirects with the standard JWT response.
+7. Express creates the standard JWT response.
+8. Express redirects to the web callback page with the token.
+9. The web callback stores the token and redirects the browser to `/dashboard`.
 
 ## Environment Variables
 
 - `GITHUB_CLIENT_ID`
 - `GITHUB_CLIENT_SECRET`
 - `GITHUB_CALLBACK_URL`
+- `WEB_APP_URL`
 
 ## Architecture Rules
 

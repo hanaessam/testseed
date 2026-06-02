@@ -29,6 +29,22 @@ export interface LoginUserDeps {
   findUserByEmail(email: string): Promise<User | null>;
 }
 
+export interface GitHubAuthorizationUrlRequest {
+  clientId: string;
+  callbackUrl: string;
+}
+
+export interface GitHubLoginRequest {
+  email: string;
+}
+
+export interface GitHubLoginDeps {
+  jwtSecret: string;
+  findUserByEmail(email: string): Promise<User | null>;
+  createUser(input: CreateUserInput): Promise<User>;
+  now?(): Date;
+}
+
 export interface SavePendingRegistrationInput extends PendingRegistration {}
 
 export interface RegistrationOtpEmailMessage {
@@ -254,10 +270,53 @@ export async function loginUser(
   return toAuthResponse(user, deps.jwtSecret);
 }
 
+export async function resolveGitHubLogin(
+  request: GitHubLoginRequest,
+  deps: GitHubLoginDeps
+): Promise<AuthResponse> {
+  const normalizedEmail = normalizeEmail(request.email);
+  if (!normalizedEmail) {
+    throw new AuthError(
+      "INVALID_GITHUB_EMAIL",
+      400,
+      "GitHub did not provide a usable email address"
+    );
+  }
+
+  const existingUser = await deps.findUserByEmail(normalizedEmail);
+  if (existingUser) {
+    return toAuthResponse(existingUser, deps.jwtSecret);
+  }
+
+  const createdAt = deps.now?.() ?? new Date();
+  const passwordHash = await bcrypt.hash(
+    `github-oauth:${normalizedEmail}:${createdAt.toISOString()}`,
+    10
+  );
+  const user = await deps.createUser({
+    email: normalizedEmail,
+    passwordHash,
+    createdAt
+  });
+
+  return toAuthResponse(user, deps.jwtSecret);
+}
+
 export function logoutUser(): LogoutResponse {
   return {
     message: "Logged out"
   };
+}
+
+export function createGitHubAuthorizationUrl(
+  request: GitHubAuthorizationUrlRequest
+): string {
+  const url = new URL("https://github.com/login/oauth/authorize");
+  url.searchParams.set("client_id", request.clientId);
+  url.searchParams.set("redirect_uri", request.callbackUrl);
+  url.searchParams.set("scope", "read:user user:email");
+
+  return url.toString();
 }
 
 function normalizeEmail(email: string): string {
