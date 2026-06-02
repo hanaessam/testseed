@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { logout } from "@/src/lib/api-client";
+import { clearStoredSession, getStoredAuthToken } from "@/src/lib/session";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,14 +13,14 @@ export function LogoutButton() {
 
   async function handleLogout() {
     setIsLoading(true);
-    const token = window.localStorage.getItem("testseedToken");
+    const token = getStoredAuthToken();
 
     try {
       if (token) {
         await logout(token);
       }
     } finally {
-      window.localStorage.removeItem("testseedToken");
+      clearStoredSession();
       router.replace("/login");
       router.refresh();
     }

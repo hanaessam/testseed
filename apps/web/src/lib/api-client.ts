@@ -6,7 +6,11 @@ import type {
   RegistrationOtpResponse,
   VerifyRegistrationOtpRequest,
   ParseSchemaRequest,
-  ParseSchemaResponse
+  ParseSchemaResponse,
+  CurrentUserResponse,
+  ListProjectsResponse,
+  ProjectHistoryResponse,
+  Project
 } from "@testseed/types";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -34,6 +38,55 @@ export async function logout(token: string): Promise<LogoutResponse> {
   return postJson<undefined, LogoutResponse>("/auth/logout", undefined, token);
 }
 
+export async function getCurrentUser(token: string): Promise<CurrentUserResponse> {
+  const response = await getJson<CurrentUserResponse>("/auth/me", token);
+  return {
+    user: response.user
+      ? {
+          ...response.user,
+          createdAt: new Date(response.user.createdAt)
+        }
+      : null
+  };
+}
+
+export async function createProject(
+  request: { name: string; description?: string },
+  token: string
+): Promise<{ project: Project }> {
+  return postJson<typeof request, { project: Project }>("/projects", request, token);
+}
+
+export async function listProjects(token: string): Promise<ListProjectsResponse> {
+  const response = await getJson<ListProjectsResponse>("/projects", token);
+  return {
+    projects: response.projects.map(toProject)
+  };
+}
+
+export async function listProjectHistory(
+  projectId: string,
+  token: string
+): Promise<ProjectHistoryResponse> {
+  const response = await getJson<ProjectHistoryResponse>(
+    `/projects/${encodeURIComponent(projectId)}/history`,
+    token
+  );
+
+  return {
+    project: response.project ? toProject(response.project) : null,
+    events: response.events.map((event) => ({
+      ...event,
+      createdAt: new Date(event.createdAt)
+    })),
+    seedBatches: response.seedBatches.map((batch) => ({
+      ...batch,
+      createdAt: new Date(batch.createdAt),
+      rolledBackAt: batch.rolledBackAt ? new Date(batch.rolledBackAt) : undefined
+    }))
+  };
+}
+
 export async function parseSchema(
   request: ParseSchemaRequest,
   token: string
@@ -43,6 +96,13 @@ export async function parseSchema(
     request,
     token
   );
+}
+
+async function getJson<ResponseBody>(
+  path: string,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson<undefined, ResponseBody>("GET", path, undefined, token);
 }
 
 export function getGitHubAuthUrl(): string {
@@ -72,6 +132,15 @@ async function postJson<RequestBody, ResponseBody>(
   request: RequestBody,
   token?: string
 ): Promise<ResponseBody> {
+  return requestJson("POST", path, request, token);
+}
+
+async function requestJson<RequestBody, ResponseBody>(
+  method: "GET" | "POST",
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
   let response: Response;
   const headers: HeadersInit = {
     "Content-Type": "application/json"
@@ -83,7 +152,7 @@ async function postJson<RequestBody, ResponseBody>(
 
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
-      method: "POST",
+      method,
       headers,
       body: request === undefined ? undefined : JSON.stringify(request)
     });
@@ -106,4 +175,12 @@ async function postJson<RequestBody, ResponseBody>(
   }
 
   return body as ResponseBody;
+}
+
+function toProject(project: Project): Project {
+  return {
+    ...project,
+    createdAt: new Date(project.createdAt),
+    updatedAt: new Date(project.updatedAt)
+  };
 }

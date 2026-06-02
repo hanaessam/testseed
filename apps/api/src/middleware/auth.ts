@@ -1,6 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
+export interface RequestAuthContext {
+  userId: string;
+}
+
+export interface AuthenticatedRequest extends Request {
+  auth?: RequestAuthContext;
+}
+
 const publicAuthPaths = new Set([
   "/auth/register/request-otp",
   "/auth/register/verify-otp",
@@ -27,7 +35,15 @@ export function requireAuth(jwtSecret: string) {
     }
 
     try {
-      jwt.verify(token, jwtSecret);
+      const payload = jwt.verify(token, jwtSecret) as jwt.JwtPayload;
+      if (typeof payload.sub !== "string" || !payload.sub) {
+        response.status(401).json({ message: "Authentication required" });
+        return;
+      }
+
+      (request as AuthenticatedRequest).auth = {
+        userId: payload.sub
+      };
       next();
     } catch {
       response.status(401).json({ message: "Authentication required" });

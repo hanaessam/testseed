@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Loader2, AlertCircle, Database, Check, RefreshCw, Layers } from "lucide-react";
-import { parseSchema } from "@/src/lib/api-client";
-import { ParsedSchema, CollectionSchema } from "@testseed/types";
+import { Sparkles, Loader2, AlertCircle, Database, Layers } from "lucide-react";
+import { createProject, parseSchema } from "@/src/lib/api-client";
+import { getStoredSession } from "@/src/lib/session";
+import { ParsedSchema } from "@testseed/types";
 
 export default function GeneratePage() {
   const [projectDescription, setProjectDescription] = useState("");
@@ -19,13 +20,14 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [activeCollectionIdx, setActiveCollectionIdx] = useState<number>(0);
 
   // Retrieve auth token on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedToken = window.localStorage.getItem("testseedToken");
-      setToken(storedToken);
+      const session = getStoredSession();
+      setToken(session?.token ?? null);
     }
   }, []);
 
@@ -44,7 +46,23 @@ export default function GeneratePage() {
         throw new Error("You must be logged in to parse schemas. Please sign in first.");
       }
 
-      const response = await parseSchema({ schemaText }, token);
+      let activeProjectId = projectId;
+      if (!activeProjectId) {
+        const project = await createProject(
+          {
+            name: projectDescription.trim() || "Untitled generation project",
+            description: projectDescription.trim() || undefined
+          },
+          token
+        );
+        activeProjectId = project.project.id;
+        setProjectId(activeProjectId);
+      }
+
+      const response = await parseSchema(
+        { schemaText, projectId: activeProjectId, source: "manual" },
+        token
+      );
       setParsedSchema(response.schema);
       if (response.warnings && response.warnings.length > 0) {
         setWarnings(response.warnings);
