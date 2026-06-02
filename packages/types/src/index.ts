@@ -66,3 +66,7 @@ export interface AuthResponse {
   token: string;
   user: AuthUser;
 }
+
+export interface LogoutResponse {
+  message: string;
+}

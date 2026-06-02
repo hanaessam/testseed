@@ -5,6 +5,7 @@ import type {
   PasswordValidationResult,
   RegistrationOtpRequest,
   RegistrationOtpResponse,
+  LogoutResponse,
   User,
   VerifyRegistrationOtpRequest
 } from "@testseed/types";
@@ -251,6 +252,12 @@ export async function loginUser(
   }
 
   return toAuthResponse(user, deps.jwtSecret);
+}
+
+export function logoutUser(): LogoutResponse {
+  return {
+    message: "Logged out"
+  };
 }
 
 function normalizeEmail(email: string): string {

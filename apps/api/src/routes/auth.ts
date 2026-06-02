@@ -1,6 +1,7 @@
 import {
   AuthError,
   loginUser,
+  logoutUser,
   requestRegistrationOtp,
   verifyRegistrationOtp,
   type RegistrationOtpEmailMessage
@@ -96,6 +97,13 @@ export function createAuthRouter(
       } catch (error) {
         next(error);
       }
+    }
+  );
+
+  router.post(
+    "/logout",
+    (_request: Request, response: Response) => {
+      response.status(200).json(logoutUser());
     }
   );
 

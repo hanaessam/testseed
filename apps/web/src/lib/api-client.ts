@@ -1,6 +1,7 @@
 import type {
   AuthRequest,
   AuthResponse,
+  LogoutResponse,
   RegistrationOtpRequest,
   RegistrationOtpResponse,
   VerifyRegistrationOtpRequest
@@ -27,6 +28,10 @@ export async function login(request: AuthRequest): Promise<AuthResponse> {
   return postAuth("/auth/login", request);
 }
 
+export async function logout(token: string): Promise<LogoutResponse> {
+  return postJson<undefined, LogoutResponse>("/auth/logout", undefined, token);
+}
+
 export function getGitHubAuthUrl(): string {
   return `${apiBaseUrl}/auth/github`;
 }
@@ -51,17 +56,23 @@ async function postAuth(
 
 async function postJson<RequestBody, ResponseBody>(
   path: string,
-  request: RequestBody
+  request: RequestBody,
+  token?: string
 ): Promise<ResponseBody> {
   let response: Response;
+  const headers: HeadersInit = {
+    "Content-Type": "application/json"
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(request)
+      headers,
+      body: request === undefined ? undefined : JSON.stringify(request)
     });
   } catch {
     throw new Error(`Could not reach the API at ${apiBaseUrl}. Start @testseed/api and check its server logs.`);

@@ -1,3 +1,4 @@
+import { LogoutButton } from "@/components/auth/logout-button";
 import { Wordmark } from "@/components/brand/wordmark";
 import { Button } from "@/components/ui/button";
 import { BarChart3, History, Settings, Sprout } from "lucide-react";
@@ -50,6 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <BarChart3 className="h-4 w-4" />
             Workspace
           </Button>
+          <LogoutButton />
         </div>
       </aside>
 

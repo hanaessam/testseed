@@ -1,9 +1,16 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
+const publicAuthPaths = new Set([
+  "/auth/register/request-otp",
+  "/auth/register/verify-otp",
+  "/auth/login",
+  "/auth/github"
+]);
+
 export function requireAuth(jwtSecret: string) {
   return (request: Request, response: Response, next: NextFunction) => {
-    if (request.path.startsWith("/auth/")) {
+    if (publicAuthPaths.has(request.path)) {
       next();
       return;
     }
