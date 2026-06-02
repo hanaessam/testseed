@@ -7,12 +7,39 @@ TestSeed is a web application that helps developers generate realistic, schema-a
 ```sh
 git clone <repository-url>
 cd testseed
-npm install
-copy .env.example .env
-npx turbo dev
+npm run setup:dev
+npm run dev
 ```
 
-On macOS or Linux, use `cp .env.example .env`.
+`npm run setup:dev` installs all workspace packages and creates `.env` from `.env.example` when it does not already exist. Fill in local secrets before starting the app.
+
+The web app runs on `http://localhost:3000`. The API runs on `http://localhost:3001`.
+
+## Realtime Development
+
+Use the monorepo dev command for local hot reload:
+
+```sh
+npm run dev
+```
+
+The API uses Nodemon to restart when TypeScript files change. The web app uses the Next.js dev server for browser hot reload.
+
+## Docker Development
+
+Start MongoDB, the API, and the web app in containers:
+
+```sh
+npm run dev:docker
+```
+
+Docker Compose mounts the repository into the API and web containers, so code changes are picked up while the services are running. The Compose MongoDB service uses `mongodb://mongo:27017/testseed` inside the API container and stores data in a named Docker volume.
+
+Stop the containers with:
+
+```sh
+docker compose down
+```
 
 ## Build, Lint, and Test
 

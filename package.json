@@ -4,7 +4,9 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:docker": "docker compose up --build",
     "lint": "turbo run lint",
+    "setup:dev": "node scripts/setup-dev.mjs",
     "test": "turbo run test",
     "health": "npm install && npx turbo build lint test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
@@ -16,7 +18,7 @@
     "typescript": "5.9.2"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "packageManager": "npm@10.9.2",
   "workspaces": [

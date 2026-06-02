@@ -1,0 +1,77 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  api:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev --workspace @testseed/api"
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      JWT_SECRET: testseed-local-dev-secret
+      MONGODB_URI: mongodb://mongo:27017/testseed
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      OTP_TTL_SECONDS: 600
+      OTP_MAX_ATTEMPTS: 5
+      REDIS_URL: https://example-upstash-redis-url.upstash.io
+      REDIS_TOKEN: local-dev-token
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      SMTP_USER: local-dev-user
+      SMTP_PASS: local-dev-pass
+      SMTP_FROM: TestSeed <no-reply@testseed.local>
+      WEB_APP_URL: http://localhost:3000
+    volumes:
+      - .:/app
+      - root-node-modules:/app/node_modules
+      - api-node-modules:/app/apps/api/node_modules
+      - core-node-modules:/app/packages/core/node_modules
+      - db-node-modules:/app/packages/db/node_modules
+      - types-node-modules:/app/packages/types/node_modules
+    depends_on:
+      - mongo
+      - mailpit
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev --workspace @testseed/web -- --hostname 0.0.0.0"
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      WEB_APP_URL: http://localhost:3000
+    volumes:
+      - .:/app
+      - root-node-modules:/app/node_modules
+      - web-node-modules:/app/apps/web/node_modules
+      - types-node-modules:/app/packages/types/node_modules
+    depends_on:
+      - api
+
+  mailpit:
+    image: axllent/mailpit:v1.24
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "8025:8025"
+
+volumes:
+  mongo-data:
+  root-node-modules:
+  api-node-modules:
+  web-node-modules:
+  core-node-modules:
+  db-node-modules:
+  types-node-modules:
