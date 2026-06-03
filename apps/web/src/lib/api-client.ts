@@ -11,7 +11,12 @@ import type {
   ListProjectsResponse,
   ProjectHistoryResponse,
   ProjectDetailResponse,
+  RemoveRepositoryContextResponse,
+  StartRepositoryContextAuthorizationRequest,
+  StartRepositoryContextAuthorizationResponse,
   UpdateProjectRequest,
+  UpdateProjectContextRequest,
+  UpdateProjectContextResponse,
   UpdateProjectResponse,
   DeleteProjectRequest,
   DeleteProjectResponse,
@@ -92,6 +97,57 @@ export async function updateProject(
 
   return {
     project: toProject(response.project)
+  };
+}
+
+export async function updateProjectContext(
+  projectId: string,
+  request: UpdateProjectContextRequest,
+  token: string
+): Promise<UpdateProjectContextResponse> {
+  const response = await putJson<UpdateProjectContextRequest, UpdateProjectContextResponse>(
+    `/projects/${encodeURIComponent(projectId)}/context`,
+    request,
+    token
+  );
+
+  return {
+    project: toProject(response.project)
+  };
+}
+
+export async function startRepositoryContextAuthorization(
+  projectId: string,
+  request: StartRepositoryContextAuthorizationRequest,
+  token: string
+): Promise<StartRepositoryContextAuthorizationResponse> {
+  return postJson<
+    StartRepositoryContextAuthorizationRequest,
+    StartRepositoryContextAuthorizationResponse
+  >(`/projects/${encodeURIComponent(projectId)}/context/github/authorize`, request, token);
+}
+
+export async function removeRepositoryContext(
+  projectId: string,
+  token: string
+): Promise<RemoveRepositoryContextResponse> {
+  const response = await deleteJson<undefined, RemoveRepositoryContextResponse>(
+    `/projects/${encodeURIComponent(projectId)}/context/github`,
+    undefined,
+    token
+  );
+
+  return {
+    context: {
+      ...response.context,
+      updatedAt: new Date(response.context.updatedAt),
+      repository: response.context.repository
+        ? {
+            ...response.context.repository,
+            connectedAt: new Date(response.context.repository.connectedAt)
+          }
+        : undefined
+    }
   };
 }
 
@@ -354,6 +410,18 @@ async function requestJson<RequestBody, ResponseBody>(
 function toProject(project: Project): Project {
   return {
     ...project,
+    context: project.context
+      ? {
+          ...project.context,
+          updatedAt: new Date(project.context.updatedAt),
+          repository: project.context.repository
+            ? {
+                ...project.context.repository,
+                connectedAt: new Date(project.context.repository.connectedAt)
+              }
+            : undefined
+        }
+      : undefined,
     createdAt: new Date(project.createdAt),
     updatedAt: new Date(project.updatedAt),
     archivedAt: project.archivedAt ? new Date(project.archivedAt) : undefined

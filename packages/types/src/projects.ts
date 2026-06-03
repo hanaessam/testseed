@@ -5,11 +5,52 @@ export interface Project {
   ownerId: string;
   name: string;
   description?: string;
+  context?: ProjectContext;
   createdAt: Date;
   updatedAt: Date;
   archivedAt?: Date;
   activeSchemaVersion: number;
   activeSchemaSnapshotId?: string;
+}
+
+export type ContextWarningSeverity = "info" | "warning" | "error";
+
+export interface ContextWarning {
+  code: string;
+  message: string;
+  severity: ContextWarningSeverity;
+}
+
+export type RepositoryContextCategory =
+  | "schemas"
+  | "models"
+  | "seed_scripts"
+  | "documentation"
+  | "domain_terms";
+
+export type RepositoryContextAccessStatus =
+  | "connected"
+  | "unauthorized"
+  | "unavailable"
+  | "too_large"
+  | "no_useful_context";
+
+export interface RepositoryContextSource {
+  provider: "github";
+  repositoryFullName: string;
+  repositoryUrl: string;
+  accessStatus: RepositoryContextAccessStatus;
+  summary: string;
+  contextCategories: RepositoryContextCategory[];
+  warnings: ContextWarning[];
+  connectedAt: Date;
+}
+
+export interface ProjectContext {
+  description?: string;
+  repository?: RepositoryContextSource;
+  warnings: ContextWarning[];
+  updatedAt: Date;
 }
 
 export interface ProjectSchemaSnapshot {
@@ -25,6 +66,7 @@ export interface ProjectSchemaSnapshot {
 export type ProjectEventKind =
   | "project_created"
   | "project_updated"
+  | "project_context_updated"
   | "project_archived"
   | "project_restored"
   | "project_hard_deleted"
@@ -37,7 +79,9 @@ export type ProjectEventKind =
   | "generation_completed"
   | "seed_batch_recorded"
   | "rollback_requested"
-  | "rollback_completed";
+  | "rollback_completed"
+  | "repository_context_connected"
+  | "repository_context_removed";
 
 export interface ProjectEvent {
   id: string;
@@ -81,6 +125,28 @@ export interface UpdateProjectRequest {
 
 export interface UpdateProjectResponse {
   project: Project;
+}
+
+export interface UpdateProjectContextRequest {
+  description?: string;
+  clearRepositoryContext?: boolean;
+}
+
+export interface UpdateProjectContextResponse {
+  project: Project;
+}
+
+export interface StartRepositoryContextAuthorizationRequest {
+  repositoryFullName: string;
+}
+
+export interface StartRepositoryContextAuthorizationResponse {
+  authorizationUrl: string;
+  message: string;
+}
+
+export interface RemoveRepositoryContextResponse {
+  context: ProjectContext;
 }
 
 export type DeleteMode = "archive" | "hard";

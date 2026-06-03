@@ -135,7 +135,17 @@ GitHub account login should be implemented through the Express API, not directly
 5. The API creates the same JWT used by email/password login.
 6. The API redirects to the web callback page, which stores the token and sends the browser to `/dashboard`.
 
-Repository file access is a separate future feature from login. Add it behind explicit repository authorization and keep graceful fallback to manual schema input or MongoDB schema discovery when a repository is private, unavailable, too large, or lacks useful schema files.
+Repository context is separate from GitHub account login. Login continues to use the identity-only `/auth/github` flow, while project context uses a one-operation repository authorization from the project detail screen.
+
+For repository context:
+
+- Users provide an `owner/repo` repository name or paste a GitHub repository URL; `.git` suffixes are normalized before authorization.
+- The API requests repository access only for that context operation through the same registered `GITHUB_CALLBACK_URL` used by GitHub login.
+- The callback route reads the signed repository-context state, extracts context, and redirects back to the project detail page.
+- TestSeed uses OpenAI, when `OPENAI_API_KEY` is configured, to summarize useful repository code and README/docs into project domain context.
+- TestSeed stores only the generated repository summary, detected context categories, warnings, repository identity, and timestamps.
+- GitHub access tokens and raw repository file contents must be discarded after the operation and must not be stored in MongoDB, logs, local files, or project events.
+- Manual schema input and MongoDB schema discovery remain available when repository context is unavailable, unauthorized, too large, or not useful.
 
 ## Project Docs
 

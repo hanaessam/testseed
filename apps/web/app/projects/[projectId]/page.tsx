@@ -1,16 +1,26 @@
 "use client";
 
 import { AppShell } from "@/components/layout/app-shell";
+import {
+  ProjectContextForm,
+  ProjectContextSummary,
+  RepositoryContextPanel
+} from "@/components/project-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   deleteProject as deleteProjectRequest,
   deleteProjectSchema,
   getProjectDetail,
   listProjectHistory,
+  removeRepositoryContext,
   restoreProject as restoreProjectRequest,
   restoreProjectSchema,
+  startRepositoryContextAuthorization,
+  updateProject,
+  updateProjectContext,
   updateProjectSchema
 } from "@/src/lib/api-client";
 import { clearStoredSession, getStoredSession } from "@/src/lib/session";
@@ -59,6 +69,14 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
   const [schemaDraft, setSchemaDraft] = useState("");
   const [schemaSaveMessage, setSchemaSaveMessage] = useState<string | null>(null);
   const [isSavingSchema, setIsSavingSchema] = useState(false);
+  const [projectNameDraft, setProjectNameDraft] = useState("");
+  const [projectDetailsMessage, setProjectDetailsMessage] = useState<string | null>(null);
+  const [isSavingProjectDetails, setIsSavingProjectDetails] = useState(false);
+  const [contextDraft, setContextDraft] = useState("");
+  const [repositoryFullName, setRepositoryFullName] = useState("");
+  const [contextSaveMessage, setContextSaveMessage] = useState<string | null>(null);
+  const [isSavingContext, setIsSavingContext] = useState(false);
+  const [isAuthorizingRepository, setIsAuthorizingRepository] = useState(false);
   const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
   const [isLifecycleBusy, setIsLifecycleBusy] = useState(false);
 
@@ -89,6 +107,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
         }
 
         setProject(detailResponse.project);
+        setProjectNameDraft(detailResponse.project.name);
         setSnapshot(detailResponse.activeSchemaSnapshot ?? null);
         setSchemaDraft(
           detailResponse.activeSchemaSnapshot
@@ -96,6 +115,12 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
             : ""
         );
         setHistory(historyResponse);
+        setContextDraft(
+          detailResponse.project.context?.description ??
+            detailResponse.project.description ??
+            ""
+        );
+        setRepositoryFullName(detailResponse.project.context?.repository?.repositoryFullName ?? "");
       } catch (loadError) {
         if (!isMounted) {
           return;
@@ -167,6 +192,132 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
       );
     } finally {
       setIsSavingSchema(false);
+    }
+  }
+
+  async function handleSaveProjectDetails() {
+    const session = getStoredSession();
+    if (!session || !project) {
+      clearStoredSession();
+      router.replace("/login");
+      return;
+    }
+
+    const name = projectNameDraft.trim();
+    if (!name) {
+      setProjectDetailsMessage("Project name is required.");
+      return;
+    }
+
+    setIsSavingProjectDetails(true);
+    setProjectDetailsMessage(null);
+
+    try {
+      const result = await updateProject(
+        project.id,
+        {
+          name,
+          description: project.description
+        },
+        session.token
+      );
+
+      setProject(result.project);
+      setProjectNameDraft(result.project.name);
+      setProjectDetailsMessage("Project details saved.");
+    } catch (saveError) {
+      setProjectDetailsMessage(
+        saveError instanceof Error ? saveError.message : "Could not save project details."
+      );
+    } finally {
+      setIsSavingProjectDetails(false);
+    }
+  }
+
+  async function handleSaveContext() {
+    const session = getStoredSession();
+    if (!session || !project) {
+      clearStoredSession();
+      router.replace("/login");
+      return;
+    }
+
+    setIsSavingContext(true);
+    setContextSaveMessage(null);
+
+    try {
+      const result = await updateProjectContext(
+        project.id,
+        { description: contextDraft },
+        session.token
+      );
+
+      setProject(result.project);
+      setContextDraft(result.project.context?.description ?? result.project.description ?? "");
+      setContextSaveMessage("Project context saved.");
+    } catch (saveError) {
+      setContextSaveMessage(
+        saveError instanceof Error ? saveError.message : "Could not save project context."
+      );
+    } finally {
+      setIsSavingContext(false);
+    }
+  }
+
+  async function handleAuthorizeRepositoryContext() {
+    const session = getStoredSession();
+    if (!session || !project) {
+      clearStoredSession();
+      router.replace("/login");
+      return;
+    }
+
+    setIsAuthorizingRepository(true);
+    setContextSaveMessage(null);
+
+    try {
+      const result = await startRepositoryContextAuthorization(
+        project.id,
+        { repositoryFullName },
+        session.token
+      );
+      window.location.href = result.authorizationUrl;
+    } catch (authorizationError) {
+      setContextSaveMessage(
+        authorizationError instanceof Error
+          ? authorizationError.message
+          : "Could not start repository authorization."
+      );
+      setIsAuthorizingRepository(false);
+    }
+  }
+
+  async function handleRemoveRepositoryContext() {
+    const session = getStoredSession();
+    if (!session || !project) {
+      clearStoredSession();
+      router.replace("/login");
+      return;
+    }
+
+    setIsLifecycleBusy(true);
+    setContextSaveMessage(null);
+
+    try {
+      const result = await removeRepositoryContext(project.id, session.token);
+      setProject({
+        ...project,
+        context: result.context,
+        updatedAt: new Date()
+      });
+      setRepositoryFullName("");
+      setContextSaveMessage("Repository context removed.");
+    } catch (removeError) {
+      setContextSaveMessage(
+        removeError instanceof Error ? removeError.message : "Could not remove repository context."
+      );
+    } finally {
+      setIsLifecycleBusy(false);
     }
   }
 
@@ -350,6 +501,83 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
         {!isLoading && project ? (
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
             <div className="space-y-5">
+              <Card>
+                <CardHeader>
+                  <p className="font-mono text-xs text-accent">project.details</p>
+                  <h2 className="mt-1 text-lg font-semibold">Details</h2>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="project-name" className="text-xs text-muted">
+                      Project name
+                    </label>
+                    <Input
+                      id="project-name"
+                      value={projectNameDraft}
+                      onChange={(event) => setProjectNameDraft(event.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={isSavingProjectDetails || !projectNameDraft.trim()}
+                    onClick={handleSaveProjectDetails}
+                  >
+                    {isSavingProjectDetails ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Save details
+                  </Button>
+                  {projectDetailsMessage ? (
+                    <p className="border border-border bg-background px-3 py-2 text-xs text-muted">
+                      {projectDetailsMessage}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <p className="font-mono text-xs text-accent">project.context</p>
+                  <h2 className="mt-1 text-lg font-semibold">Context</h2>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <ProjectContextSummary
+                    context={project.context}
+                    fallbackDescription={project.description}
+                  />
+                  <ProjectContextForm
+                    description={contextDraft}
+                    isSaving={isSavingContext}
+                    onDescriptionChange={setContextDraft}
+                    onSubmit={handleSaveContext}
+                  />
+                  <RepositoryContextPanel
+                    repositoryFullName={repositoryFullName}
+                    isDisabled={isAuthorizingRepository || !repositoryFullName.trim()}
+                    onRepositoryFullNameChange={setRepositoryFullName}
+                    onAuthorize={handleAuthorizeRepositoryContext}
+                  />
+                  {project.context?.repository ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={isLifecycleBusy}
+                      onClick={handleRemoveRepositoryContext}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove repository context
+                    </Button>
+                  ) : null}
+                  {contextSaveMessage ? (
+                    <p className="border border-border bg-background px-3 py-2 text-xs text-muted">
+                      {contextSaveMessage}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">

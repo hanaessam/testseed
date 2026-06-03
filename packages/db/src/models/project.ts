@@ -20,6 +20,10 @@ const projectSchema = new Schema<Omit<Project, "id">>(
       type: String,
       required: false
     },
+    context: {
+      type: Schema.Types.Mixed,
+      required: false
+    },
     createdAt: {
       type: Date,
       required: true

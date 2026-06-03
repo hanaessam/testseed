@@ -19,7 +19,7 @@ const publicAuthPaths = new Set([
 
 export function requireAuth(jwtSecret: string) {
   return (request: Request, response: Response, next: NextFunction) => {
-    if (publicAuthPaths.has(request.path)) {
+    if (publicAuthPaths.has(request.path) || isPublicRepositoryContextCallback(request.path)) {
       next();
       return;
     }
@@ -49,4 +49,8 @@ export function requireAuth(jwtSecret: string) {
       response.status(401).json({ message: "Authentication required" });
     }
   };
+}
+
+function isPublicRepositoryContextCallback(path: string): boolean {
+  return /^\/projects\/[^/]+\/context\/github\/callback$/.test(path);
 }
