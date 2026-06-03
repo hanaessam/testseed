@@ -1,6 +1,7 @@
 import {
   AuthError,
   createGitHubAuthorizationUrl,
+  getCurrentAuthUser,
   loginUser,
   logoutUser,
   requestRegistrationOtp,
@@ -12,6 +13,7 @@ import type { createRegistrationOtpCache, createUserRepository } from "@testseed
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
+import { type AuthenticatedRequest } from "../middleware/auth";
 
 type UserRepository = ReturnType<typeof createUserRepository>;
 type RegistrationOtpCache = ReturnType<typeof createRegistrationOtpCache>;
@@ -181,6 +183,30 @@ export function createAuthRouter(
       response.status(200).json(logoutUser());
     }
   );
+
+  router.get("/me", async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const authenticatedRequest = request as AuthenticatedRequest;
+      if (!authenticatedRequest.auth) {
+        response.status(401).json({ message: "Authentication required" });
+        return;
+      }
+
+      const result = await getCurrentAuthUser(
+        { userId: authenticatedRequest.auth.userId },
+        { findUserById: userRepository.findUserById }
+      );
+
+      if (!result.user) {
+        response.status(404).json({ message: "User not found" });
+        return;
+      }
+
+      response.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   return router;
 }

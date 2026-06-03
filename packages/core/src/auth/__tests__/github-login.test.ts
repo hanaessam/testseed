@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { resolveGitHubLogin, type CreateUserInput } from "./index";
+import { resolveGitHubLogin, type CreateUserInput } from "../index";
 import type { User } from "@testseed/types";
 
 const jwtSecret = "test-secret";

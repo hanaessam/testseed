@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { getCurrentUser } from "@/src/lib/api-client";
+import { saveTokenSession, updateStoredSessionUser } from "@/src/lib/session";
 
 export function GitHubCallback({ token }: { token?: string }) {
   const router = useRouter();
@@ -12,8 +14,16 @@ export function GitHubCallback({ token }: { token?: string }) {
       return;
     }
 
-    window.localStorage.setItem("testseedToken", token);
-    router.replace("/dashboard");
+    saveTokenSession(token);
+    getCurrentUser(token)
+      .then((response) => {
+        if (response.user) {
+          updateStoredSessionUser(response.user);
+        }
+      })
+      .finally(() => {
+        router.replace("/dashboard");
+      });
   }, [router, token]);
 
   return (

@@ -4,7 +4,24 @@ import type {
   LogoutResponse,
   RegistrationOtpRequest,
   RegistrationOtpResponse,
-  VerifyRegistrationOtpRequest
+  VerifyRegistrationOtpRequest,
+  ParseSchemaRequest,
+  ParseSchemaResponse,
+  CurrentUserResponse,
+  ListProjectsResponse,
+  ProjectHistoryResponse,
+  ProjectDetailResponse,
+  UpdateProjectRequest,
+  UpdateProjectResponse,
+  DeleteProjectRequest,
+  DeleteProjectResponse,
+  RestoreProjectResponse,
+  UpdateProjectSchemaRequest,
+  UpdateProjectSchemaResponse,
+  DeleteProjectSchemaRequest,
+  DeleteProjectSchemaResponse,
+  RestoreProjectSchemaResponse,
+  Project
 } from "@testseed/types";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -30,6 +47,212 @@ export async function login(request: AuthRequest): Promise<AuthResponse> {
 
 export async function logout(token: string): Promise<LogoutResponse> {
   return postJson<undefined, LogoutResponse>("/auth/logout", undefined, token);
+}
+
+export async function getCurrentUser(token: string): Promise<CurrentUserResponse> {
+  const response = await getJson<CurrentUserResponse>("/auth/me", token);
+  return {
+    user: response.user
+      ? {
+          ...response.user,
+          createdAt: new Date(response.user.createdAt)
+        }
+      : null
+  };
+}
+
+export async function createProject(
+  request: { name: string; description?: string },
+  token: string
+): Promise<{ project: Project }> {
+  return postJson<typeof request, { project: Project }>("/projects", request, token);
+}
+
+export async function listProjects(
+  token: string,
+  options: { includeArchived?: boolean } = {}
+): Promise<ListProjectsResponse> {
+  const query = options.includeArchived ? "?includeArchived=true" : "";
+  const response = await getJson<ListProjectsResponse>(`/projects${query}`, token);
+  return {
+    projects: response.projects.map(toProject)
+  };
+}
+
+export async function updateProject(
+  projectId: string,
+  request: UpdateProjectRequest,
+  token: string
+): Promise<UpdateProjectResponse> {
+  const response = await patchJson<UpdateProjectRequest, UpdateProjectResponse>(
+    `/projects/${encodeURIComponent(projectId)}`,
+    request,
+    token
+  );
+
+  return {
+    project: toProject(response.project)
+  };
+}
+
+export async function deleteProject(
+  projectId: string,
+  request: DeleteProjectRequest,
+  token: string
+): Promise<DeleteProjectResponse> {
+  const response = await deleteJson<DeleteProjectRequest, DeleteProjectResponse>(
+    `/projects/${encodeURIComponent(projectId)}`,
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    project: response.project ? toProject(response.project) : undefined
+  };
+}
+
+export async function restoreProject(
+  projectId: string,
+  token: string
+): Promise<RestoreProjectResponse> {
+  const response = await patchJson<undefined, RestoreProjectResponse>(
+    `/projects/${encodeURIComponent(projectId)}/restore`,
+    undefined,
+    token
+  );
+
+  return {
+    project: toProject(response.project)
+  };
+}
+
+export async function getProjectDetail(
+  projectId: string,
+  token: string
+): Promise<ProjectDetailResponse> {
+  const response = await getJson<ProjectDetailResponse>(
+    `/projects/${encodeURIComponent(projectId)}`,
+    token
+  );
+
+  return {
+    project: response.project ? toProject(response.project) : null,
+    activeSchemaSnapshot: response.activeSchemaSnapshot
+      ? {
+          ...response.activeSchemaSnapshot,
+          createdAt: new Date(response.activeSchemaSnapshot.createdAt),
+          archivedAt: response.activeSchemaSnapshot.archivedAt
+            ? new Date(response.activeSchemaSnapshot.archivedAt)
+            : undefined
+        }
+      : undefined
+  };
+}
+
+export async function listProjectHistory(
+  projectId: string,
+  token: string
+): Promise<ProjectHistoryResponse> {
+  const response = await getJson<ProjectHistoryResponse>(
+    `/projects/${encodeURIComponent(projectId)}/history`,
+    token
+  );
+
+  return {
+    project: response.project ? toProject(response.project) : null,
+    events: response.events.map((event) => ({
+      ...event,
+      createdAt: new Date(event.createdAt)
+    })),
+    seedBatches: response.seedBatches.map((batch) => ({
+      ...batch,
+      createdAt: new Date(batch.createdAt),
+      rolledBackAt: batch.rolledBackAt ? new Date(batch.rolledBackAt) : undefined
+    }))
+  };
+}
+
+export async function updateProjectSchema(
+  projectId: string,
+  request: UpdateProjectSchemaRequest,
+  token: string
+): Promise<UpdateProjectSchemaResponse> {
+  const response = await putJson<UpdateProjectSchemaRequest, UpdateProjectSchemaResponse>(
+    `/projects/${encodeURIComponent(projectId)}/schema`,
+    request,
+    token
+  );
+
+  return {
+    project: toProject(response.project),
+    snapshot: {
+      ...response.snapshot,
+      createdAt: new Date(response.snapshot.createdAt),
+      archivedAt: response.snapshot.archivedAt
+        ? new Date(response.snapshot.archivedAt)
+        : undefined
+    }
+  };
+}
+
+export async function deleteProjectSchema(
+  projectId: string,
+  request: DeleteProjectSchemaRequest,
+  token: string
+): Promise<DeleteProjectSchemaResponse> {
+  const response = await deleteJson<DeleteProjectSchemaRequest, DeleteProjectSchemaResponse>(
+    `/projects/${encodeURIComponent(projectId)}/schema`,
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    project: toProject(response.project)
+  };
+}
+
+export async function restoreProjectSchema(
+  projectId: string,
+  token: string
+): Promise<RestoreProjectSchemaResponse> {
+  const response = await patchJson<undefined, RestoreProjectSchemaResponse>(
+    `/projects/${encodeURIComponent(projectId)}/schema/restore`,
+    undefined,
+    token
+  );
+
+  return {
+    project: toProject(response.project),
+    snapshot: response.snapshot
+      ? {
+          ...response.snapshot,
+          createdAt: new Date(response.snapshot.createdAt),
+          archivedAt: response.snapshot.archivedAt
+            ? new Date(response.snapshot.archivedAt)
+            : undefined
+        }
+      : undefined
+  };
+}
+
+export async function parseSchema(
+  request: ParseSchemaRequest,
+  token: string
+): Promise<ParseSchemaResponse> {
+  return postJson<ParseSchemaRequest, ParseSchemaResponse>(
+    "/schemas/parse",
+    request,
+    token
+  );
+}
+
+async function getJson<ResponseBody>(
+  path: string,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson<undefined, ResponseBody>("GET", path, undefined, token);
 }
 
 export function getGitHubAuthUrl(): string {
@@ -59,6 +282,39 @@ async function postJson<RequestBody, ResponseBody>(
   request: RequestBody,
   token?: string
 ): Promise<ResponseBody> {
+  return requestJson("POST", path, request, token);
+}
+
+async function putJson<RequestBody, ResponseBody>(
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson("PUT", path, request, token);
+}
+
+async function patchJson<RequestBody, ResponseBody>(
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson("PATCH", path, request, token);
+}
+
+async function deleteJson<RequestBody, ResponseBody>(
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson("DELETE", path, request, token);
+}
+
+async function requestJson<RequestBody, ResponseBody>(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
   let response: Response;
   const headers: HeadersInit = {
     "Content-Type": "application/json"
@@ -70,7 +326,7 @@ async function postJson<RequestBody, ResponseBody>(
 
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
-      method: "POST",
+      method,
       headers,
       body: request === undefined ? undefined : JSON.stringify(request)
     });
@@ -93,4 +349,13 @@ async function postJson<RequestBody, ResponseBody>(
   }
 
   return body as ResponseBody;
+}
+
+function toProject(project: Project): Project {
+  return {
+    ...project,
+    createdAt: new Date(project.createdAt),
+    updatedAt: new Date(project.updatedAt),
+    archivedAt: project.archivedAt ? new Date(project.archivedAt) : undefined
+  };
 }

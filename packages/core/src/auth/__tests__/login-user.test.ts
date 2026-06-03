@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { registerUser, loginUser } from "./index";
+import { registerUser, loginUser } from "../index";
 import type { User } from "@testseed/types";
 
 const jwtSecret = "test-secret";
@@ -38,6 +38,38 @@ describe("loginUser", () => {
       sub: "user-1",
       email: "dev@testseed.local"
     });
+  });
+
+  it("creates a session token that expires after seven days", async () => {
+    let storedUser: User | null = null;
+
+    await registerUser(
+      { email: "dev@testseed.local", password: "secret123" },
+      {
+        jwtSecret,
+        findUserByEmail: async () => null,
+        createUser: async (input) => {
+          storedUser = {
+            id: "user-1",
+            email: input.email,
+            passwordHash: input.passwordHash,
+            createdAt: input.createdAt
+          };
+          return storedUser;
+        }
+      }
+    );
+
+    const response = await loginUser(
+      { email: "dev@testseed.local", password: "secret123" },
+      {
+        jwtSecret,
+        findUserByEmail: async () => storedUser
+      }
+    );
+
+    const payload = jwt.verify(response.token, jwtSecret) as jwt.JwtPayload;
+    expect(payload.exp! - payload.iat!).toBe(7 * 24 * 60 * 60);
   });
 
   it("returns a generic 401 error when the email is unknown", async () => {

@@ -1,4 +1,4 @@
-import { createGitHubAuthorizationUrl } from "./index";
+import { createGitHubAuthorizationUrl } from "../index";
 
 describe("createGitHubAuthorizationUrl", () => {
   it("builds the GitHub OAuth authorization URL for login", () => {

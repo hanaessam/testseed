@@ -17,6 +17,11 @@ export function createUserRepository(connection: Connection) {
       return document ? toUser(document) : null;
     },
 
+    async findUserById(userId: string): Promise<User | null> {
+      const document = await UserModel.findById(userId).exec();
+      return document ? toUser(document) : null;
+    },
+
     async createUser(input: CreateUserInput): Promise<User> {
       const document = await UserModel.create(input);
       return toUser(document);

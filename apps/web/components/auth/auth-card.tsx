@@ -11,6 +11,7 @@ import {
   requestRegistrationOtp,
   verifyRegistrationOtp
 } from "@/src/lib/api-client";
+import { saveAuthSession } from "@/src/lib/session";
 import type { PasswordRuleResult } from "@testseed/types";
 import { Check, Eye, EyeOff, GitBranch, KeyRound, Mail, X } from "lucide-react";
 import Link from "next/link";
@@ -48,7 +49,7 @@ export function AuthCard({ mode }: AuthCardProps) {
 
     try {
       const response = await login({ email, password });
-      window.localStorage.setItem("testseedToken", response.token);
+      saveAuthSession(response);
       router.push("/dashboard");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Authentication failed");
@@ -87,7 +88,7 @@ export function AuthCard({ mode }: AuthCardProps) {
 
     try {
       const response = await verifyRegistrationOtp({ email, otp });
-      window.localStorage.setItem("testseedToken", response.token);
+      saveAuthSession(response);
       router.push("/dashboard");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not verify code");

@@ -1,6 +1,7 @@
 import type {
   AuthRequest,
   AuthResponse,
+  AuthUser,
   PendingRegistration,
   PasswordValidationResult,
   RegistrationOtpRequest,
@@ -27,6 +28,14 @@ export interface RegisterUserDeps {
 export interface LoginUserDeps {
   jwtSecret: string;
   findUserByEmail(email: string): Promise<User | null>;
+}
+
+export interface GetCurrentAuthUserRequest {
+  userId: string;
+}
+
+export interface GetCurrentAuthUserDeps {
+  findUserById(userId: string): Promise<User | null>;
 }
 
 export interface GitHubAuthorizationUrlRequest {
@@ -308,6 +317,17 @@ export function logoutUser(): LogoutResponse {
   };
 }
 
+export async function getCurrentAuthUser(
+  request: GetCurrentAuthUserRequest,
+  deps: GetCurrentAuthUserDeps
+): Promise<{ user: AuthUser | null }> {
+  const user = await deps.findUserById(request.userId);
+
+  return {
+    user: user ? toAuthUser(user) : null
+  };
+}
+
 export function createGitHubAuthorizationUrl(
   request: GitHubAuthorizationUrlRequest
 ): string {
@@ -353,16 +373,20 @@ function toAuthResponse(user: User, jwtSecret: string): AuthResponse {
     jwtSecret,
     {
       subject: user.id,
-      expiresIn: "1h"
+      expiresIn: "7d"
     }
   );
 
   return {
     token,
-    user: {
-      id: user.id,
-      email: user.email,
-      createdAt: user.createdAt
-    }
+    user: toAuthUser(user)
+  };
+}
+
+function toAuthUser(user: User): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    createdAt: user.createdAt
   };
 }

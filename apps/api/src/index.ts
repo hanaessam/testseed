@@ -2,7 +2,9 @@ import {
   createConnection,
   createRedisClient,
   createRegistrationOtpCache,
-  createUserRepository
+  createUserRepository,
+  createProjectRepository,
+  createProjectHistoryRepository
 } from "@testseed/db";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -12,6 +14,10 @@ import path from "node:path";
 import { createRegistrationOtpEmailSender } from "./email/registration-otp-email";
 import { requireAuth } from "./middleware/auth";
 import { authErrorHandler, createAuthRouter } from "./routes/auth";
+import { createHistoryRouter } from "./routes/history";
+import { createProjectsRouter } from "./routes/projects";
+import { createRollbackRouter } from "./routes/rollback";
+import { createSchemaRouter } from "./routes/schema";
 
 dotenv.config({
   path: findRootEnvPath()
@@ -60,6 +66,8 @@ if (!smtpHost || !smtpUser || !smtpPass || !smtpFrom) {
 
 const connection = createConnection(mongoUri);
 const userRepository = createUserRepository(connection);
+const projectRepository = createProjectRepository(connection);
+const projectHistoryRepository = createProjectHistoryRepository(connection);
 const redis = createRedisClient({
   url: redisUrl,
   token: redisToken
@@ -96,6 +104,33 @@ app.use(
     sendRegistrationOtpEmail,
     authRouterConfig
   )
+);
+app.use(
+  "/schemas",
+  createSchemaRouter({
+    projectRepository,
+    projectHistoryRepository
+  })
+);
+app.use(
+  "/projects",
+  createProjectsRouter({
+    projectRepository,
+    projectHistoryRepository
+  })
+);
+app.use(
+  "/projects",
+  createHistoryRouter({
+    projectRepository,
+    projectHistoryRepository
+  })
+);
+app.use(
+  "/projects",
+  createRollbackRouter({
+    projectHistoryRepository
+  })
 );
 app.use(authErrorHandler);
 app.use(

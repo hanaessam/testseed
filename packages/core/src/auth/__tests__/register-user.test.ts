@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { registerUser } from "./index";
+import { registerUser } from "../index";
 import type { User } from "@testseed/types";
 
 const jwtSecret = "test-secret";
