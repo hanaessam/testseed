@@ -2,15 +2,14 @@
 
 # Dependencies
 node_modules
+**/node_modules/
 .pnp
 .pnp.js
 
 # Local env files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Testing
 coverage
@@ -24,19 +23,35 @@ coverage
 # Build Outputs
 .next/
 out/
-build
-dist
+build/
+dist/
+**/.next/
+**/build/
+**/dist/
+apps/api/src/**/*.js
+apps/api/src/**/*.d.ts
 
+# Generated agent artifacts
+.agents/workflows/archives/
+.agents/workflows/manifests/
+.agents/workflows/**/*.zip
+.agents/workflows/**/*.tar
+.agents/workflows/**/*.tgz
+.agents/workflows/**/*.gz
+.agents/workflows/**/*.manifest.json
 
 # Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.codex-*.log
 
 # Misc
 .DS_Store
 *.pem
+tree.txt
 
 
-#  logs
+# Logs
 *.log
+logs/
