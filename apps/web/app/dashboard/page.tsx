@@ -12,7 +12,6 @@ import {
 import type { AuthUser, Project, ProjectHistoryResponse } from "@testseed/types";
 import {
   ArrowRight,
-  Clock3,
   Database,
   FileJson,
   History,
@@ -163,20 +162,20 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-              <Card>
+            <div className="grid gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]">
+              <Card className="overflow-hidden">
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-mono text-xs text-accent">projects.index</p>
-                      <h2 className="mt-1 text-lg font-semibold">Saved projects</h2>
+                      <h2 className="mt-1 text-lg font-semibold">Projects</h2>
                     </div>
                     <History className="h-5 w-5 text-accent" />
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-1 p-0">
                   {projects.length === 0 ? (
-                    <div className="border border-border bg-background p-4">
+                    <div className="m-4 border border-border bg-background p-4">
                       <p className="text-sm font-medium">No projects yet</p>
                       <p className="mt-2 text-xs leading-5 text-muted">
                         Create a generation run and TestSeed will save the project, schema snapshot,
@@ -185,72 +184,90 @@ export default function DashboardPage() {
                     </div>
                   ) : (
                     projects.map(({ project, history }) => (
-                      <div key={project.id} className="border border-border bg-background p-4">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div>
-                            <h3 className="text-sm font-semibold">{project.name}</h3>
-                            <p className="mt-1 text-xs leading-5 text-muted">
-                              {project.description || "No description"}
-                            </p>
+                      <Link
+                        key={project.id}
+                        href={`/projects/${project.id}`}
+                        className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-border px-4 py-3 transition-colors first:border-t-0 hover:bg-background"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 shrink-0 bg-accent" />
+                            <h3 className="truncate text-sm font-semibold">{project.name}</h3>
                           </div>
-                          <span className="font-mono text-xs text-accent">
+                          <p className="mt-1 truncate text-xs text-muted">
+                            {project.description || "No description"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono text-xs text-accent">
                             v{project.activeSchemaVersion}
-                          </span>
+                          </p>
+                          <p className="mt-1 text-xs text-muted">
+                            {history?.events.length ?? 0} events
+                          </p>
+                          <p className="mt-1 text-xs text-muted">{formatDate(project.updatedAt)}</p>
                         </div>
-
-                        <div className="mt-4 grid gap-2 text-xs text-muted sm:grid-cols-3">
-                          <HistoryStat
-                            label="Events"
-                            value={String(history?.events.length ?? 0)}
-                          />
-                          <HistoryStat
-                            label="Batches"
-                            value={String(history?.seedBatches.length ?? 0)}
-                          />
-                          <HistoryStat
-                            label="Updated"
-                            value={formatDate(project.updatedAt)}
-                          />
-                        </div>
-
-                        {history?.events.length ? (
-                          <div className="mt-4 space-y-2">
-                            {history.events.slice(-3).map((event) => (
-                              <div
-                                key={event.id}
-                                className="flex items-start gap-2 border-t border-border pt-2 text-xs"
-                              >
-                                <Clock3 className="mt-0.5 h-3.5 w-3.5 text-accent" />
-                                <div>
-                                  <p className="text-foreground">{event.message}</p>
-                                  <p className="mt-1 font-mono text-muted">
-                                    {event.kind} - {formatDate(event.createdAt)}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
+                      </Link>
                     ))
                   )}
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <p className="font-mono text-xs text-accent">account.summary</p>
-                  <h2 className="mt-1 text-lg font-semibold">Account</h2>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <SummaryRow label="Email" value={account?.email ?? "Loading"} />
-                  <SummaryRow
-                    label="Member since"
-                    value={account ? formatDate(account.createdAt) : "Loading"}
-                  />
-                  <SummaryRow label="User ID" value={account?.id ?? "Loading"} />
-                </CardContent>
-              </Card>
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                <Card>
+                  <CardHeader>
+                    <p className="font-mono text-xs text-accent">activity.feed</p>
+                    <h2 className="mt-1 text-lg font-semibold">Latest project activity</h2>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {projects.length === 0 ? (
+                      <p className="text-sm text-muted">Project activity appears after parsing a schema.</p>
+                    ) : (
+                      projects.slice(0, 5).map(({ project, history }) => {
+                        const latestEvent = history?.events.at(-1);
+
+                        return (
+                          <div key={project.id} className="border border-border bg-background p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <Link
+                                href={`/projects/${project.id}`}
+                                className="truncate text-sm font-medium hover:text-accent"
+                              >
+                                {project.name}
+                              </Link>
+                              <span className="font-mono text-xs text-muted">
+                                {project.activeSchemaVersion > 0
+                                  ? `schema v${project.activeSchemaVersion}`
+                                  : "no schema"}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-xs leading-5 text-muted">
+                              {latestEvent
+                                ? `${latestEvent.message} - ${formatDate(latestEvent.createdAt)}`
+                                : "No activity events yet."}
+                            </p>
+                          </div>
+                        );
+                      })
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <p className="font-mono text-xs text-accent">account.summary</p>
+                    <h2 className="mt-1 text-lg font-semibold">Account</h2>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <SummaryRow label="Email" value={account?.email ?? "Loading"} />
+                    <SummaryRow
+                      label="Member since"
+                      value={account ? formatDate(account.createdAt) : "Loading"}
+                    />
+                    <SummaryRow label="User ID" value={account?.id ?? "Loading"} />
+                  </CardContent>
+                </Card>
+              </div>
             </div>
 
             <Card>
@@ -268,15 +285,6 @@ export default function DashboardPage() {
         )}
       </section>
     </AppShell>
-  );
-}
-
-function HistoryStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border border-border bg-surface px-3 py-2">
-      <p className="font-mono text-foreground">{value}</p>
-      <p className="mt-1">{label}</p>
-    </div>
   );
 }
 

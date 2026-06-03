@@ -1,4 +1,4 @@
-import { logoutUser } from "./index";
+import { logoutUser } from "../index";
 
 describe("logoutUser", () => {
   it("returns a logout acknowledgement", () => {

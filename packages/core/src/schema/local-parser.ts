@@ -130,6 +130,14 @@ function cleanSchemaText(text: string): string {
   return text
     // Remove ES imports e.g., import mongoose from 'mongoose';
     .replace(/import\s+[\s\S]*?\s+from\s+['"][^'"]+['"];?/g, "")
+    // Remove TypeScript-only declarations that are not executable in the VM sandbox.
+    .replace(/^\s*export\s+interface\s+\w+[\s\S]*?^\s*}\s*$/gm, "")
+    .replace(/^\s*interface\s+\w+[\s\S]*?^\s*}\s*$/gm, "")
+    .replace(/^\s*export\s+type\s+\w+[\s\S]*?;\s*$/gm, "")
+    .replace(/^\s*type\s+\w+[\s\S]*?;\s*$/gm, "")
+    // Convert exported declarations/expressions into sandbox-runnable statements.
+    .replace(/^\s*export\s+(?=(const|let|var|class|function)\b)/gm, "")
+    .replace(/^\s*export\s+default\s+/gm, "")
     // Remove requires e.g., const mongoose = require('mongoose');
     .replace(/(const|let|var)\s+\w+\s*=\s*require\s*\([^)]+\);?/g, "")
     .replace(/(const|let|var)\s+\{\s*[^}]+\s*\}\s*=\s*require\s*\([^)]+\);?/g, "")

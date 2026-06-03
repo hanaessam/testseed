@@ -4,14 +4,16 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { Wordmark } from "@/components/brand/wordmark";
 import { Button } from "@/components/ui/button";
 import { getStoredSession, type StoredSession } from "@/src/lib/session";
-import { BarChart3, History, Settings, Sprout } from "lucide-react";
+import { BarChart3, FolderKanban, History, LayoutDashboard, Sprout, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/generate", label: "Generate", icon: Sprout },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/dashboard", label: "History", icon: History },
-  { href: "/dashboard", label: "Settings", icon: Settings }
+  { href: "/dashboard", label: "Account", icon: UserCircle }
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

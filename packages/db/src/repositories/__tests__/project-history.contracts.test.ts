@@ -1,5 +1,5 @@
 import type { Connection } from "mongoose";
-import { createProjectHistoryRepository, createProjectRepository } from "../index";
+import { createProjectHistoryRepository, createProjectRepository } from "../../index";
 
 declare const connection: Connection;
 

@@ -10,6 +10,17 @@ import type {
   CurrentUserResponse,
   ListProjectsResponse,
   ProjectHistoryResponse,
+  ProjectDetailResponse,
+  UpdateProjectRequest,
+  UpdateProjectResponse,
+  DeleteProjectRequest,
+  DeleteProjectResponse,
+  RestoreProjectResponse,
+  UpdateProjectSchemaRequest,
+  UpdateProjectSchemaResponse,
+  DeleteProjectSchemaRequest,
+  DeleteProjectSchemaResponse,
+  RestoreProjectSchemaResponse,
   Project
 } from "@testseed/types";
 
@@ -57,10 +68,85 @@ export async function createProject(
   return postJson<typeof request, { project: Project }>("/projects", request, token);
 }
 
-export async function listProjects(token: string): Promise<ListProjectsResponse> {
-  const response = await getJson<ListProjectsResponse>("/projects", token);
+export async function listProjects(
+  token: string,
+  options: { includeArchived?: boolean } = {}
+): Promise<ListProjectsResponse> {
+  const query = options.includeArchived ? "?includeArchived=true" : "";
+  const response = await getJson<ListProjectsResponse>(`/projects${query}`, token);
   return {
     projects: response.projects.map(toProject)
+  };
+}
+
+export async function updateProject(
+  projectId: string,
+  request: UpdateProjectRequest,
+  token: string
+): Promise<UpdateProjectResponse> {
+  const response = await patchJson<UpdateProjectRequest, UpdateProjectResponse>(
+    `/projects/${encodeURIComponent(projectId)}`,
+    request,
+    token
+  );
+
+  return {
+    project: toProject(response.project)
+  };
+}
+
+export async function deleteProject(
+  projectId: string,
+  request: DeleteProjectRequest,
+  token: string
+): Promise<DeleteProjectResponse> {
+  const response = await deleteJson<DeleteProjectRequest, DeleteProjectResponse>(
+    `/projects/${encodeURIComponent(projectId)}`,
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    project: response.project ? toProject(response.project) : undefined
+  };
+}
+
+export async function restoreProject(
+  projectId: string,
+  token: string
+): Promise<RestoreProjectResponse> {
+  const response = await patchJson<undefined, RestoreProjectResponse>(
+    `/projects/${encodeURIComponent(projectId)}/restore`,
+    undefined,
+    token
+  );
+
+  return {
+    project: toProject(response.project)
+  };
+}
+
+export async function getProjectDetail(
+  projectId: string,
+  token: string
+): Promise<ProjectDetailResponse> {
+  const response = await getJson<ProjectDetailResponse>(
+    `/projects/${encodeURIComponent(projectId)}`,
+    token
+  );
+
+  return {
+    project: response.project ? toProject(response.project) : null,
+    activeSchemaSnapshot: response.activeSchemaSnapshot
+      ? {
+          ...response.activeSchemaSnapshot,
+          createdAt: new Date(response.activeSchemaSnapshot.createdAt),
+          archivedAt: response.activeSchemaSnapshot.archivedAt
+            ? new Date(response.activeSchemaSnapshot.archivedAt)
+            : undefined
+        }
+      : undefined
   };
 }
 
@@ -84,6 +170,70 @@ export async function listProjectHistory(
       createdAt: new Date(batch.createdAt),
       rolledBackAt: batch.rolledBackAt ? new Date(batch.rolledBackAt) : undefined
     }))
+  };
+}
+
+export async function updateProjectSchema(
+  projectId: string,
+  request: UpdateProjectSchemaRequest,
+  token: string
+): Promise<UpdateProjectSchemaResponse> {
+  const response = await putJson<UpdateProjectSchemaRequest, UpdateProjectSchemaResponse>(
+    `/projects/${encodeURIComponent(projectId)}/schema`,
+    request,
+    token
+  );
+
+  return {
+    project: toProject(response.project),
+    snapshot: {
+      ...response.snapshot,
+      createdAt: new Date(response.snapshot.createdAt),
+      archivedAt: response.snapshot.archivedAt
+        ? new Date(response.snapshot.archivedAt)
+        : undefined
+    }
+  };
+}
+
+export async function deleteProjectSchema(
+  projectId: string,
+  request: DeleteProjectSchemaRequest,
+  token: string
+): Promise<DeleteProjectSchemaResponse> {
+  const response = await deleteJson<DeleteProjectSchemaRequest, DeleteProjectSchemaResponse>(
+    `/projects/${encodeURIComponent(projectId)}/schema`,
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    project: toProject(response.project)
+  };
+}
+
+export async function restoreProjectSchema(
+  projectId: string,
+  token: string
+): Promise<RestoreProjectSchemaResponse> {
+  const response = await patchJson<undefined, RestoreProjectSchemaResponse>(
+    `/projects/${encodeURIComponent(projectId)}/schema/restore`,
+    undefined,
+    token
+  );
+
+  return {
+    project: toProject(response.project),
+    snapshot: response.snapshot
+      ? {
+          ...response.snapshot,
+          createdAt: new Date(response.snapshot.createdAt),
+          archivedAt: response.snapshot.archivedAt
+            ? new Date(response.snapshot.archivedAt)
+            : undefined
+        }
+      : undefined
   };
 }
 
@@ -135,8 +285,32 @@ async function postJson<RequestBody, ResponseBody>(
   return requestJson("POST", path, request, token);
 }
 
+async function putJson<RequestBody, ResponseBody>(
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson("PUT", path, request, token);
+}
+
+async function patchJson<RequestBody, ResponseBody>(
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson("PATCH", path, request, token);
+}
+
+async function deleteJson<RequestBody, ResponseBody>(
+  path: string,
+  request: RequestBody,
+  token?: string
+): Promise<ResponseBody> {
+  return requestJson("DELETE", path, request, token);
+}
+
 async function requestJson<RequestBody, ResponseBody>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   request: RequestBody,
   token?: string
@@ -181,6 +355,7 @@ function toProject(project: Project): Project {
   return {
     ...project,
     createdAt: new Date(project.createdAt),
-    updatedAt: new Date(project.updatedAt)
+    updatedAt: new Date(project.updatedAt),
+    archivedAt: project.archivedAt ? new Date(project.archivedAt) : undefined
   };
 }

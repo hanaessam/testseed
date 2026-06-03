@@ -4,10 +4,11 @@ import type {
   Project,
   ProjectEvent,
   ProjectEventKind,
+  ProjectDetailResponse,
   ProjectHistoryResponse,
   ProjectSchemaSnapshot,
   SeedBatch
-} from "./index";
+} from "../index";
 
 const project: Project = {
   id: "project-1",
@@ -70,6 +71,11 @@ const projectHistoryResponse: ProjectHistoryResponse = {
   seedBatches: [seedBatch]
 };
 
+const projectDetailResponse: ProjectDetailResponse = {
+  project,
+  activeSchemaSnapshot: snapshot
+};
+
 void project;
 void snapshot;
 void event;
@@ -77,3 +83,4 @@ void seedBatch;
 void listProjectsResponse;
 void currentUserResponse;
 void projectHistoryResponse;
+void projectDetailResponse;

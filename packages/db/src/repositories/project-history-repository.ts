@@ -74,6 +74,15 @@ export function createProjectHistoryRepository(connection: Connection) {
       ).exec();
 
       return document ? toSeedBatch(document) : null;
+    },
+
+    async hardDeleteProjectHistory(projectId: string): Promise<number> {
+      const [eventsResult, seedBatchesResult] = await Promise.all([
+        ProjectEventModel.deleteMany({ projectId }).exec(),
+        SeedBatchModel.deleteMany({ projectId }).exec()
+      ]);
+
+      return eventsResult.deletedCount + seedBatchesResult.deletedCount;
     }
   };
 }

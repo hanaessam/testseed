@@ -16,7 +16,7 @@ export async function parseManualSchema(
   request: ParseSchemaRequest,
   options: ParseSchemaOptions = {}
 ): Promise<ParseSchemaResponse> {
-  const { schemaText } = request;
+  const schemaText = toSchemaText(request);
   const { openai, model, forceAI = false } = options;
 
   if (!schemaText || !schemaText.trim()) {
@@ -79,4 +79,17 @@ export async function parseManualSchema(
   }
 
   throw new Error("Unable to parse schema. Please verify your pasted Mongoose schema definitions.");
+}
+
+function toSchemaText(request: ParseSchemaRequest): string {
+  const chunks = [
+    request.schemaText?.trim(),
+    ...(request.schemaFiles ?? []).map((file) =>
+      file.content.trim()
+        ? `\n// Source: ${file.name}\n${file.content.trim()}`
+        : ""
+    )
+  ].filter((chunk): chunk is string => Boolean(chunk));
+
+  return chunks.join("\n\n");
 }

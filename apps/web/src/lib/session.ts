@@ -4,7 +4,7 @@ import type { AuthResponse, AuthUser } from "@testseed/types";
 
 const sessionStorageKey = "testseedSession";
 const legacyTokenKey = "testseedToken";
-const fallbackSessionTtlMs = 60 * 60 * 1000;
+const fallbackSessionTtlMs = 7 * 24 * 60 * 60 * 1000;
 
 export interface StoredSession {
   token: string;

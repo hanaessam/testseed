@@ -28,6 +28,11 @@ const projectSchema = new Schema<Omit<Project, "id">>(
       type: Date,
       required: true
     },
+    archivedAt: {
+      type: Date,
+      required: false,
+      index: true
+    },
     activeSchemaVersion: {
       type: Number,
       required: true,

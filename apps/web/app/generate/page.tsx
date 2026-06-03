@@ -1,39 +1,78 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Loader2, AlertCircle, Database, Layers } from "lucide-react";
-import { createProject, parseSchema } from "@/src/lib/api-client";
+import { Sparkles, Loader2, AlertCircle, Database, Layers, FileCode2, X } from "lucide-react";
+import { createProject, getProjectDetail, parseSchema } from "@/src/lib/api-client";
 import { getStoredSession } from "@/src/lib/session";
 import { ParsedSchema } from "@testseed/types";
+
+interface SchemaFileDraft {
+  name: string;
+  content: string;
+}
 
 export default function GeneratePage() {
   const [projectDescription, setProjectDescription] = useState("");
   const [schemaText, setSchemaText] = useState("");
+  const [schemaFiles, setSchemaFiles] = useState<SchemaFileDraft[]>([]);
   const [parsedSchema, setParsedSchema] = useState<ParsedSchema | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string | null>(null);
+  const [requestedMode, setRequestedMode] = useState<string | null>(null);
   const [activeCollectionIdx, setActiveCollectionIdx] = useState<number>(0);
 
   // Retrieve auth token on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const session = getStoredSession();
-      setToken(session?.token ?? null);
+      const storedToken = session?.token ?? null;
+      const existingProjectId = getProjectIdFromLocation();
+      setToken(storedToken);
+      setRequestedMode(new URLSearchParams(window.location.search).get("mode"));
+
+      if (existingProjectId) {
+        setProjectId(existingProjectId);
+      }
+
+      if (storedToken && existingProjectId) {
+        getProjectDetail(existingProjectId, storedToken)
+          .then((detail) => {
+            if (detail.project) {
+              setProjectName(detail.project.name);
+              setProjectDescription(detail.project.description ?? detail.project.name);
+              setParsedSchema(detail.activeSchemaSnapshot?.schema ?? null);
+              setActiveCollectionIdx(0);
+            }
+          })
+          .catch((loadError) => {
+            setError(
+              loadError instanceof Error
+                ? loadError.message
+                : "Could not load the project for schema update."
+            );
+          });
+      }
     }
   }, []);
 
+  const hasSchemaInput = useMemo(
+    () => Boolean(schemaText.trim()) || schemaFiles.some((file) => file.content.trim()),
+    [schemaFiles, schemaText]
+  );
+
   const handleReviewSchema = async () => {
-    if (!schemaText.trim()) {
-      setError("Please paste a Mongoose schema first.");
+    if (!hasSchemaInput) {
+      setError("Paste a Mongoose schema or add one or more schema files first.");
       return;
     }
 
@@ -46,7 +85,7 @@ export default function GeneratePage() {
         throw new Error("You must be logged in to parse schemas. Please sign in first.");
       }
 
-      let activeProjectId = projectId;
+      let activeProjectId = projectId ?? getProjectIdFromLocation();
       if (!activeProjectId) {
         const project = await createProject(
           {
@@ -57,10 +96,16 @@ export default function GeneratePage() {
         );
         activeProjectId = project.project.id;
         setProjectId(activeProjectId);
+        setProjectName(project.project.name);
       }
 
       const response = await parseSchema(
-        { schemaText, projectId: activeProjectId, source: "manual" },
+        {
+          schemaText,
+          schemaFiles,
+          projectId: activeProjectId,
+          source: "manual"
+        },
         token
       );
       setParsedSchema(response.schema);
@@ -102,7 +147,30 @@ const ProductSchema = new Schema({
 mongoose.model('User', UserSchema);
 mongoose.model('Product', ProductSchema);`;
     setSchemaText(demo);
+    setSchemaFiles([]);
     setError(null);
+  };
+
+  const handleSchemaFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) {
+      return;
+    }
+
+    const fileDrafts = await Promise.all(
+      files.map(async (file) => ({
+        name: file.name,
+        content: await file.text()
+      }))
+    );
+
+    setSchemaFiles((currentFiles) => [...currentFiles, ...fileDrafts]);
+    setError(null);
+    event.target.value = "";
+  };
+
+  const removeSchemaFile = (fileIndex: number) => {
+    setSchemaFiles((currentFiles) => currentFiles.filter((_, index) => index !== fileIndex));
   };
 
   const currentCollection = parsedSchema?.collections[activeCollectionIdx] || null;
@@ -114,7 +182,7 @@ mongoose.model('Product', ProductSchema);`;
         <div className="flex flex-col gap-4 border-b border-border bg-surface p-6 md:flex-row md:items-end">
           <div className="flex-1 space-y-2">
             <Label htmlFor="project-description" className="text-xs uppercase tracking-wider text-muted font-mono">
-              Project Description
+              {projectId ? "Updating Project" : "Project Description"}
             </Label>
             <Input
               id="project-description"
@@ -122,11 +190,22 @@ mongoose.model('Product', ProductSchema);`;
               onChange={(e) => setProjectDescription(e.target.value)}
               placeholder="e.g., E-commerce API with users, products, orders, and reviews"
               className="bg-background border-border text-sm font-medium focus:ring-accent"
+              disabled={Boolean(projectId)}
             />
+            {projectId ? (
+              <p className="text-xs text-muted">
+                New analysis will update schema snapshots for {projectName ?? "this project"}.
+              </p>
+            ) : null}
+            {requestedMode === "generate" && parsedSchema ? (
+              <p className="text-xs text-accent">
+                Loaded the saved schema for {projectName ?? "this project"}.
+              </p>
+            ) : null}
           </div>
           <Button
             onClick={handleReviewSchema}
-            disabled={isLoading || !schemaText.trim()}
+            disabled={isLoading || !hasSchemaInput}
             className="bg-accent text-background hover:bg-accent/90 font-semibold px-6 shadow-focus transition-all duration-200"
           >
             {isLoading ? (
@@ -137,7 +216,7 @@ mongoose.model('Product', ProductSchema);`;
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Analyze Schema
+                {projectId ? "Analyze and save" : "Analyze Schema"}
               </>
             )}
           </Button>
@@ -161,8 +240,58 @@ mongoose.model('Product', ProductSchema);`;
               </Button>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col pt-6">
+              <div className="mb-4 grid gap-3 border border-border bg-background p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                <div>
+                  <Label htmlFor="schema-files" className="font-mono text-xs uppercase tracking-wider text-muted">
+                    Schema files
+                  </Label>
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    Add one or more model files; TestSeed parses them together as one project schema.
+                  </p>
+                </div>
+                <Button asChild variant="secondary">
+                  <label htmlFor="schema-files" className="cursor-pointer">
+                    <FileCode2 className="h-4 w-4" />
+                    Add files
+                  </label>
+                </Button>
+                <input
+                  id="schema-files"
+                  type="file"
+                  multiple
+                  accept=".js,.jsx,.ts,.tsx,.mjs,.cjs,.txt"
+                  className="sr-only"
+                  onChange={handleSchemaFiles}
+                />
+              </div>
+
+              {schemaFiles.length > 0 ? (
+                <div className="mb-4 grid gap-2">
+                  {schemaFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex min-h-10 items-center gap-3 border border-border bg-background px-3 text-xs"
+                    >
+                      <FileCode2 className="h-4 w-4 shrink-0 text-accent" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-foreground">{file.name}</p>
+                        <p className="text-muted">{file.content.length.toLocaleString()} chars</p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${file.name}`}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-border text-muted transition-colors hover:border-error hover:text-error"
+                        onClick={() => removeSchemaFile(index)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
               <Textarea
-                className="flex-1 font-mono text-xs leading-relaxed p-4 bg-background border-border text-foreground/90 resize-none focus-visible:ring-accent focus:ring-accent focus:border-accent"
+                className="min-h-[30rem] flex-1 font-mono text-xs leading-relaxed p-4 bg-background border-border text-foreground/90 resize-none focus-visible:ring-accent focus:ring-accent focus:border-accent"
                 spellCheck={false}
                 value={schemaText}
                 onChange={(e) => setSchemaText(e.target.value)}
@@ -314,4 +443,12 @@ mongoose.model('Product', ProductSchema);`;
       </section>
     </AppShell>
   );
+}
+
+function getProjectIdFromLocation(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return new URLSearchParams(window.location.search).get("projectId");
 }

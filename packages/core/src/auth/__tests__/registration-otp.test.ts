@@ -3,7 +3,7 @@ import {
   requestRegistrationOtp,
   validatePassword,
   verifyRegistrationOtp
-} from "./index";
+} from "../index";
 import type { PendingRegistration, User } from "@testseed/types";
 
 const jwtSecret = "test-secret";

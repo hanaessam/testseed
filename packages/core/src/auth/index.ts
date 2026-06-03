@@ -373,7 +373,7 @@ function toAuthResponse(user: User, jwtSecret: string): AuthResponse {
     jwtSecret,
     {
       subject: user.id,
-      expiresIn: "1h"
+      expiresIn: "7d"
     }
   );
 

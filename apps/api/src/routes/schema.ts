@@ -17,11 +17,24 @@ export interface SchemaRouterDeps {
   projectHistoryRepository?: ProjectHistoryRepository;
 }
 
-const parseSchemaRequestSchema = z.object({
-  schemaText: z.string().min(1, "Schema text cannot be empty."),
-  projectId: z.string().min(1).optional(),
-  source: z.enum(["manual", "mongodb", "ai"]).optional()
+const schemaFileSchema = z.object({
+  name: z.string().min(1),
+  content: z.string().min(1)
 });
+
+const parseSchemaRequestSchema = z
+  .object({
+    schemaText: z.string().optional(),
+    schemaFiles: z.array(schemaFileSchema).optional(),
+    projectId: z.string().min(1).optional(),
+    source: z.enum(["manual", "mongodb", "ai"]).optional()
+  })
+  .refine(
+    (request) =>
+      Boolean(request.schemaText?.trim()) ||
+      Boolean(request.schemaFiles?.some((file) => file.content.trim())),
+    "Schema text or at least one schema file is required."
+  );
 
 export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
   const router = Router();
@@ -31,7 +44,7 @@ export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
     validateBody(parseSchemaRequestSchema),
     async (request: Request, response: Response, next: NextFunction) => {
       try {
-        const { schemaText, projectId, source } = request.body;
+        const { projectId, source } = request.body;
 
         let openaiClient: OpenAI | undefined = undefined;
         if (process.env.OPENAI_API_KEY) {
@@ -41,7 +54,10 @@ export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
         }
 
         const result = await parseManualSchema(
-          { schemaText },
+          {
+            schemaText: request.body.schemaText,
+            schemaFiles: request.body.schemaFiles
+          },
           { openai: openaiClient }
         );
 

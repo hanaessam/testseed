@@ -27,6 +27,10 @@ const projectSnapshotSchema = new Schema<Omit<ProjectSchemaSnapshot, "id">>(
     createdAt: {
       type: Date,
       required: true
+    },
+    archivedAt: {
+      type: Date,
+      required: false
     }
   },
   {

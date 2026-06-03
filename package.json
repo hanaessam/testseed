@@ -8,7 +8,8 @@
     "lint": "turbo run lint",
     "setup:dev": "node scripts/setup-dev.mjs",
     "test": "turbo run test",
-    "health": "npm install && npx turbo build lint test",
+    "health": "npm install && npm run test:suite",
+    "test:suite": "node scripts/test-suite.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
   },

@@ -1,6 +1,6 @@
-import { parseManualSchema } from "./parser";
-import { parseManualSchemaLocal } from "./local-parser";
-import { parseManualSchemaAI } from "./ai-parser";
+import { parseManualSchema } from "../parser";
+import { parseManualSchemaLocal } from "../local-parser";
+import { parseManualSchemaAI } from "../ai-parser";
 
 describe("Manual Schema Parser", () => {
   describe("Local Sandbox Parser", () => {
@@ -103,6 +103,33 @@ describe("Manual Schema Parser", () => {
       expect(authorField?.type).toBe("ObjectId");
       expect(authorField?.ref).toBe("User");
     });
+
+    it("should parse exported schema files without falling back to static analysis", () => {
+      const schemaText = `
+        import mongoose, { Schema } from 'mongoose';
+
+        export interface CustomerDocument {
+          email: string;
+          name?: string;
+        }
+
+        export type CustomerRole = 'buyer' | 'seller';
+
+        export const CustomerSchema = new Schema({
+          email: { type: String, required: true },
+          name: String
+        });
+
+        export default mongoose.model('Customer', CustomerSchema);
+      `;
+
+      const result = parseManualSchemaLocal(schemaText);
+
+      expect(result.warnings).toEqual([]);
+      expect(result.schema.collections).toHaveLength(1);
+      expect(result.schema.collections[0].name).toBe("Customer");
+      expect(result.schema.collections[0].fields.find((field) => field.name === "email")?.required).toBe(true);
+    });
   });
 
   describe("AI-Assisted Parser", () => {
@@ -154,6 +181,35 @@ describe("Manual Schema Parser", () => {
   });
 
   describe("Coordinator (parseManualSchema)", () => {
+    it("should parse multiple schema files as one project schema", async () => {
+      const result = await parseManualSchema({
+        schemaFiles: [
+          {
+            name: "user.schema.ts",
+            content: `
+              const UserSchema = new Schema({
+                email: { type: String, required: true }
+              });
+            `
+          },
+          {
+            name: "product.schema.ts",
+            content: `
+              const ProductSchema = new Schema({
+                name: String,
+                owner: { type: Schema.Types.ObjectId, ref: 'User' }
+              });
+            `
+          }
+        ]
+      });
+
+      expect(result.schema.collections.map((collection) => collection.name)).toEqual([
+        "User",
+        "Product"
+      ]);
+    });
+
     it("should use local parser if it successfully extracts collections", async () => {
       const schemaText = `
         const ItemSchema = new Schema({

@@ -1,5 +1,5 @@
 import type { User } from "@testseed/types";
-import { getCurrentAuthUser } from "./index";
+import { getCurrentAuthUser } from "../index";
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
