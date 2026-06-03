@@ -1,4 +1,4 @@
-import { parseManualSchema, saveParsedSchemaToProject } from "@testseed/core";
+import { parseManualSchema } from "@testseed/core";
 import type {
   createProjectRepository,
   createProjectHistoryRepository
@@ -7,7 +7,6 @@ import { Router, type NextFunction, type Request, type Response } from "express"
 import OpenAI from "openai";
 import { z } from "zod";
 import { validateBody } from "../middleware/validate";
-import { type AuthenticatedRequest } from "../middleware/auth";
 
 type ProjectRepository = ReturnType<typeof createProjectRepository>;
 type ProjectHistoryRepository = ReturnType<typeof createProjectHistoryRepository>;
@@ -44,8 +43,6 @@ export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
     validateBody(parseSchemaRequestSchema),
     async (request: Request, response: Response, next: NextFunction) => {
       try {
-        const { projectId, source } = request.body;
-
         let openaiClient: OpenAI | undefined = undefined;
         if (process.env.OPENAI_API_KEY) {
           openaiClient = new OpenAI({
@@ -61,37 +58,7 @@ export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
           { openai: openaiClient }
         );
 
-        if (!projectId || !deps.projectRepository || !deps.projectHistoryRepository) {
-          response.status(200).json(result);
-          return;
-        }
-
-        const authenticatedRequest = request as AuthenticatedRequest;
-        if (!authenticatedRequest.auth) {
-          response.status(401).json({ message: "Authentication required" });
-          return;
-        }
-
-        const persisted = await saveParsedSchemaToProject(
-          {
-            projectId,
-            ownerId: authenticatedRequest.auth.userId,
-            schema: result.schema,
-            source: source ?? "manual"
-          },
-          {
-            findProjectById: deps.projectRepository.findProjectById,
-            saveSchemaSnapshot: deps.projectRepository.saveSchemaSnapshot,
-            updateProjectActiveSchema: deps.projectRepository.updateProjectActiveSchema,
-            appendProjectEvent: deps.projectHistoryRepository.appendProjectEvent
-          }
-        );
-
-        response.status(200).json({
-          ...result,
-          project: persisted.project,
-          snapshot: persisted.snapshot
-        });
+        response.status(200).json(result);
       } catch (error) {
         next(error);
       }

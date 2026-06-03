@@ -42,6 +42,10 @@ export interface AuthRouterConfig {
   githubClientSecret?: string;
   githubCallbackUrl?: string;
   webAppUrl?: string;
+  completeRepositoryContextCallback?(request: {
+    code: string;
+    state: string;
+  }): Promise<string>;
 }
 
 interface GitHubAccessTokenResponse {
@@ -87,7 +91,10 @@ export function createAuthRouter(
     "/github/callback",
     async (request: Request, response: Response, next: NextFunction) => {
       try {
-        const query = z.object({ code: z.string().min(1) }).parse(request.query);
+        const query = z.object({
+          code: z.string().min(1),
+          state: z.string().min(1).optional()
+        }).parse(request.query);
 
         if (!config.githubClientId || !config.githubClientSecret || !config.githubCallbackUrl) {
           throw new AuthError(
@@ -95,6 +102,15 @@ export function createAuthRouter(
             503,
             "GitHub login is not configured"
           );
+        }
+
+        if (query.state && config.completeRepositoryContextCallback) {
+          const redirectUrl = await config.completeRepositoryContextCallback({
+            code: query.code,
+            state: query.state
+          });
+          response.redirect(redirectUrl);
+          return;
         }
 
         const accessToken = await exchangeGitHubCodeForToken(query.code, {

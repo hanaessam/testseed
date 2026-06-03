@@ -15,7 +15,7 @@ import { createRegistrationOtpEmailSender } from "./email/registration-otp-email
 import { requireAuth } from "./middleware/auth";
 import { authErrorHandler, createAuthRouter } from "./routes/auth";
 import { createHistoryRouter } from "./routes/history";
-import { createProjectsRouter } from "./routes/projects";
+import { completeRepositoryContextCallback, createProjectsRouter } from "./routes/projects";
 import { createRollbackRouter } from "./routes/rollback";
 import { createSchemaRouter } from "./routes/schema";
 
@@ -47,6 +47,7 @@ const githubClientId = process.env.GITHUB_CLIENT_ID;
 const githubClientSecret = process.env.GITHUB_CLIENT_SECRET;
 const githubCallbackUrl = process.env.GITHUB_CALLBACK_URL;
 const webAppUrl = process.env.WEB_APP_URL;
+const openaiApiKey = process.env.OPENAI_API_KEY;
 
 if (!mongoUri) {
   throw new Error("MONGODB_URI is required");
@@ -88,7 +89,18 @@ const authRouterConfig = {
   githubClientId,
   githubClientSecret,
   githubCallbackUrl,
-  webAppUrl
+  webAppUrl,
+  completeRepositoryContextCallback: (request: { code: string; state: string }) =>
+    completeRepositoryContextCallback(request, {
+      projectRepository,
+      projectHistoryRepository,
+      githubClientId,
+      githubClientSecret,
+      githubCallbackUrl,
+      webAppUrl,
+      jwtSecret,
+      openaiApiKey
+    })
 };
 
 export const app = express();
@@ -116,7 +128,13 @@ app.use(
   "/projects",
   createProjectsRouter({
     projectRepository,
-    projectHistoryRepository
+    projectHistoryRepository,
+    githubClientId,
+    githubClientSecret,
+    githubCallbackUrl,
+    webAppUrl,
+    jwtSecret,
+    openaiApiKey
   })
 );
 app.use(

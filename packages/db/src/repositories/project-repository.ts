@@ -1,4 +1,4 @@
-import type { ParsedSchema, Project, ProjectSchemaSnapshot } from "@testseed/types";
+import type { ParsedSchema, Project, ProjectContext, ProjectSchemaSnapshot } from "@testseed/types";
 import type { Connection } from "mongoose";
 import {
   createProjectModel,
@@ -28,6 +28,12 @@ export interface SaveSchemaSnapshotInput {
 export interface UpdateProjectRecordInput {
   name?: string;
   description?: string;
+  updatedAt: Date;
+}
+
+export interface UpdateProjectContextRecordInput {
+  description?: string;
+  context: ProjectContext;
   updatedAt: Date;
 }
 
@@ -79,6 +85,53 @@ export function createProjectRepository(connection: Connection) {
       const document = await ProjectModel.findByIdAndUpdate(projectId, update, {
         new: true
       }).exec();
+
+      if (!document) {
+        throw new Error(`Project ${projectId} was not found`);
+      }
+
+      return toProject(document);
+    },
+
+    async updateProjectContextRecord(
+      projectId: string,
+      input: UpdateProjectContextRecordInput
+    ): Promise<Project> {
+      const update: Record<string, unknown> = {
+        description: input.description,
+        context: input.context,
+        updatedAt: input.updatedAt
+      };
+
+      if (input.description === undefined) {
+        update.$unset = { description: "" };
+        delete update.description;
+      }
+
+      const document = await ProjectModel.findByIdAndUpdate(projectId, update, {
+        new: true
+      }).exec();
+
+      if (!document) {
+        throw new Error(`Project ${projectId} was not found`);
+      }
+
+      return toProject(document);
+    },
+
+    async removeProjectRepositoryContext(
+      projectId: string,
+      context: ProjectContext,
+      updatedAt: Date
+    ): Promise<Project> {
+      const document = await ProjectModel.findByIdAndUpdate(
+        projectId,
+        {
+          context,
+          updatedAt
+        },
+        { new: true }
+      ).exec();
 
       if (!document) {
         throw new Error(`Project ${projectId} was not found`);
@@ -242,6 +295,7 @@ function toProject(document: {
   ownerId: string;
   name: string;
   description?: string;
+  context?: ProjectContext;
   createdAt: Date;
   updatedAt: Date;
   activeSchemaVersion: number;
@@ -253,6 +307,7 @@ function toProject(document: {
     ownerId: document.ownerId,
     name: document.name,
     description: document.description,
+    context: document.context,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
     archivedAt: document.archivedAt,

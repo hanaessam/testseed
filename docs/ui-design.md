@@ -44,3 +44,10 @@ Local shadcn-style primitives live in `apps/web/components/ui/`.
 - `Label`: small muted field labels.
 
 All API calls from UI components must go through `apps/web/src/lib/api-client.ts`.
+
+## Project Context Controls
+
+- Project context controls belong in existing workflow panels, not a standalone landing-style page.
+- Description editing uses the existing `Textarea` and compact action buttons.
+- Repository context uses an `owner/repo` input, a clear authorize action, status text, warnings, and a remove action when repository context is connected.
+- Context review should show description-only, repository-enhanced, or generic-fallback status without blocking schema input.

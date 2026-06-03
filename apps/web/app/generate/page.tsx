@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Sparkles, Loader2, AlertCircle, Database, Layers, FileCode2, X } from "lucide-react";
-import { createProject, getProjectDetail, parseSchema } from "@/src/lib/api-client";
+import {
+  createProject,
+  getProjectDetail,
+  parseSchema,
+  startRepositoryContextAuthorization,
+  updateProjectContext,
+  updateProjectSchema
+} from "@/src/lib/api-client";
 import { getStoredSession } from "@/src/lib/session";
 import { ParsedSchema } from "@testseed/types";
 
@@ -18,11 +25,14 @@ interface SchemaFileDraft {
 }
 
 export default function GeneratePage() {
+  const [projectNameDraft, setProjectNameDraft] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
+  const [repositoryDraft, setRepositoryDraft] = useState("");
   const [schemaText, setSchemaText] = useState("");
   const [schemaFiles, setSchemaFiles] = useState<SchemaFileDraft[]>([]);
   const [parsedSchema, setParsedSchema] = useState<ParsedSchema | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [contextWarnings, setContextWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -30,6 +40,11 @@ export default function GeneratePage() {
   const [projectName, setProjectName] = useState<string | null>(null);
   const [requestedMode, setRequestedMode] = useState<string | null>(null);
   const [activeCollectionIdx, setActiveCollectionIdx] = useState<number>(0);
+  const [projectMessage, setProjectMessage] = useState<string | null>(null);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [schemaSaveMessage, setSchemaSaveMessage] = useState<string | null>(null);
+  const [isSavingSchema, setIsSavingSchema] = useState(false);
+  const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
 
   // Retrieve auth token on mount
   useEffect(() => {
@@ -49,7 +64,14 @@ export default function GeneratePage() {
           .then((detail) => {
             if (detail.project) {
               setProjectName(detail.project.name);
-              setProjectDescription(detail.project.description ?? detail.project.name);
+              setProjectNameDraft(detail.project.name);
+              setProjectDescription(
+                detail.project.context?.description ?? detail.project.description ?? detail.project.name
+              );
+              setRepositoryDraft(detail.project.context?.repository?.repositoryFullName ?? "");
+              setContextWarnings(
+                detail.project.context?.warnings.map((warning) => warning.message) ?? []
+              );
               setParsedSchema(detail.activeSchemaSnapshot?.schema ?? null);
               setActiveCollectionIdx(0);
             }
@@ -71,6 +93,11 @@ export default function GeneratePage() {
   );
 
   const handleReviewSchema = async () => {
+    if (!projectId) {
+      setError("Create a project first so TestSeed can save context before analysis.");
+      return;
+    }
+
     if (!hasSchemaInput) {
       setError("Paste a Mongoose schema or add one or more schema files first.");
       return;
@@ -79,36 +106,24 @@ export default function GeneratePage() {
     setIsLoading(true);
     setError(null);
     setWarnings([]);
+    setContextWarnings([]);
 
     try {
       if (!token) {
         throw new Error("You must be logged in to parse schemas. Please sign in first.");
       }
 
-      let activeProjectId = projectId ?? getProjectIdFromLocation();
-      if (!activeProjectId) {
-        const project = await createProject(
-          {
-            name: projectDescription.trim() || "Untitled generation project",
-            description: projectDescription.trim() || undefined
-          },
-          token
-        );
-        activeProjectId = project.project.id;
-        setProjectId(activeProjectId);
-        setProjectName(project.project.name);
-      }
-
       const response = await parseSchema(
         {
           schemaText,
           schemaFiles,
-          projectId: activeProjectId,
           source: "manual"
         },
         token
       );
       setParsedSchema(response.schema);
+      setSavedProjectId(null);
+      setSchemaSaveMessage(null);
       if (response.warnings && response.warnings.length > 0) {
         setWarnings(response.warnings);
       }
@@ -119,6 +134,134 @@ export default function GeneratePage() {
       setParsedSchema(null);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    if (!token) {
+      setProjectMessage("You must be logged in to create a project.");
+      return;
+    }
+
+    const projectName = projectNameDraft.trim() || projectDescription.trim();
+    if (!projectName) {
+      setProjectMessage("Project name is required.");
+      return;
+    }
+
+    setIsCreatingProject(true);
+    setProjectMessage(null);
+    setContextWarnings([]);
+
+    try {
+      const created = await createProject(
+        {
+          name: projectName,
+          description: projectDescription.trim() || undefined
+        },
+        token
+      );
+      const activeProjectId = created.project.id;
+      setProjectId(activeProjectId);
+      setProjectName(created.project.name);
+      setProjectNameDraft(created.project.name);
+
+      const contextResponse = await updateProjectContext(
+        activeProjectId,
+        {
+          description: projectDescription
+        },
+        token
+      );
+      setProjectDescription(
+        contextResponse.project.context?.description ??
+          contextResponse.project.description ??
+          projectDescription
+      );
+      setContextWarnings(
+        contextResponse.project.context?.warnings.map((warning) => warning.message) ?? []
+      );
+      setProjectMessage("Project created and context saved.");
+
+      if (repositoryDraft.trim()) {
+        const auth = await startRepositoryContextAuthorization(
+          activeProjectId,
+          { repositoryFullName: repositoryDraft },
+          token
+        );
+        window.location.href = auth.authorizationUrl;
+      }
+    } catch (createError) {
+      setProjectMessage(
+        createError instanceof Error ? createError.message : "Could not create project."
+      );
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
+  const handleSaveExistingContext = async () => {
+    if (!token || !projectId) {
+      setProjectMessage("Create or load a project before saving context.");
+      return;
+    }
+
+    setIsCreatingProject(true);
+    setProjectMessage(null);
+    setContextWarnings([]);
+
+    try {
+      const contextResponse = await updateProjectContext(
+        projectId,
+        {
+          description: projectDescription
+        },
+        token
+      );
+      setProjectDescription(
+        contextResponse.project.context?.description ??
+          contextResponse.project.description ??
+          projectDescription
+      );
+      setContextWarnings(
+        contextResponse.project.context?.warnings.map((warning) => warning.message) ?? []
+      );
+      setProjectMessage("Project context saved.");
+    } catch (saveError) {
+      setProjectMessage(
+        saveError instanceof Error ? saveError.message : "Could not save project context."
+      );
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
+  const handleSaveParsedSchema = async () => {
+    if (!token || !projectId || !parsedSchema) {
+      setSchemaSaveMessage("Analyze a schema for a saved project before saving.");
+      return;
+    }
+
+    setIsSavingSchema(true);
+    setSchemaSaveMessage(null);
+
+    try {
+      const result = await updateProjectSchema(
+        projectId,
+        {
+          schema: parsedSchema,
+          source: "manual"
+        },
+        token
+      );
+      setSavedProjectId(result.project.id);
+      setSchemaSaveMessage(`Saved schema v${result.project.activeSchemaVersion}.`);
+    } catch (saveError) {
+      setSchemaSaveMessage(
+        saveError instanceof Error ? saveError.message : "Could not save schema."
+      );
+    } finally {
+      setIsSavingSchema(false);
     }
   };
 
@@ -180,9 +323,23 @@ mongoose.model('Product', ProductSchema);`;
       <section className="flex min-h-screen flex-col bg-background text-foreground font-sans">
         {/* Top Context Bar */}
         <div className="flex flex-col gap-4 border-b border-border bg-surface p-6 md:flex-row md:items-end">
-          <div className="flex-1 space-y-2">
+          <div className="grid flex-1 gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="project-name" className="text-xs uppercase tracking-wider text-muted font-mono">
+                Project Name
+              </Label>
+              <Input
+                id="project-name"
+                value={projectNameDraft}
+                onChange={(e) => setProjectNameDraft(e.target.value)}
+                placeholder="e.g., E-commerce API"
+                className="bg-background border-border text-sm font-medium focus:ring-accent"
+                disabled={Boolean(projectId)}
+              />
+            </div>
+            <div className="space-y-2">
             <Label htmlFor="project-description" className="text-xs uppercase tracking-wider text-muted font-mono">
-              {projectId ? "Updating Project" : "Project Description"}
+              Project Context
             </Label>
             <Input
               id="project-description"
@@ -190,22 +347,76 @@ mongoose.model('Product', ProductSchema);`;
               onChange={(e) => setProjectDescription(e.target.value)}
               placeholder="e.g., E-commerce API with users, products, orders, and reviews"
               className="bg-background border-border text-sm font-medium focus:ring-accent"
-              disabled={Boolean(projectId)}
             />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="repository-url" className="text-xs uppercase tracking-wider text-muted font-mono">
+                GitHub Repository
+              </Label>
+              <Input
+                id="repository-url"
+                value={repositoryDraft}
+                onChange={(e) => setRepositoryDraft(e.target.value)}
+                placeholder="owner/repo or GitHub URL"
+              className="bg-background border-border text-sm font-medium focus:ring-accent"
+              disabled={Boolean(projectId)}
+              />
+            </div>
+            <div className="md:col-span-3">
             {projectId ? (
               <p className="text-xs text-muted">
                 New analysis will update schema snapshots for {projectName ?? "this project"}.
               </p>
+            ) : null}
+            {contextWarnings.length > 0 ? (
+              <div className="mt-2 space-y-1">
+                {contextWarnings.map((warning) => (
+                  <p key={warning} className="text-xs text-amber-400">
+                    {warning}
+                  </p>
+                ))}
+              </div>
             ) : null}
             {requestedMode === "generate" && parsedSchema ? (
               <p className="text-xs text-accent">
                 Loaded the saved schema for {projectName ?? "this project"}.
               </p>
             ) : null}
+            {projectMessage ? (
+              <p className="mt-2 text-xs text-muted">{projectMessage}</p>
+            ) : null}
+            </div>
           </div>
+          {!projectId ? (
+            <Button
+              onClick={handleCreateProject}
+              disabled={isCreatingProject || !(projectNameDraft.trim() || projectDescription.trim())}
+              variant="secondary"
+            >
+              {isCreatingProject ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Database className="mr-2 h-4 w-4" />
+              )}
+              Create project
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSaveExistingContext}
+              disabled={isCreatingProject}
+              variant="secondary"
+            >
+              {isCreatingProject ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Database className="mr-2 h-4 w-4" />
+              )}
+              Save context
+            </Button>
+          )}
           <Button
             onClick={handleReviewSchema}
-            disabled={isLoading || !hasSchemaInput}
+            disabled={isLoading || !hasSchemaInput || !projectId}
             className="bg-accent text-background hover:bg-accent/90 font-semibold px-6 shadow-focus transition-all duration-200"
           >
             {isLoading ? (
@@ -216,7 +427,7 @@ mongoose.model('Product', ProductSchema);`;
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                {projectId ? "Analyze and save" : "Analyze Schema"}
+                Analyze schema
               </>
             )}
           </Button>
@@ -332,6 +543,28 @@ mongoose.model('Product', ProductSchema);`;
 
               {parsedSchema ? (
                 <div className="flex flex-1 flex-col space-y-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      onClick={handleSaveParsedSchema}
+                      disabled={isSavingSchema || !projectId}
+                    >
+                      {isSavingSchema ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Database className="mr-2 h-4 w-4" />
+                      )}
+                      Save schema
+                    </Button>
+                    {savedProjectId ? (
+                      <Button asChild variant="secondary">
+                        <a href={`/projects/${savedProjectId}`}>View project details</a>
+                      </Button>
+                    ) : null}
+                    {schemaSaveMessage ? (
+                      <p className="text-xs text-muted">{schemaSaveMessage}</p>
+                    ) : null}
+                  </div>
                   {/* Collections List (Tabs) */}
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wider text-muted font-mono">Discovered Collections</Label>
