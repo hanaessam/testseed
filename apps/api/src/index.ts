@@ -11,6 +11,8 @@ import dotenv from "dotenv";
 import express, { type NextFunction, type Request, type Response } from "express";
 import fs from "node:fs";
 import path from "node:path";
+import { createEmailChangeVerificationEmailSender } from "./email/email-change-verification-email";
+import { createPasswordResetEmailSender } from "./email/password-reset-email";
 import { createRegistrationOtpEmailSender } from "./email/registration-otp-email";
 import { requireAuth } from "./middleware/auth";
 import { authErrorHandler, createAuthRouter } from "./routes/auth";
@@ -82,6 +84,22 @@ const sendRegistrationOtpEmail = createRegistrationOtpEmailSender({
   pass: smtpPass,
   from: smtpFrom
 });
+const sendPasswordResetEmail = createPasswordResetEmailSender({
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure,
+  user: smtpUser,
+  pass: smtpPass,
+  from: smtpFrom
+});
+const sendEmailChangeVerificationEmail = createEmailChangeVerificationEmailSender({
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure,
+  user: smtpUser,
+  pass: smtpPass,
+  from: smtpFrom
+});
 const authRouterConfig = {
   jwtSecret,
   otpTtlSeconds: Number(process.env.OTP_TTL_SECONDS ?? 600),
@@ -114,6 +132,8 @@ app.use(
     userRepository,
     registrationOtpCache,
     sendRegistrationOtpEmail,
+    sendPasswordResetEmail,
+    sendEmailChangeVerificationEmail,
     authRouterConfig
   )
 );

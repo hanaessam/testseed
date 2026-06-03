@@ -250,6 +250,14 @@ export function AuthCard({ mode }: AuthCardProps) {
                 {isLoading ? <span className="h-2 w-2 animate-pulse bg-accent-foreground" /> : null}
                 Log in
               </Button>
+              <div className="text-right">
+                <Link
+                  className="text-sm text-accent transition-colors hover:text-foreground"
+                  href="/forgot-password"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </form>
           )}
 

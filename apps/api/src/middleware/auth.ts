@@ -13,6 +13,8 @@ const publicAuthPaths = new Set([
   "/auth/register/request-otp",
   "/auth/register/verify-otp",
   "/auth/login",
+  "/auth/password/forgot",
+  "/auth/password/reset",
   "/auth/github",
   "/auth/github/callback"
 ]);

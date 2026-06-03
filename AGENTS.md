@@ -70,6 +70,6 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For the active Spec Kit feature, read:
 
-- `specs/001-project-context-setup/spec.md`
-- `specs/001-project-context-setup/plan.md`
+- `specs/002-account-management/spec.md`
+- `specs/002-account-management/plan.md`
 <!-- SPECKIT END -->

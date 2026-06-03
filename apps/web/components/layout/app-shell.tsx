@@ -13,7 +13,7 @@ const navItems = [
   { href: "/generate", label: "Generate", icon: Sprout },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/dashboard", label: "History", icon: History },
-  { href: "/dashboard", label: "Account", icon: UserCircle }
+  { href: "/account", label: "Account", icon: UserCircle }
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

@@ -1,4 +1,24 @@
 export type {
+  AccountMessageResponse,
+  AccountProfileResponse,
+  AuthRequest,
+  AuthResponse,
+  ChangePasswordRequest,
+  CurrentUserResponse,
+  DeleteAccountRequest,
+  DeleteAccountResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
+  LogoutResponse,
+  RegistrationOtpRequest,
+  RegistrationOtpResponse,
+  ResetPasswordRequest,
+  UpdateAccountProfileRequest,
+  VerifyEmailChangeRequest,
+  VerifyRegistrationOtpRequest
+} from "./auth";
+
+export type {
   ParseSchemaRequest,
   ParseSchemaResponse,
   SchemaFileInput
