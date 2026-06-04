@@ -19,6 +19,11 @@ import { completeRepositoryContextCallback, createProjectsRouter } from "./route
 import { createRollbackRouter } from "./routes/rollback";
 import { createSchemaRouter } from "./routes/schema";
 
+import dns from "node:dns";
+
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
+dns.setDefaultResultOrder("ipv4first");
+
 dotenv.config({
   path: findRootEnvPath()
 });
