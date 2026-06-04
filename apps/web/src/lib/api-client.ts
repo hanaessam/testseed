@@ -1,9 +1,19 @@
 import type {
   AuthRequest,
   AuthResponse,
+  AccountMessageResponse,
+  AccountProfileResponse,
+  ChangePasswordRequest,
+  DeleteAccountRequest,
+  DeleteAccountResponse,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
   LogoutResponse,
   RegistrationOtpRequest,
   RegistrationOtpResponse,
+  ResetPasswordRequest,
+  UpdateAccountProfileRequest,
+  VerifyEmailChangeRequest,
   VerifyRegistrationOtpRequest,
   ParseSchemaRequest,
   ParseSchemaResponse,
@@ -57,12 +67,85 @@ export async function logout(token: string): Promise<LogoutResponse> {
 export async function getCurrentUser(token: string): Promise<CurrentUserResponse> {
   const response = await getJson<CurrentUserResponse>("/auth/me", token);
   return {
-    user: response.user
-      ? {
-          ...response.user,
-          createdAt: new Date(response.user.createdAt)
-        }
-      : null
+    user: response.user ? toAuthUser(response.user) : null
+  };
+}
+
+export async function updateProfile(
+  request: UpdateAccountProfileRequest,
+  token: string
+): Promise<AccountProfileResponse> {
+  const response = await patchJson<UpdateAccountProfileRequest, AccountProfileResponse>(
+    "/auth/me",
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    user: toAuthUser(response.user)
+  };
+}
+
+export async function verifyEmailChange(
+  request: VerifyEmailChangeRequest,
+  token: string
+): Promise<AccountProfileResponse> {
+  const response = await postJson<VerifyEmailChangeRequest, AccountProfileResponse>(
+    "/auth/me/email/verify",
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    user: toAuthUser(response.user)
+  };
+}
+
+export async function changePassword(
+  request: ChangePasswordRequest,
+  token: string
+): Promise<AccountMessageResponse> {
+  return postJson<ChangePasswordRequest, AccountMessageResponse>(
+    "/auth/me/password",
+    request,
+    token
+  );
+}
+
+export async function forgotPassword(
+  request: ForgotPasswordRequest
+): Promise<ForgotPasswordResponse> {
+  return postJson<ForgotPasswordRequest, ForgotPasswordResponse>(
+    "/auth/password/forgot",
+    request
+  );
+}
+
+export async function resetPassword(
+  request: ResetPasswordRequest
+): Promise<AccountMessageResponse> {
+  return postJson<ResetPasswordRequest, AccountMessageResponse>(
+    "/auth/password/reset",
+    request
+  );
+}
+
+export async function deleteAccount(
+  request: DeleteAccountRequest,
+  token: string
+): Promise<DeleteAccountResponse> {
+  const response = await deleteJson<DeleteAccountRequest, DeleteAccountResponse>(
+    "/auth/me",
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    deactivatedAt: new Date(response.deactivatedAt),
+    scheduledDeletionAt: new Date(response.scheduledDeletionAt)
   };
 }
 
@@ -326,10 +409,7 @@ async function postAuth(
 
   return {
     ...authResponse,
-    user: {
-      ...authResponse.user,
-      createdAt: new Date(authResponse.user.createdAt)
-    }
+    user: toAuthUser(authResponse.user)
   };
 }
 
@@ -425,5 +505,12 @@ function toProject(project: Project): Project {
     createdAt: new Date(project.createdAt),
     updatedAt: new Date(project.updatedAt),
     archivedAt: project.archivedAt ? new Date(project.archivedAt) : undefined
+  };
+}
+
+function toAuthUser(user: AuthResponse["user"]): AuthResponse["user"] {
+  return {
+    ...user,
+    createdAt: new Date(user.createdAt)
   };
 }

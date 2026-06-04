@@ -17,9 +17,42 @@ const userSchema = new Schema<Omit<User, "id">>(
       type: String,
       required: true
     },
+    displayName: {
+      type: String,
+      required: false,
+      trim: true
+    },
+    pendingEmail: {
+      type: String,
+      required: false,
+      trim: true,
+      lowercase: true,
+      index: true
+    },
+    status: {
+      type: String,
+      required: true,
+      enum: ["active", "deactivated", "deleted"],
+      default: "active",
+      index: true
+    },
+    deactivatedAt: {
+      type: Date,
+      required: false
+    },
+    scheduledDeletionAt: {
+      type: Date,
+      required: false,
+      index: true
+    },
     createdAt: {
       type: Date,
       required: true
+    },
+    updatedAt: {
+      type: Date,
+      required: true,
+      default: () => new Date()
     }
   },
   {

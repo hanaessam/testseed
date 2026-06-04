@@ -71,7 +71,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 WEB_APP_URL=http://localhost:3000
 ```
 
-Required for email OTP registration:
+Required for email verification, password reset, and account email-change codes:
 
 ```env
 REDIS_URL=https://your-upstash-redis-url.upstash.io
@@ -152,7 +152,7 @@ For repository context:
 - [Design](DESIGN.md)
 - [Web UI design context](docs/ui-design.md)
 - [GitHub auth direction](docs/github-auth-design.md)
-- [Email OTP registration](docs/auth-email-otp.md)
+- [Email OTP registration and account recovery](docs/auth-email-otp.md)
 - [Contributing](CONTRIBUTING.md)
 - [Architecture decisions](docs/adr/)
 - [Requirements](docs/requirements.md)

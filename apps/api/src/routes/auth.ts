@@ -1,12 +1,21 @@
 import {
   AuthError,
+  changePassword,
   createGitHubAuthorizationUrl,
+  deleteAccount,
+  getAccountProfile,
   getCurrentAuthUser,
   loginUser,
   logoutUser,
+  requestAccountProfileUpdate,
+  requestPasswordReset,
   requestRegistrationOtp,
   resolveGitHubLogin,
+  completePasswordReset,
+  verifyEmailChange,
   verifyRegistrationOtp,
+  type EmailChangeVerificationEmailMessage,
+  type PasswordResetEmailMessage,
   type RegistrationOtpEmailMessage
 } from "@testseed/core";
 import type { createRegistrationOtpCache, createUserRepository } from "@testseed/db";
@@ -32,6 +41,37 @@ const requestRegistrationOtpSchema = z.object({
 const verifyRegistrationOtpSchema = z.object({
   email: z.string().email(),
   otp: z.string().regex(/^\d{6}$/)
+});
+
+const updateAccountProfileSchema = z.object({
+  displayName: z.string().max(120).optional(),
+  email: z.string().email().optional()
+});
+
+const verifyEmailChangeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/)
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(1),
+  confirmPassword: z.string().min(1)
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/),
+  newPassword: z.string().min(1),
+  confirmPassword: z.string().min(1)
+});
+
+const deleteAccountSchema = z.object({
+  currentPassword: z.string().min(1),
+  confirmationPhrase: z.literal("DELETE")
 });
 
 export interface AuthRouterConfig {
@@ -62,6 +102,10 @@ export function createAuthRouter(
   userRepository: UserRepository,
   registrationOtpCache: RegistrationOtpCache,
   sendRegistrationOtpEmail: (message: RegistrationOtpEmailMessage) => Promise<void>,
+  sendPasswordResetEmail: (message: PasswordResetEmailMessage) => Promise<void>,
+  sendEmailChangeVerificationEmail: (
+    message: EmailChangeVerificationEmailMessage
+  ) => Promise<void>,
   config: AuthRouterConfig
 ): Router {
   const router = Router();
@@ -194,6 +238,44 @@ export function createAuthRouter(
   );
 
   router.post(
+    "/password/forgot",
+    validateBody(forgotPasswordSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const result = await requestPasswordReset(request.body, {
+          findUserByEmail: userRepository.findUserByEmail,
+          savePasswordResetRequest: userRepository.savePasswordResetRequest,
+          sendPasswordResetEmail,
+          otpTtlSeconds: config.otpTtlSeconds,
+          otpMaxAttempts: config.otpMaxAttempts
+        });
+        response.status(202).json(result);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/password/reset",
+    validateBody(resetPasswordSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const result = await completePasswordReset(request.body, {
+          findUserByEmail: userRepository.findUserByEmail,
+          findPasswordResetRequest: userRepository.findPasswordResetRequest,
+          consumePasswordResetAttempt: userRepository.consumePasswordResetAttempt,
+          updatePasswordHashByEmail: userRepository.updatePasswordHashByEmail,
+          deletePasswordResetRequest: userRepository.deletePasswordResetRequest
+        });
+        response.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
     "/logout",
     (_request: Request, response: Response) => {
       response.status(200).json(logoutUser());
@@ -202,14 +284,11 @@ export function createAuthRouter(
 
   router.get("/me", async (request: Request, response: Response, next: NextFunction) => {
     try {
-      const authenticatedRequest = request as AuthenticatedRequest;
-      if (!authenticatedRequest.auth) {
-        response.status(401).json({ message: "Authentication required" });
-        return;
-      }
+      const userId = requireAuthenticatedUserId(request, response);
+      if (!userId) return;
 
       const result = await getCurrentAuthUser(
-        { userId: authenticatedRequest.auth.userId },
+        { userId },
         { findUserById: userRepository.findUserById }
       );
 
@@ -223,6 +302,104 @@ export function createAuthRouter(
       next(error);
     }
   });
+
+  router.patch(
+    "/me",
+    validateBody(updateAccountProfileSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const userId = requireAuthenticatedUserId(request, response);
+        if (!userId) return;
+
+        const result = await requestAccountProfileUpdate(
+          { ...request.body, userId },
+          {
+            findUserById: userRepository.findUserById,
+            findUserByEmail: userRepository.findUserByEmail,
+            updateUserProfile: userRepository.updateUserProfile,
+            saveEmailChangeVerification: userRepository.saveEmailChangeVerification,
+            sendEmailChangeVerificationEmail,
+            otpTtlSeconds: config.otpTtlSeconds,
+            otpMaxAttempts: config.otpMaxAttempts
+          }
+        );
+        response.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/me/email/verify",
+    validateBody(verifyEmailChangeSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const userId = requireAuthenticatedUserId(request, response);
+        if (!userId) return;
+
+        const result = await verifyEmailChange(
+          { ...request.body, userId },
+          {
+            findUserById: userRepository.findUserById,
+            findUserByEmail: userRepository.findUserByEmail,
+            findEmailChangeVerification: userRepository.findEmailChangeVerification,
+            consumeEmailChangeVerificationAttempt:
+              userRepository.consumeEmailChangeVerificationAttempt,
+            activatePendingEmail: userRepository.activatePendingEmail,
+            deleteEmailChangeVerification: userRepository.deleteEmailChangeVerification
+          }
+        );
+        response.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/me/password",
+    validateBody(changePasswordSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const userId = requireAuthenticatedUserId(request, response);
+        if (!userId) return;
+
+        const result = await changePassword(
+          { ...request.body, userId },
+          {
+            findUserById: userRepository.findUserById,
+            updatePasswordHash: userRepository.updatePasswordHash
+          }
+        );
+        response.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.delete(
+    "/me",
+    validateBody(deleteAccountSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const userId = requireAuthenticatedUserId(request, response);
+        if (!userId) return;
+
+        const result = await deleteAccount(
+          { ...request.body, userId },
+          {
+            findUserById: userRepository.findUserById,
+            deactivateUser: userRepository.deactivateUser
+          }
+        );
+        response.status(200).json(result);
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
 
   return router;
 }
@@ -297,4 +474,14 @@ async function fetchGitHubEmail(accessToken: string): Promise<string> {
   }
 
   return email;
+}
+
+function requireAuthenticatedUserId(request: Request, response: Response): string | null {
+  const authenticatedRequest = request as AuthenticatedRequest;
+  if (!authenticatedRequest.auth) {
+    response.status(401).json({ message: "Authentication required" });
+    return null;
+  }
+
+  return authenticatedRequest.auth.userId;
 }
