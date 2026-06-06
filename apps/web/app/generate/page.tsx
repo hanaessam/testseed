@@ -10,9 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sparkles, Loader2, AlertCircle, Database, Layers, FileCode2, X } from "lucide-react";
 import {
   createProject,
+  discoverMongoSchema,
   getProjectDetail,
   parseSchema,
   startRepositoryContextAuthorization,
+  testMongoConnection,
   updateProjectContext,
   updateProjectSchema
 } from "@/src/lib/api-client";
@@ -31,6 +33,9 @@ export default function GeneratePage() {
   const [schemaText, setSchemaText] = useState("");
   const [schemaFiles, setSchemaFiles] = useState<SchemaFileDraft[]>([]);
   const [parsedSchema, setParsedSchema] = useState<ParsedSchema | null>(null);
+  const [schemaSource, setSchemaSource] = useState<"manual" | "mongodb">("manual");
+  const [mongoConnectionString, setMongoConnectionString] = useState("");
+  const [mongoConnectionMessage, setMongoConnectionMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [contextWarnings, setContextWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +49,8 @@ export default function GeneratePage() {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [schemaSaveMessage, setSchemaSaveMessage] = useState<string | null>(null);
   const [isSavingSchema, setIsSavingSchema] = useState(false);
+  const [isTestingMongo, setIsTestingMongo] = useState(false);
+  const [isDiscoveringMongo, setIsDiscoveringMongo] = useState(false);
   const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
 
   // Retrieve auth token on mount
@@ -122,6 +129,7 @@ export default function GeneratePage() {
         token
       );
       setParsedSchema(response.schema);
+      setSchemaSource("manual");
       setSavedProjectId(null);
       setSchemaSaveMessage(null);
       if (response.warnings && response.warnings.length > 0) {
@@ -134,6 +142,96 @@ export default function GeneratePage() {
       setParsedSchema(null);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTestMongoConnection = async () => {
+    if (!token) {
+      setMongoConnectionMessage("You must be logged in to test a MongoDB connection.");
+      return;
+    }
+
+    if (!mongoConnectionString.trim()) {
+      setMongoConnectionMessage("Enter a MongoDB connection string first.");
+      return;
+    }
+
+    setIsTestingMongo(true);
+    setMongoConnectionMessage(null);
+    setError(null);
+
+    try {
+      const result = await testMongoConnection(
+        {
+          connectionString: mongoConnectionString,
+          projectId: projectId ?? undefined
+        },
+        token
+      );
+      setMongoConnectionMessage(
+        result.databaseName
+          ? `Connection successful for ${result.databaseName}.`
+          : result.message
+      );
+    } catch (testError) {
+      setMongoConnectionMessage(
+        testError instanceof Error ? testError.message : "Could not test the MongoDB connection."
+      );
+    } finally {
+      setIsTestingMongo(false);
+    }
+  };
+
+  const handleDiscoverMongoSchema = async () => {
+    if (!projectId) {
+      setError("Create a project first so TestSeed can save context before discovery.");
+      return;
+    }
+
+    if (!token) {
+      setError("You must be logged in to discover a MongoDB schema.");
+      return;
+    }
+
+    if (!mongoConnectionString.trim()) {
+      setError("Enter a MongoDB connection string first.");
+      return;
+    }
+
+    setIsDiscoveringMongo(true);
+    setError(null);
+    setWarnings([]);
+    setMongoConnectionMessage(null);
+    setSchemaSaveMessage(null);
+    setSavedProjectId(null);
+
+    try {
+      const response = await discoverMongoSchema(
+        {
+          connectionString: mongoConnectionString,
+          projectId,
+          sampleSize: 20
+        },
+        token
+      );
+      setParsedSchema(response.schema);
+      setSchemaSource("mongodb");
+      setWarnings(response.warnings);
+      setActiveCollectionIdx(0);
+      setMongoConnectionMessage(
+        response.databaseName
+          ? `Discovered schema from ${response.databaseName}.`
+          : "Discovered schema from MongoDB."
+      );
+    } catch (discoverError) {
+      setError(
+        discoverError instanceof Error
+          ? discoverError.message
+          : "Could not discover MongoDB schema."
+      );
+      setParsedSchema(null);
+    } finally {
+      setIsDiscoveringMongo(false);
     }
   };
 
@@ -250,7 +348,7 @@ export default function GeneratePage() {
         projectId,
         {
           schema: parsedSchema,
-          source: "manual"
+          source: schemaSource
         },
         token
       );
@@ -436,6 +534,66 @@ mongoose.model('Product', ProductSchema);`;
         {/* Main Grid Workspace */}
         <div className="grid flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_480px] gap-6 p-6">
           {/* Schema Input Panel */}
+          <div className="flex flex-col gap-6">
+          <Card className="flex flex-col bg-surface border-border overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-4">
+              <div>
+                <p className="font-mono text-xs text-accent">mongodb.discovery</p>
+                <h1 className="mt-1 text-lg font-bold tracking-tight">MongoDB Schema Discovery</h1>
+              </div>
+              <Database className="h-5 w-5 text-accent" />
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              <div className="space-y-2">
+                <Label htmlFor="mongodb-connection" className="font-mono text-xs uppercase tracking-wider text-muted">
+                  Connection string
+                </Label>
+                <Input
+                  id="mongodb-connection"
+                  type="password"
+                  value={mongoConnectionString}
+                  onChange={(event) => setMongoConnectionString(event.target.value)}
+                  placeholder="mongodb+srv://..."
+                  autoComplete="off"
+                  className="bg-background border-border font-mono text-xs"
+                />
+                <p className="text-xs leading-5 text-muted">
+                  Used only for this test or discovery operation. TestSeed does not save it.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleTestMongoConnection}
+                  disabled={isTestingMongo || !mongoConnectionString.trim()}
+                >
+                  {isTestingMongo ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4" />
+                  )}
+                  Test connection
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleDiscoverMongoSchema}
+                  disabled={isDiscoveringMongo || !projectId || !mongoConnectionString.trim()}
+                >
+                  {isDiscoveringMongo ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Discover schema
+                </Button>
+              </div>
+              {mongoConnectionMessage ? (
+                <p className="text-xs text-muted">{mongoConnectionMessage}</p>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <Card className="flex flex-col bg-surface border-border overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-4">
               <div>
@@ -510,6 +668,7 @@ mongoose.model('Product', ProductSchema);`;
               />
             </CardContent>
           </Card>
+          </div>
 
           {/* Parsed Schema Review Panel */}
           <Card className="flex flex-col bg-surface border-border overflow-hidden">
@@ -649,7 +808,19 @@ mongoose.model('Product', ProductSchema);`;
                                       default: {field.defaultValue}
                                     </span>
                                   )}
-                                  {!field.ref && !field.enum && !field.defaultValue && (
+                                  {field.itemType && (
+                                    <span> items: {field.itemType}</span>
+                                  )}
+                                  {field.confidence && (
+                                    <span> confidence: {field.confidence}</span>
+                                  )}
+                                  {field.warnings && field.warnings.length > 0 && (
+                                    <span> warning: {field.warnings.join("; ")}</span>
+                                  )}
+                                  {field.children && field.children.length > 0 && (
+                                    <span> nested: {field.children.map((child) => child.name).join(", ")}</span>
+                                  )}
+                                  {!field.ref && !field.enum && !field.defaultValue && !field.itemType && !field.confidence && (
                                     <span className="text-muted/40">none</span>
                                   )}
                                 </td>

@@ -17,6 +17,9 @@ import type {
   VerifyRegistrationOtpRequest,
   ParseSchemaRequest,
   ParseSchemaResponse,
+  MongoConnectionTestResponse,
+  MongoSchemaDiscoveryRequest,
+  MongoSchemaDiscoveryResponse,
   CurrentUserResponse,
   ListProjectsResponse,
   ProjectHistoryResponse,
@@ -382,6 +385,28 @@ export async function parseSchema(
 ): Promise<ParseSchemaResponse> {
   return postJson<ParseSchemaRequest, ParseSchemaResponse>(
     "/schemas/parse",
+    request,
+    token
+  );
+}
+
+export async function testMongoConnection(
+  request: MongoSchemaDiscoveryRequest,
+  token: string
+): Promise<MongoConnectionTestResponse> {
+  return postJson<MongoSchemaDiscoveryRequest, MongoConnectionTestResponse>(
+    "/schemas/mongodb/test-connection",
+    request,
+    token
+  );
+}
+
+export async function discoverMongoSchema(
+  request: MongoSchemaDiscoveryRequest,
+  token: string
+): Promise<MongoSchemaDiscoveryResponse> {
+  return postJson<MongoSchemaDiscoveryRequest, MongoSchemaDiscoveryResponse>(
+    "/schemas/mongodb/discover",
     request,
     token
   );

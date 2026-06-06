@@ -7,6 +7,7 @@ export * from "./models/project";
 export * from "./models/project-snapshot";
 export * from "./models/project-event";
 export * from "./models/seed-batch";
+export * from "./schema-discovery";
 export * from "./repositories/user-repository";
 export * from "./repositories/project-repository";
 export * from "./repositories/project-history-repository";

@@ -1,8 +1,9 @@
-import { parseManualSchema } from "@testseed/core";
+import { discoverMongoSchema, parseManualSchema, testMongoConnection } from "@testseed/core";
 import type {
   createProjectRepository,
   createProjectHistoryRepository
 } from "@testseed/db";
+import { createMongoSchemaDiscoveryInspector } from "@testseed/db";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import OpenAI from "openai";
 import { z } from "zod";
@@ -35,6 +36,12 @@ const parseSchemaRequestSchema = z
     "Schema text or at least one schema file is required."
   );
 
+const mongoSchemaDiscoveryRequestSchema = z.object({
+  connectionString: z.string().min(1, "MongoDB connection string is required."),
+  projectId: z.string().min(1).optional(),
+  sampleSize: z.number().int().min(1).max(100).optional()
+});
+
 export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
   const router = Router();
 
@@ -61,6 +68,43 @@ export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
         response.status(200).json(result);
       } catch (error) {
         next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/mongodb/test-connection",
+    validateBody(mongoSchemaDiscoveryRequestSchema),
+    async (request: Request, response: Response) => {
+      try {
+        const result = await testMongoConnection(request.body, {
+          inspector: createMongoSchemaDiscoveryInspector()
+        });
+
+        response.status(200).json(result);
+      } catch (_error) {
+        response.status(400).json({
+          ok: false,
+          message: "Unable to connect to MongoDB. Check the connection string and database access."
+        });
+      }
+    }
+  );
+
+  router.post(
+    "/mongodb/discover",
+    validateBody(mongoSchemaDiscoveryRequestSchema),
+    async (request: Request, response: Response) => {
+      try {
+        const result = await discoverMongoSchema(request.body, {
+          inspector: createMongoSchemaDiscoveryInspector()
+        });
+
+        response.status(200).json(result);
+      } catch (_error) {
+        response.status(400).json({
+          message: "Unable to discover MongoDB schema. Check the connection string and database access."
+        });
       }
     }
   );

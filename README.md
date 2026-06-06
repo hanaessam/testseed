@@ -105,6 +105,17 @@ npm run dev
 
 The API uses `NEXT_PUBLIC_API_URL` as the web client's backend target. Keep MongoDB connection strings, OAuth secrets, SMTP credentials, and Redis tokens transient and out of source control.
 
+## MongoDB Schema Discovery
+
+From the Generate screen, create or load a project, then use the MongoDB Schema Discovery panel to test a connection string and infer schema structure from existing collections and sample documents.
+
+The API exposes:
+
+- `POST /schemas/mongodb/test-connection`
+- `POST /schemas/mongodb/discover`
+
+Connection strings submitted for discovery are operation-only inputs. TestSeed opens a temporary connection, lists collections, samples documents, closes the connection, and returns inferred fields, nested objects, arrays, possible references, and uncertainty warnings. The connection string is not saved as project context, schema metadata, or configuration.
+
 ## GitHub Account and Repository Access
 
 For the current GitHub login work, create a **GitHub OAuth App**, not a GitHub App. A GitHub App is only needed later if TestSeed adds install-based private repository access for schema/model context.

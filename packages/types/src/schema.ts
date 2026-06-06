@@ -6,6 +6,10 @@ export interface SchemaField {
   enum?: string[];
   ref?: string;
   defaultValue?: string;
+  confidence?: "high" | "medium" | "low";
+  warnings?: string[];
+  children?: SchemaField[];
+  itemType?: string;
 }
 
 export interface CollectionSchema {
@@ -34,4 +38,38 @@ export interface ParseSchemaRequest {
 export interface ParseSchemaResponse {
   schema: ParsedSchema;
   warnings?: string[];
+}
+
+export interface MongoSchemaDiscoveryRequest {
+  connectionString: string;
+  projectId?: string;
+  sampleSize?: number;
+}
+
+export interface MongoConnectionTestResponse {
+  ok: boolean;
+  databaseName?: string;
+  message: string;
+}
+
+export interface MongoCollectionSample {
+  name: string;
+  documents: Record<string, unknown>[];
+}
+
+export interface MongoDatabaseInspection {
+  databaseName?: string;
+  collections: MongoCollectionSample[];
+}
+
+export interface DiscoveredCollectionSchema extends CollectionSchema {
+  sampleCount: number;
+  warnings: string[];
+}
+
+export interface MongoSchemaDiscoveryResponse {
+  schema: ParsedSchema;
+  collections: DiscoveredCollectionSchema[];
+  warnings: string[];
+  databaseName?: string;
 }
