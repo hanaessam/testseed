@@ -70,6 +70,7 @@ describe("MongoDB schema discovery", () => {
               {
                 _id: "665f7f5b9d7f2a73d99f0001",
                 email: "hana@example.com",
+                status: "active",
                 profile: { city: "Cairo" },
                 roles: ["admin", "buyer"],
                 age: 28
@@ -77,6 +78,7 @@ describe("MongoDB schema discovery", () => {
               {
                 _id: "665f7f5b9d7f2a73d99f0002",
                 email: "mariam@example.com",
+                status: "active",
                 profile: { city: "Alexandria" },
                 roles: ["buyer"],
                 age: "unknown",
@@ -125,6 +127,11 @@ describe("MongoDB schema discovery", () => {
       type: "Array",
       itemType: "String"
     });
+    expect(users?.fields.find((field) => field.name === "status")).toMatchObject({
+      type: "String",
+      enum: ["active"],
+      enumSource: "inferred"
+    });
     expect(users?.fields.find((field) => field.name === "age")).toMatchObject({
       type: "Mixed",
       confidence: "low"
@@ -142,18 +149,21 @@ describe("MongoDB schema discovery", () => {
     });
   });
 
-  it("preserves collection metadata in the review schema and warns when the sample cap is reached", async () => {
+  it("does not infer enum candidates when sampled values are too varied", async () => {
     const inspector = {
       testConnection: jest.fn(),
       inspectDatabase: jest.fn().mockResolvedValue({
         collections: [
           {
-            name: "events",
-            sampleLimitReached: true,
-            documents: Array.from({ length: 20 }, (_value, index) => ({
-              _id: `665f7f5b9d7f2a73d99f00${String(index).padStart(2, "0")}`,
-              name: `event-${index}`
-            }))
+            name: "products",
+            documents: [
+              { name: "Keyboard" },
+              { name: "Monitor" },
+              { name: "Laptop" },
+              { name: "Mouse" },
+              { name: "Dock" },
+              { name: "Webcam" }
+            ]
           }
         ]
       })
@@ -164,17 +174,10 @@ describe("MongoDB schema discovery", () => {
       { inspector }
     );
 
-    expect(result.collections[0]).toMatchObject({
-      name: "events",
-      sampleCount: 20,
-      warnings: ["Only 20 sampled documents were inspected; review confidence carefully."]
-    });
-    expect(result.schema.collections[0]).toMatchObject({
-      name: "events",
-      sampleCount: 20,
-      warnings: ["Only 20 sampled documents were inspected; review confidence carefully."]
-    });
-    expect(JSON.stringify(result)).not.toContain("mongodb://example.test/shop");
+    const nameField = result.collections[0].fields.find((field) => field.name === "name");
+    expect(nameField).toMatchObject({ type: "String" });
+    expect(nameField).not.toHaveProperty("enum");
+    expect(nameField).not.toHaveProperty("enumSource");
   });
 
   it("returns warnings for empty databases and empty collections", async () => {

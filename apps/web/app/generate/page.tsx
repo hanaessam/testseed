@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import {
   updateProjectSchema
 } from "@/src/lib/api-client";
 import { getStoredSession } from "@/src/lib/session";
-import { ParsedSchema } from "@testseed/types";
+import type { ParsedSchema, SchemaField } from "@testseed/types";
 
 interface SchemaFileDraft {
   name: string;
@@ -414,6 +414,32 @@ mongoose.model('Product', ProductSchema);`;
     setSchemaFiles((currentFiles) => currentFiles.filter((_, index) => index !== fileIndex));
   };
 
+  const updateReviewedField = (
+    collectionIndex: number,
+    fieldIndex: number,
+    updateField: (field: SchemaField) => SchemaField
+  ) => {
+    setParsedSchema((currentSchema) => {
+      if (!currentSchema) {
+        return currentSchema;
+      }
+
+      return {
+        ...currentSchema,
+        collections: currentSchema.collections.map((collection, currentCollectionIndex) =>
+          currentCollectionIndex === collectionIndex
+            ? {
+                ...collection,
+                fields: collection.fields.map((field, currentFieldIndex) =>
+                  currentFieldIndex === fieldIndex ? updateField(field) : field
+                )
+              }
+            : collection
+        )
+      };
+    });
+  };
+
   const currentCollection = parsedSchema?.collections[activeCollectionIdx] || null;
 
   return (
@@ -783,67 +809,97 @@ mongoose.model('Product', ProductSchema);`;
                               <th className="p-3 font-semibold">Field</th>
                               <th className="p-3 font-semibold">Type</th>
                               <th className="p-3 font-semibold">Rules</th>
-                              <th className="p-3 font-semibold">Details</th>
+                              <th className="p-3 font-semibold">Review Evidence</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
-                            {currentCollection.fields.map((field) => (
-                              <tr key={field.name} className="hover:bg-surface/50">
-                                <td className="p-3 font-bold text-foreground">{field.name}</td>
-                                <td className="p-3">
-                                  <span className="rounded bg-accent/5 border border-accent/20 px-1.5 py-0.5 text-accent text-[10px]">
-                                    {field.type}
-                                  </span>
-                                </td>
-                                <td className="p-3 space-x-1">
-                                  {field.required && (
-                                    <span className="rounded bg-red-500/10 border border-red-500/20 px-1 py-0.2 text-[9px] text-red-400 font-bold">
-                                      REQ
-                                    </span>
-                                  )}
-                                  {field.unique && (
-                                    <span className="rounded bg-indigo-500/10 border border-indigo-500/20 px-1 py-0.2 text-[9px] text-indigo-400 font-bold">
-                                      UNIq
-                                    </span>
-                                  )}
-                                  {!field.required && !field.unique && (
-                                    <span className="text-muted text-[10px]">-</span>
-                                  )}
-                                </td>
-                                <td className="p-3 text-[10px] text-muted">
-                                  {field.ref && (
-                                    <span className="text-accent">
-                                      ref → <span className="underline">{field.ref}</span>
-                                    </span>
-                                  )}
-                                  {field.enum && (
-                                    <span>
-                                      enum: {JSON.stringify(field.enum)}
-                                    </span>
-                                  )}
-                                  {field.defaultValue && (
-                                    <span>
-                                      default: {field.defaultValue}
-                                    </span>
-                                  )}
-                                  {field.itemType && (
-                                    <span> items: {field.itemType}</span>
-                                  )}
-                                  {field.confidence && (
-                                    <span> confidence: {field.confidence}</span>
-                                  )}
-                                  {field.warnings && field.warnings.length > 0 && (
-                                    <span> warning: {field.warnings.join("; ")}</span>
-                                  )}
-                                  {field.children && field.children.length > 0 && (
-                                    <span> nested: {field.children.map((child) => child.name).join(", ")}</span>
-                                  )}
-                                  {!field.ref && !field.enum && !field.defaultValue && !field.itemType && !field.confidence && (
-                                    <span className="text-muted/40">none</span>
-                                  )}
+                            {currentCollection.fields.length > 0 ? (
+                              currentCollection.fields.map((field, fieldIndex) => (
+                                <tr key={field.name} className="align-top hover:bg-surface/50">
+                                  <td className="p-3 font-bold text-foreground">{field.name}</td>
+                                  <td className="p-3">
+                                    <div className="space-y-2">
+                                      <select
+                                        aria-label={`${field.name} type`}
+                                        className="h-8 w-full rounded border border-border bg-surface px-2 text-xs text-foreground focus:border-accent focus:outline-none"
+                                        value={field.type}
+                                        onChange={(event) =>
+                                          updateReviewedField(activeCollectionIdx, fieldIndex, (currentField) => ({
+                                            ...currentField,
+                                            type: event.target.value,
+                                            itemType:
+                                              event.target.value === "Array"
+                                                ? currentField.itemType
+                                                : undefined,
+                                            children:
+                                              event.target.value === "Array" ||
+                                              event.target.value === "Object"
+                                                ? currentField.children
+                                                : undefined
+                                          }))
+                                        }
+                                      >
+                                        {!REVIEW_FIELD_TYPE_OPTIONS.includes(field.type) ? (
+                                          <option value={field.type}>{field.type}</option>
+                                        ) : null}
+                                        {REVIEW_FIELD_TYPE_OPTIONS.map((typeOption) => (
+                                          <option key={typeOption} value={typeOption}>
+                                            {typeOption}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {field.itemType ? <ReviewBadge>items: {field.itemType}</ReviewBadge> : null}
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex flex-wrap gap-2">
+                                      <label className="inline-flex h-7 items-center gap-2 rounded border border-border bg-surface px-2 text-[10px] font-bold text-muted">
+                                        <input
+                                          type="checkbox"
+                                          className="h-3 w-3 accent-current"
+                                          checked={field.required}
+                                          onChange={(event) =>
+                                            updateReviewedField(
+                                              activeCollectionIdx,
+                                              fieldIndex,
+                                              (currentField) => ({
+                                                ...currentField,
+                                                required: event.target.checked
+                                              })
+                                            )
+                                          }
+                                        />
+                                        required
+                                      </label>
+                                      {field.unique ? <ReviewBadge tone="info">unique</ReviewBadge> : null}
+                                      {field.confidence ? (
+                                        <ReviewBadge tone={field.confidence === "low" ? "warning" : "neutral"}>
+                                          {field.confidence} confidence
+                                        </ReviewBadge>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <FieldEvidence
+                                      field={field}
+                                      onFieldChange={(nextField) =>
+                                        updateReviewedField(
+                                          activeCollectionIdx,
+                                          fieldIndex,
+                                          () => nextField
+                                        )
+                                      }
+                                    />
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td className="p-4 text-xs text-muted" colSpan={4}>
+                                  No fields were inferred for this collection.
                                 </td>
                               </tr>
-                            ))}
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -873,4 +929,173 @@ function getProjectIdFromLocation(): string | null {
   }
 
   return new URLSearchParams(window.location.search).get("projectId");
+}
+
+type ReviewBadgeTone = "neutral" | "accent" | "danger" | "info" | "warning";
+
+const REVIEW_FIELD_TYPE_OPTIONS = [
+  "String",
+  "Number",
+  "Boolean",
+  "Date",
+  "ObjectId",
+  "Array",
+  "Object",
+  "Mixed"
+];
+
+function ReviewBadge({
+  children,
+  tone = "neutral"
+}: {
+  children: ReactNode;
+  tone?: ReviewBadgeTone;
+}) {
+  const toneClass = {
+    neutral: "border-border bg-surface text-muted",
+    accent: "border-accent/20 bg-accent/5 text-accent",
+    danger: "border-red-500/20 bg-red-500/10 text-red-400",
+    info: "border-indigo-500/20 bg-indigo-500/10 text-indigo-400",
+    warning: "border-amber-500/20 bg-amber-500/10 text-amber-400"
+  }[tone];
+
+  return (
+    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function FieldEvidence({
+  field,
+  onFieldChange
+}: {
+  field: SchemaField;
+  onFieldChange: (field: SchemaField) => void;
+}) {
+  const hasEvidence = Boolean(
+    field.ref ||
+      field.enum?.length ||
+      field.defaultValue ||
+      field.children?.length ||
+      field.warnings?.length
+  );
+  const canEditReference = field.refConfidence !== "explicit";
+  const canEditEnum = field.enumSource !== "declared";
+
+  if (!hasEvidence && !canEditReference) {
+    return <span className="text-[10px] text-muted/50">No extra review evidence.</span>;
+  }
+
+  return (
+    <div className="space-y-2 text-[10px] text-muted">
+      <div className="space-y-1">
+        <span className="font-bold text-accent">Reference:</span>
+        {canEditReference ? (
+          <Input
+            aria-label={`${field.name} reference`}
+            className="h-7 border-border bg-surface px-2 font-mono text-[10px]"
+            value={field.ref ?? ""}
+            onChange={(event) => {
+              const nextRef = event.target.value.trim();
+              onFieldChange({
+                ...field,
+                ref: nextRef || undefined,
+                refConfidence: nextRef ? field.refConfidence ?? "possible" : undefined
+              });
+            }}
+            placeholder="Collection name"
+          />
+        ) : (
+          <div>
+            <span className="text-foreground">{field.ref}</span>
+            {field.refConfidence ? <span> ({field.refConfidence})</span> : null}
+          </div>
+        )}
+      </div>
+      {field.enumSource === "declared" && field.enum && field.enum.length > 0 ? (
+        <div className="space-y-1">
+          <div>
+            <span className="font-bold text-accent">Declared enum values:</span>{" "}
+            <span>read-only</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {field.enum.map((value) => (
+              <ReviewBadge key={value}>{value}</ReviewBadge>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {canEditEnum && (field.enumSource === "inferred" || (field.enum?.length ?? 0) > 0) ? (
+        <div className="space-y-1">
+          <div>
+            <span className="font-bold text-accent">Enum-like values:</span>{" "}
+            <span>inferred</span>
+          </div>
+          <Input
+            aria-label={`${field.name} inferred enum values`}
+            className="h-7 border-border bg-surface px-2 font-mono text-[10px]"
+            value={(field.enum ?? []).join(", ")}
+            onChange={(event) => {
+              const values = splitReviewValues(event.target.value);
+              onFieldChange({
+                ...field,
+                enum: values.length > 0 ? values : undefined,
+                enumSource: values.length > 0 ? "inferred" : undefined
+              });
+            }}
+            placeholder="value one, value two"
+          />
+        </div>
+      ) : null}
+      {field.defaultValue ? (
+        <div>
+          <span className="font-bold text-accent">Default:</span>{" "}
+          <span className="text-foreground">{field.defaultValue}</span>
+        </div>
+      ) : null}
+      {field.children && field.children.length > 0 ? (
+        <div className="space-y-1">
+          <span className="font-bold text-accent">Nested fields:</span>
+          <div className="flex flex-wrap gap-1">
+            {field.children.map((child) => (
+              <ReviewBadge key={child.name}>
+                {child.name}: {child.type}
+              </ReviewBadge>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="space-y-1">
+        <span className="font-bold text-accent">Warnings:</span>
+        <Textarea
+          aria-label={`${field.name} warnings`}
+          className="min-h-16 resize-y border-border bg-surface p-2 font-mono text-[10px] text-amber-400"
+          value={(field.warnings ?? []).join("\n")}
+          onChange={(event) => {
+            const nextWarnings = splitReviewLines(event.target.value);
+            onFieldChange({
+              ...field,
+              warnings: nextWarnings.length > 0 ? nextWarnings : undefined
+            });
+          }}
+          placeholder="No field warnings."
+        />
+      </div>
+    </div>
+  );
+}
+
+function splitReviewValues(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function splitReviewLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }

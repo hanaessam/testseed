@@ -4,6 +4,7 @@ export interface SchemaField {
   required: boolean;
   unique: boolean;
   enum?: string[];
+  enumSource?: "declared" | "inferred";
   ref?: string;
   refConfidence?: "explicit" | "inferred" | "possible";
   defaultValue?: string;
