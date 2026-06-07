@@ -5,7 +5,8 @@ import type {
   GenerationProviderResponse,
   GenerationValidationResult,
   ParsedSchema,
-  ProjectContext
+  ProjectContext,
+  SchemaField
 } from "@testseed/types";
 import {
   buildGenerationPlan,
@@ -178,13 +179,11 @@ function normalizeGeneratedCollections(
         ? collection.name
         : providerKeyByCanonicalName.get(canonicalProviderKey(collection.name));
     const records = providerKey ? providerCollections[providerKey] ?? [] : [];
-    normalized[collection.name] = records.slice(0, counts[collection.name] ?? 0).map((record, recordIndex) => ({
-      ...record,
-      _id:
-        typeof record._id === "string" && /^[a-f0-9]{24}$/i.test(record._id)
-          ? record._id
-          : createStableObjectId(collectionIndex, recordIndex)
-    }));
+    const expectedCount = counts[collection.name] ?? 0;
+    normalized[collection.name] = Array.from({ length: expectedCount }, (_, recordIndex) => {
+      const record = records[recordIndex] ?? {};
+      return normalizeRecord(record, collection.fields, collection.name, collectionIndex, recordIndex);
+    });
   });
 
   repairGeneratedReferences(normalized, schema);
@@ -233,6 +232,96 @@ function repairGeneratedReferences(
         }
       }
     }
+  }
+}
+
+function normalizeRecord(
+  record: Record<string, unknown>,
+  fields: SchemaField[],
+  collectionName: string,
+  collectionIndex: number,
+  recordIndex: number
+): GeneratedRecord {
+  const normalized: GeneratedRecord = {
+    ...record,
+    _id:
+      typeof record._id === "string" && /^[a-f0-9]{24}$/i.test(record._id)
+        ? record._id
+        : createStableObjectId(collectionIndex, recordIndex)
+  };
+
+  for (const field of fields) {
+    const value = normalized[field.name];
+    if (value === undefined || value === null || value === "" || !generatedValueMatchesType(value, field)) {
+      if (field.required || value !== undefined) {
+        normalized[field.name] = createFallbackValue(field, collectionName, recordIndex);
+      }
+    }
+
+    if (
+      field.enum &&
+      field.enum.length > 0 &&
+      typeof normalized[field.name] === "string" &&
+      !field.enum.includes(normalized[field.name] as string)
+    ) {
+      normalized[field.name] = field.enum[0];
+    }
+  }
+
+  return normalized;
+}
+
+function createFallbackValue(
+  field: SchemaField,
+  collectionName: string,
+  recordIndex: number
+): unknown {
+  if (field.enum && field.enum.length > 0) {
+    return field.enum[recordIndex % field.enum.length];
+  }
+
+  switch (field.type) {
+    case "String":
+      return `${collectionName}_${field.name}_${recordIndex + 1}`;
+    case "Number":
+      return recordIndex + 1;
+    case "Boolean":
+      return false;
+    case "Date":
+      return new Date(Date.UTC(2026, 0, recordIndex + 1)).toISOString();
+    case "ObjectId":
+      return createStableObjectId(99, recordIndex);
+    case "Array":
+      return [];
+    case "Object":
+      return {};
+    case "Mixed":
+      return `${collectionName}_${field.name}_${recordIndex + 1}`;
+    default:
+      return `${collectionName}_${field.name}_${recordIndex + 1}`;
+  }
+}
+
+function generatedValueMatchesType(value: unknown, field: SchemaField): boolean {
+  switch (field.type) {
+    case "String":
+      return typeof value === "string";
+    case "Number":
+      return typeof value === "number" && Number.isFinite(value);
+    case "Boolean":
+      return typeof value === "boolean";
+    case "Date":
+      return typeof value === "string" && !Number.isNaN(Date.parse(value));
+    case "ObjectId":
+      return typeof value === "string" && /^[a-f0-9]{24}$/i.test(value);
+    case "Array":
+      return Array.isArray(value);
+    case "Object":
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    case "Mixed":
+      return true;
+    default:
+      return true;
   }
 }
 
