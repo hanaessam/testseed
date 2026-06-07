@@ -4,7 +4,9 @@ export interface SchemaField {
   required: boolean;
   unique: boolean;
   enum?: string[];
+  enumSource?: "declared" | "inferred";
   ref?: string;
+  refConfidence?: "explicit" | "inferred" | "possible";
   defaultValue?: string;
   confidence?: "high" | "medium" | "low";
   warnings?: string[];
@@ -15,6 +17,8 @@ export interface SchemaField {
 export interface CollectionSchema {
   name: string;
   fields: SchemaField[];
+  sampleCount?: number;
+  warnings?: string[];
 }
 
 export interface ParsedSchema {

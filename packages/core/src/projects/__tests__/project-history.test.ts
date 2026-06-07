@@ -471,6 +471,94 @@ describe("project history use cases", () => {
     expect(eventInput!.kind).toBe("schema_parsed");
   });
 
+  it("saves reviewed schema metadata exactly as submitted", async () => {
+    const reviewedSchema: ParsedSchema = {
+      collections: [
+        {
+          name: "orders",
+          sampleCount: 20,
+          warnings: ["Collection inferred from a small sample."],
+          fields: [
+            {
+              name: "status",
+              type: "String",
+              required: true,
+              unique: false,
+              enum: ["pending", "paid"],
+              enumSource: "inferred",
+              confidence: "medium",
+              warnings: ["Enum-like values were inferred from sampled documents."]
+            },
+            {
+              name: "customerId",
+              type: "ObjectId",
+              required: false,
+              unique: false,
+              ref: "customers",
+              refConfidence: "possible",
+              confidence: "low",
+              warnings: ["Reference target should be reviewed."]
+            },
+            {
+              name: "shippingAddress",
+              type: "Object",
+              required: false,
+              unique: false,
+              confidence: "high",
+              children: [
+                {
+                  name: "city",
+                  type: "String",
+                  required: false,
+                  unique: false,
+                  confidence: "high"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+    let savedSchema: ParsedSchema | null = null;
+
+    const result = await saveParsedSchemaToProject(
+      {
+        projectId: "project-1",
+        ownerId: "user-1",
+        schema: reviewedSchema,
+        source: "mongodb"
+      },
+      {
+        now: () => new Date("2026-06-02T00:00:00.000Z"),
+        findProjectById: async () => makeProject(),
+        saveSchemaSnapshot: async (input) => {
+          savedSchema = input.schema;
+          return {
+            id: "snapshot-2",
+            projectId: input.projectId,
+            version: input.version,
+            schema: input.schema,
+            source: input.source,
+            createdAt: input.createdAt
+          };
+        },
+        updateProjectActiveSchema: async (_projectId, input) =>
+          makeProject({
+            activeSchemaVersion: input.version,
+            activeSchemaSnapshotId: input.activeSchemaSnapshotId,
+            updatedAt: input.updatedAt
+          }),
+        appendProjectEvent: async (input) => ({ id: "event-1", ...input })
+      }
+    );
+
+    expect(savedSchema).toEqual(reviewedSchema);
+    expect(result.snapshot.schema).toEqual(reviewedSchema);
+    expect(result.snapshot.schema.collections[0]?.sampleCount).toBe(20);
+    expect(result.snapshot.schema.collections[0]?.fields[1]?.ref).toBe("customers");
+    expect(result.snapshot.schema.collections[0]?.fields[2]?.children?.[0]?.name).toBe("city");
+  });
+
   it("rejects saving a parsed schema for another user's project", async () => {
     await expect(
       saveParsedSchemaToProject(

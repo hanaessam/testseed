@@ -98,10 +98,7 @@ export async function discoverMongoSchema(
     databaseName: inspection.databaseName,
     collections,
     schema: {
-      collections: collections.map((collection) => ({
-        name: collection.name,
-        fields: collection.fields
-      }))
+      collections
     },
     warnings: [
       ...warnings,
@@ -186,6 +183,7 @@ function toSchemaField(
   const confidence = calculateConfidence(stats, sampleCount, type);
   const warnings = buildFieldWarnings(stats, sampleCount, type, confidence);
   const ref = inferReference(stats.name, type, collectionNames);
+  const inferredEnum = inferEnumCandidates(stats, type);
 
   return {
     name: stats.name,
@@ -194,7 +192,8 @@ function toSchemaField(
     unique: false,
     confidence,
     warnings: warnings.length > 0 ? warnings : undefined,
-    ref,
+    ...(ref ? { ref, refConfidence: "inferred" as const } : {}),
+    ...(inferredEnum ? { enum: inferredEnum, enumSource: "inferred" as const } : {}),
     itemType: type === "Array" ? inferArrayItemType(stats.arrayItems) : undefined,
     children:
       type === "Object"
@@ -203,6 +202,29 @@ function toSchemaField(
           ? inferArrayObjectChildren(stats.arrayItems, collectionNames)
           : undefined
   };
+}
+
+function inferEnumCandidates(stats: FieldStats, type: FieldType): string[] | undefined {
+  if (type !== "String") {
+    return undefined;
+  }
+
+  const values = stats.values.filter(
+    (value): value is string => typeof value === "string" && value.trim().length > 0
+  );
+  if (values.length < 2) {
+    return undefined;
+  }
+
+  const uniqueValues = [...new Set(values)].sort((left, right) => left.localeCompare(right));
+  const uniqueRatio = uniqueValues.length / values.length;
+  const maxCandidateValues = 8;
+
+  if (uniqueValues.length <= maxCandidateValues && uniqueRatio <= 0.5) {
+    return uniqueValues;
+  }
+
+  return undefined;
 }
 
 function chooseFieldType(types: FieldType[]): FieldType {

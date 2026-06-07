@@ -114,7 +114,9 @@ The API exposes:
 - `POST /schemas/mongodb/test-connection`
 - `POST /schemas/mongodb/discover`
 
-Connection strings submitted for discovery are operation-only inputs. TestSeed opens a temporary connection, lists collections, samples documents, closes the connection, and returns inferred fields, nested objects, arrays, possible references, and uncertainty warnings. The connection string is not saved as project context, schema metadata, or configuration.
+Connection strings submitted for discovery are operation-only inputs. TestSeed opens a temporary connection, lists collections, samples documents, closes the connection, and returns inferred fields, nested objects, arrays, possible references, enum-like values, and uncertainty warnings. The connection string is not saved as project context, schema metadata, or configuration.
+
+After manual parsing or MongoDB discovery, the Generate screen shows a schema review with collection tabs, field rules, confidence markers, enum-like values, reference evidence, nested fields, and warnings. You can make limited field-level corrections for type, required status, inferred enum-like values, non-explicit references, and warnings. Field and collection names, declared enum values, uniqueness, default values, and explicit references stay read-only. Save the reviewed schema to attach it to the active project snapshot before continuing to generation.
 
 ## GitHub Account and Repository Access
 
