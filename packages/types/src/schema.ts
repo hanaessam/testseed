@@ -54,11 +54,20 @@ export interface MongoConnectionTestResponse {
   ok: boolean;
   databaseName?: string;
   message: string;
+  errorCategory?: MongoConnectionErrorCategory;
 }
+
+export type MongoConnectionErrorCategory =
+  | "invalid_format"
+  | "unreachable_host"
+  | "authentication_failed"
+  | "timeout"
+  | "unknown";
 
 export interface MongoCollectionSample {
   name: string;
   documents: Record<string, unknown>[];
+  sampleLimitReached?: boolean;
 }
 
 export interface MongoDatabaseInspection {

@@ -20,6 +20,44 @@ describe("MongoDB schema discovery", () => {
     expect(inspector.testConnection).toHaveBeenCalledWith("mongodb://example.test/shop");
   });
 
+  it("uses a default sample cap of 20 documents per collection", async () => {
+    const inspector = {
+      testConnection: jest.fn(),
+      inspectDatabase: jest.fn().mockResolvedValue({
+        collections: []
+      })
+    };
+
+    await discoverMongoSchema(
+      { connectionString: "mongodb://example.test/shop" },
+      { inspector }
+    );
+
+    expect(inspector.inspectDatabase).toHaveBeenCalledWith(
+      "mongodb://example.test/shop",
+      { sampleSize: 20 }
+    );
+  });
+
+  it("caps requested sample sizes at 20 documents per collection", async () => {
+    const inspector = {
+      testConnection: jest.fn(),
+      inspectDatabase: jest.fn().mockResolvedValue({
+        collections: []
+      })
+    };
+
+    await discoverMongoSchema(
+      { connectionString: "mongodb://example.test/shop", sampleSize: 50 },
+      { inspector }
+    );
+
+    expect(inspector.inspectDatabase).toHaveBeenCalledWith(
+      "mongodb://example.test/shop",
+      { sampleSize: 20 }
+    );
+  });
+
   it("infers fields, nested structures, arrays, references, and uncertain fields from samples", async () => {
     const inspector = {
       testConnection: jest.fn(),

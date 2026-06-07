@@ -8,6 +8,14 @@
 
 **Input**: User description: "check the requirements.md file in docs and implement MongoDB Schema Discovery"
 
+## Clarifications
+
+### Session 2026-06-07
+
+- Q: How many documents should discovery inspect per collection? -> A: Inspect up to 20 sampled documents per collection, with a clear warning when sample size is limited.
+- Q: Should successful discovery save schema results automatically? -> A: Keep discovery results transient until the user reviews and explicitly saves the schema.
+- Q: How should MongoDB connection errors be shown? -> A: Show sanitized user-friendly error categories such as invalid format, unreachable host, authentication failed, or timeout.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Discover Schema From MongoDB (Priority: P1)
@@ -75,6 +83,7 @@ As an authenticated developer, I want possible references highlighted when field
 ### Edge Cases
 
 - The developer submits an empty, malformed, unreachable, or unauthorized connection string.
+- Raw MongoDB driver errors could include sensitive host, username, or connection details and must be converted to sanitized user-facing categories.
 - The database is reachable but contains no collections.
 - One or more collections are empty.
 - Sample documents contain fields that appear only rarely.
@@ -92,13 +101,16 @@ As an authenticated developer, I want possible references highlighted when field
 - **FR-001**: System MUST provide MongoDB schema discovery as a schema input option for authenticated users.
 - **FR-002**: System MUST allow users to submit a MongoDB connection string for the active connection test or discovery operation.
 - **FR-003**: System MUST test whether the submitted connection can reach the target database and return clear success or failure feedback.
+- **FR-003a**: System MUST show sanitized connection failure categories, such as invalid format, unreachable host, authentication failed, or timeout, without exposing raw connection details.
 - **FR-004**: System MUST inspect available collections when discovery runs successfully.
 - **FR-005**: System MUST inspect sample documents from each discovered collection when samples are available.
+- **FR-005a**: System MUST inspect up to 20 sampled documents per collection and show a warning when the sample cap limits confidence.
 - **FR-006**: System MUST infer field names, likely field types, nested objects, and arrays from sampled documents.
 - **FR-007**: System MUST identify possible reference fields when field values or naming patterns suggest relationships.
 - **FR-008**: System MUST mark inferred fields or references as uncertain when sampled evidence is sparse, mixed, or incomplete.
 - **FR-009**: System MUST provide collection-level warnings when no collections are found, a collection has no samples, or inference confidence is low.
 - **FR-010**: System MUST let users proceed to schema review after successful discovery.
+- **FR-010a**: System MUST keep discovered schema results transient until the user reviews and explicitly saves them as the active schema snapshot.
 - **FR-011**: System MUST guide users toward manual schema input when discovery cannot find any useful structure.
 - **FR-012**: System MUST use MongoDB connection strings only for the active operation and MUST NOT store or display them afterward.
 - **FR-013**: System MUST keep discovered schema information separate from project domain context and account information.
