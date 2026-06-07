@@ -10,11 +10,11 @@
 
 **Purpose**: Confirm the active feature context, existing contracts, and affected files before implementation.
 
-- [ ] T001 Read `docs/requirements.md` and verify Schema Review requirements align with feature 004 in `specs/004-schema-review/spec.md`
-- [ ] T002 Read active design artifacts in `specs/004-schema-review/plan.md`, `specs/004-schema-review/data-model.md`, `specs/004-schema-review/contracts/schema-review.md`, `specs/004-schema-review/research.md`, and `specs/004-schema-review/quickstart.md`
-- [ ] T003 Inspect current schema contracts in `packages/types/src/schema.ts` for review metadata fields and dependency-rule compliance
-- [ ] T004 Inspect current Generate page review flow in `apps/web/app/generate/page.tsx`
-- [ ] T005 Inspect current project schema save route in `apps/api/src/routes/projects.ts`
+- [X] T001 Read `docs/requirements.md` and verify Schema Review requirements align with feature 004 in `specs/004-schema-review/spec.md`
+- [X] T002 Read active design artifacts in `specs/004-schema-review/plan.md`, `specs/004-schema-review/data-model.md`, `specs/004-schema-review/contracts/schema-review.md`, `specs/004-schema-review/research.md`, and `specs/004-schema-review/quickstart.md`
+- [X] T003 Inspect current schema contracts in `packages/types/src/schema.ts` for review metadata fields and dependency-rule compliance
+- [X] T004 Inspect current Generate page review flow in `apps/web/app/generate/page.tsx`
+- [X] T005 Inspect current project schema save route in `apps/api/src/routes/projects.ts`
 
 ---
 
@@ -24,13 +24,13 @@
 
 **CRITICAL**: No user story work should begin until reviewed schema metadata can flow through source parsing, validation, and project snapshots.
 
-- [ ] T006 [P] Add or verify shared `SchemaField` and `CollectionSchema` review metadata fields in `packages/types/src/schema.ts`
-- [ ] T007 [P] Add parser tests for declared enum source and explicit reference confidence in `packages/core/src/schema/__tests__/parser.test.ts`
-- [ ] T008 Update manual schema parsing to tag declared enums and explicit refs in `packages/core/src/schema/local-parser.ts`
-- [ ] T009 [P] Add MongoDB discovery tests for low-confidence warnings, nested fields, arrays, inferred enums, inferred refs, sample counts, and collection warnings in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
-- [ ] T010 Verify MongoDB discovery preserves review metadata without storing connection strings in `packages/core/src/schema/mongodb-discovery.ts`
-- [ ] T011 [P] Add project snapshot persistence test for reviewed schema metadata in `packages/core/src/projects/__tests__/project-history.test.ts`
-- [ ] T012 Verify `saveParsedSchemaToProject` saves the reviewed schema exactly as submitted in `packages/core/src/projects/save-parsed-schema.ts`
+- [X] T006 [P] Add or verify shared `SchemaField` and `CollectionSchema` review metadata fields in `packages/types/src/schema.ts`
+- [X] T007 [P] Add parser tests for declared enum source and explicit reference confidence in `packages/core/src/schema/__tests__/parser.test.ts`
+- [X] T008 Update manual schema parsing to tag declared enums and explicit refs in `packages/core/src/schema/local-parser.ts`
+- [X] T009 [P] Add MongoDB discovery tests for low-confidence warnings, nested fields, arrays, inferred enums, inferred refs, sample counts, and collection warnings in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
+- [X] T010 Verify MongoDB discovery preserves review metadata without storing connection strings in `packages/core/src/schema/mongodb-discovery.ts`
+- [X] T011 [P] Add project snapshot persistence test for reviewed schema metadata in `packages/core/src/projects/__tests__/project-history.test.ts`
+- [X] T012 Verify `saveParsedSchemaToProject` saves the reviewed schema exactly as submitted in `packages/core/src/projects/save-parsed-schema.ts`
 
 **Checkpoint**: Foundation ready - schema review metadata can be produced, validated, and saved.
 
@@ -44,18 +44,18 @@
 
 ### Tests for User Story 1
 
-- [ ] T013 [P] [US1] Add API validation coverage for reviewed schema metadata and nested children in `apps/api/src/routes/__tests__/project-history.contracts.test.ts`
-- [ ] T014 [P] [US1] Add core persistence assertions for edited type, required, ref, inferred enum, warnings, and nested children in `packages/core/src/projects/__tests__/project-history.test.ts`
+- [X] T013 [P] [US1] Add API validation coverage for reviewed schema metadata and nested children in `apps/api/src/routes/__tests__/project-history.contracts.test.ts`
+- [X] T014 [P] [US1] Add core persistence assertions for edited type, required, ref, inferred enum, warnings, and nested children in `packages/core/src/projects/__tests__/project-history.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Expand recursive `PUT /projects/:projectId/schema` validation to accept reviewed field metadata in `apps/api/src/routes/projects.ts`
-- [ ] T016 [US1] Expand collection validation for `sampleCount` and collection warnings in `apps/api/src/routes/projects.ts`
-- [ ] T017 [US1] Add Generate page state updater for immutable field-level review edits in `apps/web/app/generate/page.tsx`
-- [ ] T018 [US1] Add editable field type control in the schema review table in `apps/web/app/generate/page.tsx`
-- [ ] T019 [US1] Add editable required-status control while keeping unique read-only in `apps/web/app/generate/page.tsx`
-- [ ] T020 [US1] Add field warning editing control in review evidence in `apps/web/app/generate/page.tsx`
-- [ ] T021 [US1] Verify save-schema payload contains only `ParsedSchema` review data and no MongoDB connection string in `apps/web/app/generate/page.tsx`
+- [X] T015 [US1] Expand recursive `PUT /projects/:projectId/schema` validation to accept reviewed field metadata in `apps/api/src/routes/projects.ts`
+- [X] T016 [US1] Expand collection validation for `sampleCount` and collection warnings in `apps/api/src/routes/projects.ts`
+- [X] T017 [US1] Add Generate page state updater for immutable field-level review edits in `apps/web/app/generate/page.tsx`
+- [X] T018 [US1] Add editable field type control in the schema review table in `apps/web/app/generate/page.tsx`
+- [X] T019 [US1] Add editable required-status control while keeping unique read-only in `apps/web/app/generate/page.tsx`
+- [X] T020 [US1] Add field warning editing control in review evidence in `apps/web/app/generate/page.tsx`
+- [X] T021 [US1] Verify save-schema payload contains only `ParsedSchema` review data and no MongoDB connection string in `apps/web/app/generate/page.tsx`
 
 **Checkpoint**: User Story 1 is independently functional and testable.
 
@@ -69,13 +69,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T022 [P] [US2] Add or extend MongoDB discovery test cases for sparse fields, mixed types, empty collections, and warning preservation in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
+- [X] T022 [P] [US2] Add or extend MongoDB discovery test cases for sparse fields, mixed types, empty collections, and warning preservation in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Ensure field confidence badges and warning text render beside affected fields in `apps/web/app/generate/page.tsx`
-- [ ] T024 [US2] Ensure collection-level warnings and sample counts render in the active collection panel in `apps/web/app/generate/page.tsx`
-- [ ] T025 [US2] Ensure `Save schema` remains enabled when reviewed fields have low confidence warnings in `apps/web/app/generate/page.tsx`
+- [X] T023 [US2] Ensure field confidence badges and warning text render beside affected fields in `apps/web/app/generate/page.tsx`
+- [X] T024 [US2] Ensure collection-level warnings and sample counts render in the active collection panel in `apps/web/app/generate/page.tsx`
+- [X] T025 [US2] Ensure `Save schema` remains enabled when reviewed fields have low confidence warnings in `apps/web/app/generate/page.tsx`
 
 **Checkpoint**: User Story 2 works independently with low-confidence discovered schemas.
 
@@ -89,13 +89,13 @@
 
 ### Tests for User Story 3
 
-- [ ] T026 [P] [US3] Add parser assertions for declared enum read evidence in `packages/core/src/schema/__tests__/parser.test.ts`
-- [ ] T027 [P] [US3] Add discovery assertions that varied sampled string values do not create enum candidates in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
+- [X] T026 [P] [US3] Add parser assertions for declared enum read evidence in `packages/core/src/schema/__tests__/parser.test.ts`
+- [X] T027 [P] [US3] Add discovery assertions that varied sampled string values do not create enum candidates in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] Render declared enum values as read-only review badges in `apps/web/app/generate/page.tsx`
-- [ ] T029 [US3] Add editable inferred enum-like values input that persists `enumSource: "inferred"` in `apps/web/app/generate/page.tsx`
+- [X] T028 [US3] Render declared enum values as read-only review badges in `apps/web/app/generate/page.tsx`
+- [X] T029 [US3] Add editable inferred enum-like values input that persists `enumSource: "inferred"` in `apps/web/app/generate/page.tsx`
 
 **Checkpoint**: User Story 3 works independently for manual and discovered enum-like values.
 
@@ -109,13 +109,13 @@
 
 ### Tests for User Story 4
 
-- [ ] T030 [P] [US4] Add parser assertions for explicit reference confidence in `packages/core/src/schema/__tests__/parser.test.ts`
-- [ ] T031 [P] [US4] Add discovery assertions for inferred ObjectId reference confidence in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
+- [X] T030 [P] [US4] Add parser assertions for explicit reference confidence in `packages/core/src/schema/__tests__/parser.test.ts`
+- [X] T031 [P] [US4] Add discovery assertions for inferred ObjectId reference confidence in `packages/core/src/schema/__tests__/mongodb-discovery.test.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T032 [US4] Render explicit references as read-only evidence with `explicit` confidence in `apps/web/app/generate/page.tsx`
-- [ ] T033 [US4] Add editable non-explicit reference input that preserves inferred or possible confidence in `apps/web/app/generate/page.tsx`
+- [X] T032 [US4] Render explicit references as read-only evidence with `explicit` confidence in `apps/web/app/generate/page.tsx`
+- [X] T033 [US4] Add editable non-explicit reference input that preserves inferred or possible confidence in `apps/web/app/generate/page.tsx`
 
 **Checkpoint**: User Story 4 works independently for explicit and inferred references.
 
@@ -125,13 +125,13 @@
 
 **Purpose**: Documentation, acceptance verification, and project-wide quality checks.
 
-- [ ] T034 [P] Update Schema Review workflow documentation in `README.md`
-- [ ] T035 [P] Update active Spec Kit marker to feature 004 in `AGENTS.md`
-- [ ] T036 [P] Verify `specs/004-schema-review/quickstart.md` acceptance steps manually against the Generate page
-- [ ] T037 Run focused core tests for parser, MongoDB discovery, and project history in `packages/core`
-- [ ] T038 Run focused API and web checks using scripts in `apps/api/package.json` and `apps/web/package.json`
-- [ ] T039 Run full required verification with `npx turbo build lint test` from root `package.json`
-- [ ] T040 Confirm local web and API servers from `README.md` are reachable for manual review at `http://localhost:3000` and `http://localhost:3001`
+- [X] T034 [P] Update Schema Review workflow documentation in `README.md`
+- [X] T035 [P] Update active Spec Kit marker to feature 004 in `AGENTS.md`
+- [X] T036 [P] Verify `specs/004-schema-review/quickstart.md` acceptance steps manually against the Generate page
+- [X] T037 Run focused core tests for parser, MongoDB discovery, and project history in `packages/core`
+- [X] T038 Run focused API and web checks using scripts in `apps/api/package.json` and `apps/web/package.json`
+- [X] T039 Run full required verification with `npx turbo build lint test` from root `package.json`
+- [X] T040 Confirm local web and API servers from `README.md` are reachable for manual review at `http://localhost:3000` and `http://localhost:3001`
 
 ---
 

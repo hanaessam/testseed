@@ -96,7 +96,7 @@ const parsedSchemaSchema = z.object({
   )
 });
 
-const updateProjectSchemaSchema = z.object({
+export const updateProjectSchemaSchema = z.object({
   schema: parsedSchemaSchema,
   source: z.enum(["manual", "mongodb", "ai"]).optional()
 });
