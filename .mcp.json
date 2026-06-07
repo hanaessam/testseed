@@ -6,6 +6,52 @@
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
       }
+    },
+    "mongodb": {
+      "command": "npx",
+      "args": ["-y", "mongodb-mcp-server@latest", "--readOnly"],
+      "env": {
+        "MDB_MCP_CONNECTION_STRING": "${MONGODB_URI}"
+      }
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+      }
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    },
+    "next-devtools": {
+      "command": "npx",
+      "args": ["-y", "next-devtools-mcp@latest"]
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": ["-y", "shadcn@latest", "mcp"],
+      "cwd": "apps/web"
+    },
+    "figma": {
+      "url": "https://mcp.figma.com/mcp"
+    },
+    "vercel": {
+      "url": "https://mcp.vercel.com"
+    },
+    "v0": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.v0.dev",
+        "--header",
+        "Authorization: Bearer ${V0_API_KEY}"
+      ],
+      "env": {
+        "V0_API_KEY": "${V0_API_KEY}"
+      }
     }
   }
 }
