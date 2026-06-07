@@ -70,6 +70,6 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For the active Spec Kit feature, read:
 
-- `specs/003-mongodb-schema-discovery/spec.md`
-- `specs/003-mongodb-schema-discovery/plan.md`
+- `specs/005-ai-seed-generation/spec.md`
+- `specs/005-ai-seed-generation/plan.md`
 <!-- SPECKIT END -->

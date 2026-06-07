@@ -39,6 +39,10 @@ import type {
   DeleteProjectSchemaRequest,
   DeleteProjectSchemaResponse,
   RestoreProjectSchemaResponse,
+  GenerateSeedDataRequest,
+  GenerateSeedDataResponse,
+  RefineGeneratedDatasetRequest,
+  RefineGeneratedDatasetResponse,
   Project
 } from "@testseed/types";
 
@@ -379,6 +383,30 @@ export async function restoreProjectSchema(
   };
 }
 
+export async function generateSeedData(
+  projectId: string,
+  request: GenerateSeedDataRequest,
+  token: string
+): Promise<GenerateSeedDataResponse> {
+  return postJson<GenerateSeedDataRequest, GenerateSeedDataResponse>(
+    `/projects/${encodeURIComponent(projectId)}/generations`,
+    request,
+    token
+  );
+}
+
+export async function refineGeneratedDataset(
+  projectId: string,
+  request: RefineGeneratedDatasetRequest,
+  token: string
+): Promise<RefineGeneratedDatasetResponse> {
+  return postJson<RefineGeneratedDatasetRequest, RefineGeneratedDatasetResponse>(
+    `/projects/${encodeURIComponent(projectId)}/generations/refinements`,
+    request,
+    token
+  );
+}
+
 export async function parseSchema(
   request: ParseSchemaRequest,
   token: string
@@ -505,8 +533,20 @@ async function requestJson<RequestBody, ResponseBody>(
   const body = (await response.json()) as ResponseBody | { message?: string };
 
   if (!response.ok) {
-    const errorBody = body as { message?: string };
-    throw new Error(errorBody.message ?? "Authentication failed");
+    const errorBody = body as {
+      message?: string;
+      validationResults?: Array<{ code?: string; message?: string }>;
+    };
+    const validationDetails =
+      errorBody.validationResults
+        ?.map((result) => `${result.code ?? "VALIDATION"}: ${result.message ?? ""}`.trim())
+        .filter(Boolean)
+        .join("\n") ?? "";
+    throw new Error(
+      [errorBody.message ?? "Authentication failed", validationDetails]
+        .filter(Boolean)
+        .join("\n")
+    );
   }
 
   return body as ResponseBody;

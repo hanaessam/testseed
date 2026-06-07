@@ -118,6 +118,27 @@ Connection strings submitted for discovery are operation-only inputs. TestSeed o
 
 Discovery results stay transient until you review and explicitly save the schema. Connection failures are shown as sanitized categories such as invalid format, unreachable host, authentication failed, or timeout; raw MongoDB driver errors are not shown to the user.
 
+## AI Seed Generation
+
+OpenAI is the generation provider for AI seed data. Keep `OPENAI_API_KEY` in `.env`; the web app never calls OpenAI directly and the key must stay server-side.
+
+From the Generate screen:
+
+1. Create or load a project.
+2. Add project context.
+3. Review and save a manual or MongoDB-discovered schema.
+4. Choose record counts per collection.
+5. Generate seed records.
+6. Review the returned JSON grouped by collection.
+7. Use the AI refinement chat box for targeted edits such as changing email domains, names, statuses, or other realistic values.
+
+The API exposes:
+
+- `POST /projects/:projectId/generations`
+- `POST /projects/:projectId/generations/refinements`
+
+TestSeed validates every generated or refined dataset before accepting it. Parent collections must come before child collections, ObjectId references must point to generated parent records, and values must respect required fields, field types, enum values, uniqueness, arrays, nested fields, and references. Rejected chat refinements leave the current valid dataset unchanged.
+
 ## GitHub Account and Repository Access
 
 For the current GitHub login work, create a **GitHub OAuth App**, not a GitHub App. A GitHub App is only needed later if TestSeed adds install-based private repository access for schema/model context.

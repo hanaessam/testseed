@@ -11,15 +11,23 @@ import { Sparkles, Loader2, AlertCircle, Database, Layers, FileCode2, X } from "
 import {
   createProject,
   discoverMongoSchema,
+  generateSeedData,
   getProjectDetail,
   parseSchema,
+  refineGeneratedDataset,
   startRepositoryContextAuthorization,
   testMongoConnection,
   updateProjectContext,
   updateProjectSchema
 } from "@/src/lib/api-client";
 import { getStoredSession } from "@/src/lib/session";
-import type { ParsedSchema, SchemaField } from "@testseed/types";
+import type {
+  ChatRefinementMessage,
+  GeneratedDataset,
+  GenerationValidationResult,
+  ParsedSchema,
+  SchemaField
+} from "@testseed/types";
 
 interface SchemaFileDraft {
   name: string;
@@ -52,6 +60,14 @@ export default function GeneratePage() {
   const [isTestingMongo, setIsTestingMongo] = useState(false);
   const [isDiscoveringMongo, setIsDiscoveringMongo] = useState(false);
   const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
+  const [collectionCounts, setCollectionCounts] = useState<Record<string, number>>({});
+  const [generatedDataset, setGeneratedDataset] = useState<GeneratedDataset | null>(null);
+  const [generationMessage, setGenerationMessage] = useState<string | null>(null);
+  const [generationValidationResults, setGenerationValidationResults] = useState<GenerationValidationResult[]>([]);
+  const [isGeneratingSeedData, setIsGeneratingSeedData] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<ChatRefinementMessage[]>([]);
+  const [isRefiningDataset, setIsRefiningDataset] = useState(false);
 
   // Retrieve auth token on mount
   useEffect(() => {
@@ -97,6 +113,31 @@ export default function GeneratePage() {
   const hasSchemaInput = useMemo(
     () => Boolean(schemaText.trim()) || schemaFiles.some((file) => file.content.trim()),
     [schemaFiles, schemaText]
+  );
+
+  useEffect(() => {
+    if (!parsedSchema) {
+      setCollectionCounts({});
+      return;
+    }
+
+    setCollectionCounts((currentCounts) =>
+      Object.fromEntries(
+        parsedSchema.collections.map((collection) => [
+          collection.name,
+          currentCounts[collection.name] ?? 3
+        ])
+      )
+    );
+    setGeneratedDataset(null);
+    setGenerationValidationResults([]);
+    setGenerationMessage(null);
+    setChatHistory([]);
+  }, [parsedSchema]);
+
+  const totalRequestedRecords = useMemo(
+    () => Object.values(collectionCounts).reduce((sum, count) => sum + count, 0),
+    [collectionCounts]
   );
 
   const handleReviewSchema = async () => {
@@ -360,6 +401,96 @@ export default function GeneratePage() {
       );
     } finally {
       setIsSavingSchema(false);
+    }
+  };
+
+  const handleGenerateSeedData = async () => {
+    if (!token || !projectId) {
+      setGenerationMessage("Create or load a project before generating seed data.");
+      return;
+    }
+
+    if (!parsedSchema) {
+      setGenerationMessage("Review and save a schema before generating seed data.");
+      return;
+    }
+
+    setIsGeneratingSeedData(true);
+    setGenerationMessage(null);
+    setGenerationValidationResults([]);
+    setGeneratedDataset(null);
+    setChatHistory([]);
+
+    try {
+      const result = await generateSeedData(projectId, { collectionCounts }, token);
+      setGeneratedDataset(result.dataset);
+      setGenerationMessage(result.message);
+      setGenerationValidationResults([
+        ...result.dataset.validationResults,
+        ...result.dataset.warnings
+      ]);
+    } catch (generateError) {
+      setGenerationMessage(
+        generateError instanceof Error ? generateError.message : "Could not generate seed data."
+      );
+    } finally {
+      setIsGeneratingSeedData(false);
+    }
+  };
+
+  const handleRefineGeneratedDataset = async () => {
+    if (!token || !projectId || !generatedDataset) {
+      setGenerationMessage("Generate a valid dataset before using AI chat refinement.");
+      return;
+    }
+
+    const trimmedMessage = chatMessage.trim();
+    if (!trimmedMessage) {
+      return;
+    }
+
+    setIsRefiningDataset(true);
+    setGenerationMessage(null);
+
+    try {
+      const result = await refineGeneratedDataset(
+        projectId,
+        {
+          currentDataset: generatedDataset,
+          message: trimmedMessage,
+          chatHistory
+        },
+        token
+      );
+      setChatHistory(result.chatHistory);
+      setChatMessage("");
+      setGenerationValidationResults([
+        ...result.validationResults,
+        ...result.warnings
+      ]);
+
+      if (result.dataset) {
+        setGeneratedDataset(result.dataset);
+      }
+
+      setGenerationMessage(result.message);
+    } catch (refineError) {
+      setChatHistory((currentHistory) => [
+        ...currentHistory,
+        { role: "user", content: trimmedMessage },
+        {
+          role: "assistant",
+          content:
+            refineError instanceof Error
+              ? refineError.message
+              : "Could not refine the generated dataset."
+        }
+      ]);
+      setGenerationMessage(
+        refineError instanceof Error ? refineError.message : "Could not refine the generated dataset."
+      );
+    } finally {
+      setIsRefiningDataset(false);
     }
   };
 
@@ -750,6 +881,117 @@ mongoose.model('Product', ProductSchema);`;
                       <p className="text-xs text-muted">{schemaSaveMessage}</p>
                     ) : null}
                   </div>
+                  <div className="space-y-4 rounded border border-border bg-background p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <p className="font-mono text-xs text-accent">ai.seed_generation</p>
+                        <h3 className="mt-1 text-sm font-bold">Generate seed records</h3>
+                        <p className="mt-1 text-xs text-muted">
+                          Total requested records: {totalRequestedRecords}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleGenerateSeedData}
+                        disabled={isGeneratingSeedData || !projectId || !parsedSchema || totalRequestedRecords <= 0}
+                      >
+                        {isGeneratingSeedData ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-2 h-4 w-4" />
+                        )}
+                        Generate records
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {parsedSchema.collections.map((collection) => (
+                        <label
+                          key={collection.name}
+                          className="grid gap-1 text-xs font-mono text-muted"
+                        >
+                          {collection.name}
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={collectionCounts[collection.name] ?? 0}
+                            onChange={(event) =>
+                              setCollectionCounts((currentCounts) => ({
+                                ...currentCounts,
+                                [collection.name]: Math.max(0, Number(event.target.value) || 0)
+                              }))
+                            }
+                            className="h-9 bg-surface"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    {generationMessage ? (
+                      <p className="text-xs text-muted">{generationMessage}</p>
+                    ) : null}
+                    {generationValidationResults.length > 0 ? (
+                      <div className="space-y-1 rounded border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
+                        {generationValidationResults.map((result, index) => (
+                          <p key={`${result.code}-${index}`}>
+                            <span className="font-bold">{result.code}:</span> {result.message}
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  {generatedDataset ? (
+                    <div className="space-y-4 rounded border border-border bg-background p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-mono text-xs text-accent">generated.dataset</p>
+                          <h3 className="mt-1 text-sm font-bold">Valid JSON grouped by collection</h3>
+                        </div>
+                        <ReviewBadge tone={generatedDataset.status === "valid" ? "accent" : "danger"}>
+                          {generatedDataset.status}
+                        </ReviewBadge>
+                      </div>
+                      <pre className="max-h-80 overflow-auto rounded border border-border bg-surface p-3 text-xs leading-relaxed text-foreground">
+                        {JSON.stringify(generatedDataset.collections, null, 2)}
+                      </pre>
+                      <div className="space-y-3 rounded border border-border bg-surface p-3">
+                        <div>
+                          <p className="font-mono text-xs text-accent">ai.refinement_chat</p>
+                          <h3 className="mt-1 text-sm font-bold">Refine with AI chat</h3>
+                        </div>
+                        {chatHistory.length > 0 ? (
+                          <div className="max-h-40 space-y-2 overflow-auto text-xs">
+                            {chatHistory.map((message, index) => (
+                              <div
+                                key={`${message.role}-${index}`}
+                                className="rounded border border-border bg-background p-2"
+                              >
+                                <span className="font-mono text-accent">{message.role}</span>
+                                <p className="mt-1 text-muted">{message.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        <Textarea
+                          value={chatMessage}
+                          onChange={(event) => setChatMessage(event.target.value)}
+                          placeholder="Ask for a specific change, like: make user emails use a university.edu domain"
+                          className="min-h-24 bg-background text-xs"
+                        />
+                        <Button
+                          type="button"
+                          onClick={handleRefineGeneratedDataset}
+                          disabled={isRefiningDataset || !chatMessage.trim()}
+                        >
+                          {isRefiningDataset ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="mr-2 h-4 w-4" />
+                          )}
+                          Send refinement
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   {/* Collections List (Tabs) */}
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wider text-muted font-mono">Discovered Collections</Label>
