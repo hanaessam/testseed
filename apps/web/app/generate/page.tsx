@@ -743,6 +743,11 @@ mongoose.model('Product', ProductSchema);`;
                           <span className="bg-background px-1.5 py-0.5 rounded text-[10px] border border-border text-muted">
                             {coll.fields.length}
                           </span>
+                          {coll.warnings && coll.warnings.length > 0 ? (
+                            <span className="bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px] border border-amber-500/20 text-amber-400">
+                              !
+                            </span>
+                          ) : null}
                         </button>
                       ))}
                     </div>
@@ -756,7 +761,20 @@ mongoose.model('Product', ProductSchema);`;
                           <Layers className="h-4 w-4 text-accent" />
                           <h3 className="text-sm font-bold font-mono">{currentCollection.name} Collection</h3>
                         </div>
+                        {typeof currentCollection.sampleCount === "number" ? (
+                          <span className="font-mono text-[10px] uppercase text-muted">
+                            {currentCollection.sampleCount} samples
+                          </span>
+                        ) : null}
                       </div>
+
+                      {currentCollection.warnings && currentCollection.warnings.length > 0 ? (
+                        <div className="space-y-1 border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-400">
+                          {currentCollection.warnings.map((warning) => (
+                            <p key={warning}>{warning}</p>
+                          ))}
+                        </div>
+                      ) : null}
 
                       <div className="overflow-x-auto rounded border border-border bg-background">
                         <table className="w-full text-left font-mono text-xs">

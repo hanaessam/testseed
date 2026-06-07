@@ -1,4 +1,5 @@
 import { discoverMongoSchema, parseManualSchema, testMongoConnection } from "@testseed/core";
+import type { MongoConnectionErrorCategory } from "@testseed/types";
 import type {
   createProjectRepository,
   createProjectHistoryRepository
@@ -39,7 +40,7 @@ const parseSchemaRequestSchema = z
 const mongoSchemaDiscoveryRequestSchema = z.object({
   connectionString: z.string().min(1, "MongoDB connection string is required."),
   projectId: z.string().min(1).optional(),
-  sampleSize: z.number().int().min(1).max(100).optional()
+  sampleSize: z.number().int().min(1).max(20).optional()
 });
 
 export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
@@ -82,10 +83,12 @@ export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
         });
 
         response.status(200).json(result);
-      } catch (_error) {
+      } catch (error) {
+        const errorCategory = toMongoConnectionErrorCategory(error);
         response.status(400).json({
           ok: false,
-          message: "Unable to connect to MongoDB. Check the connection string and database access."
+          errorCategory,
+          message: toMongoConnectionErrorMessage(errorCategory)
         });
       }
     }
@@ -101,13 +104,88 @@ export function createSchemaRouter(deps: SchemaRouterDeps = {}): Router {
         });
 
         response.status(200).json(result);
-      } catch (_error) {
+      } catch (error) {
+        const errorCategory = toMongoConnectionErrorCategory(error);
         response.status(400).json({
-          message: "Unable to discover MongoDB schema. Check the connection string and database access."
+          errorCategory,
+          message: toMongoConnectionErrorMessage(errorCategory)
         });
       }
     }
   );
 
   return router;
+}
+
+export function toMongoConnectionErrorCategory(error: unknown): MongoConnectionErrorCategory {
+  const message = getErrorMessage(error);
+  const code = getErrorCode(error);
+  const normalized = `${code} ${message}`.toLowerCase();
+
+  if (
+    normalized.includes("invalid scheme") ||
+    normalized.includes("invalid connection string") ||
+    normalized.includes("mongodb connection string is required") ||
+    normalized.includes("uri malformed") ||
+    normalized.includes("invalid uri")
+  ) {
+    return "invalid_format";
+  }
+
+  if (
+    normalized.includes("auth") ||
+    normalized.includes("authentication") ||
+    normalized.includes("bad auth") ||
+    normalized.includes("unauthorized") ||
+    code === "18"
+  ) {
+    return "authentication_failed";
+  }
+
+  if (
+    normalized.includes("timeout") ||
+    normalized.includes("timed out") ||
+    normalized.includes("etimedout")
+  ) {
+    return "timeout";
+  }
+
+  if (
+    normalized.includes("enotfound") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("server selection") ||
+    normalized.includes("getaddrinfo") ||
+    normalized.includes("querysrv") ||
+    normalized.includes("network")
+  ) {
+    return "unreachable_host";
+  }
+
+  return "unknown";
+}
+
+export function toMongoConnectionErrorMessage(
+  category: MongoConnectionErrorCategory
+): string {
+  const messages: Record<MongoConnectionErrorCategory, string> = {
+    invalid_format: "MongoDB connection string format is invalid.",
+    unreachable_host: "MongoDB host could not be reached.",
+    authentication_failed: "MongoDB authentication failed.",
+    timeout: "MongoDB connection timed out.",
+    unknown: "Unable to connect to MongoDB. Check the connection string and database access."
+  };
+
+  return messages[category];
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "";
+}
+
+function getErrorCode(error: unknown): string {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return "";
+  }
+
+  return String(error.code);
 }

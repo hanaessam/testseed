@@ -70,6 +70,6 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For the active Spec Kit feature, read:
 
-- `specs/002-account-management/spec.md`
-- `specs/002-account-management/plan.md`
+- `specs/003-mongodb-schema-discovery/spec.md`
+- `specs/003-mongodb-schema-discovery/plan.md`
 <!-- SPECKIT END -->

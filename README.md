@@ -114,7 +114,9 @@ The API exposes:
 - `POST /schemas/mongodb/test-connection`
 - `POST /schemas/mongodb/discover`
 
-Connection strings submitted for discovery are operation-only inputs. TestSeed opens a temporary connection, lists collections, samples documents, closes the connection, and returns inferred fields, nested objects, arrays, possible references, and uncertainty warnings. The connection string is not saved as project context, schema metadata, or configuration.
+Connection strings submitted for discovery are operation-only inputs. TestSeed opens a temporary connection, lists collections, samples up to 20 documents per collection, closes the connection, and returns inferred fields, nested objects, arrays, possible references, sample counts, and uncertainty warnings. The connection string is not saved as project context, schema metadata, or configuration.
+
+Discovery results stay transient until you review and explicitly save the schema. Connection failures are shown as sanitized categories such as invalid format, unreachable host, authentication failed, or timeout; raw MongoDB driver errors are not shown to the user.
 
 ## GitHub Account and Repository Access
 

@@ -20,6 +20,44 @@ describe("MongoDB schema discovery", () => {
     expect(inspector.testConnection).toHaveBeenCalledWith("mongodb://example.test/shop");
   });
 
+  it("uses a default sample cap of 20 documents per collection", async () => {
+    const inspector = {
+      testConnection: jest.fn(),
+      inspectDatabase: jest.fn().mockResolvedValue({
+        collections: []
+      })
+    };
+
+    await discoverMongoSchema(
+      { connectionString: "mongodb://example.test/shop" },
+      { inspector }
+    );
+
+    expect(inspector.inspectDatabase).toHaveBeenCalledWith(
+      "mongodb://example.test/shop",
+      { sampleSize: 20 }
+    );
+  });
+
+  it("caps requested sample sizes at 20 documents per collection", async () => {
+    const inspector = {
+      testConnection: jest.fn(),
+      inspectDatabase: jest.fn().mockResolvedValue({
+        collections: []
+      })
+    };
+
+    await discoverMongoSchema(
+      { connectionString: "mongodb://example.test/shop", sampleSize: 50 },
+      { inspector }
+    );
+
+    expect(inspector.inspectDatabase).toHaveBeenCalledWith(
+      "mongodb://example.test/shop",
+      { sampleSize: 20 }
+    );
+  });
+
   it("infers fields, nested structures, arrays, references, and uncertain fields from samples", async () => {
     const inspector = {
       testConnection: jest.fn(),
@@ -99,8 +137,44 @@ describe("MongoDB schema discovery", () => {
     const orders = result.collections.find((collection) => collection.name === "orders");
     expect(orders?.fields.find((field) => field.name === "userId")).toMatchObject({
       type: "ObjectId",
-      ref: "users"
+      ref: "users",
+      refConfidence: "inferred"
     });
+  });
+
+  it("preserves collection metadata in the review schema and warns when the sample cap is reached", async () => {
+    const inspector = {
+      testConnection: jest.fn(),
+      inspectDatabase: jest.fn().mockResolvedValue({
+        collections: [
+          {
+            name: "events",
+            sampleLimitReached: true,
+            documents: Array.from({ length: 20 }, (_value, index) => ({
+              _id: `665f7f5b9d7f2a73d99f00${String(index).padStart(2, "0")}`,
+              name: `event-${index}`
+            }))
+          }
+        ]
+      })
+    };
+
+    const result = await discoverMongoSchema(
+      { connectionString: "mongodb://example.test/shop" },
+      { inspector }
+    );
+
+    expect(result.collections[0]).toMatchObject({
+      name: "events",
+      sampleCount: 20,
+      warnings: ["Only 20 sampled documents were inspected; review confidence carefully."]
+    });
+    expect(result.schema.collections[0]).toMatchObject({
+      name: "events",
+      sampleCount: 20,
+      warnings: ["Only 20 sampled documents were inspected; review confidence carefully."]
+    });
+    expect(JSON.stringify(result)).not.toContain("mongodb://example.test/shop");
   });
 
   it("returns warnings for empty databases and empty collections", async () => {

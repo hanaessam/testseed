@@ -40,7 +40,7 @@ type FieldStats = {
 };
 
 const defaultSampleSize = 20;
-const maxSampleSize = 100;
+const maxSampleSize = 20;
 const objectIdPattern = /^[a-f\d]{24}$/i;
 
 export async function testMongoConnection(
@@ -82,9 +82,14 @@ export async function discoverMongoSchema(
     }
 
     const fields = inferFields(collection.documents, collectionNames);
-    const collectionWarnings = fields.flatMap((field) =>
-      (field.warnings ?? []).map((warning) => `${field.name}: ${warning}`)
-    );
+    const collectionWarnings = [
+      ...(collection.sampleLimitReached
+        ? [`Only ${sampleSize} sampled documents were inspected; review confidence carefully.`]
+        : []),
+      ...fields.flatMap((field) =>
+        (field.warnings ?? []).map((warning) => `${field.name}: ${warning}`)
+      )
+    ];
 
     return {
       name: collection.name,
@@ -100,7 +105,9 @@ export async function discoverMongoSchema(
     schema: {
       collections: collections.map((collection) => ({
         name: collection.name,
-        fields: collection.fields
+        fields: collection.fields,
+        sampleCount: collection.sampleCount,
+        warnings: collection.warnings
       }))
     },
     warnings: [
@@ -195,6 +202,7 @@ function toSchemaField(
     confidence,
     warnings: warnings.length > 0 ? warnings : undefined,
     ref,
+    refConfidence: ref ? "inferred" : undefined,
     itemType: type === "Array" ? inferArrayItemType(stats.arrayItems) : undefined,
     children:
       type === "Object"

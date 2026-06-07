@@ -5,6 +5,7 @@ export interface SchemaField {
   unique: boolean;
   enum?: string[];
   ref?: string;
+  refConfidence?: "explicit" | "inferred" | "possible";
   defaultValue?: string;
   confidence?: "high" | "medium" | "low";
   warnings?: string[];
@@ -15,6 +16,8 @@ export interface SchemaField {
 export interface CollectionSchema {
   name: string;
   fields: SchemaField[];
+  sampleCount?: number;
+  warnings?: string[];
 }
 
 export interface ParsedSchema {
@@ -50,11 +53,20 @@ export interface MongoConnectionTestResponse {
   ok: boolean;
   databaseName?: string;
   message: string;
+  errorCategory?: MongoConnectionErrorCategory;
 }
+
+export type MongoConnectionErrorCategory =
+  | "invalid_format"
+  | "unreachable_host"
+  | "authentication_failed"
+  | "timeout"
+  | "unknown";
 
 export interface MongoCollectionSample {
   name: string;
   documents: Record<string, unknown>[];
+  sampleLimitReached?: boolean;
 }
 
 export interface MongoDatabaseInspection {
