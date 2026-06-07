@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import {
   updateProjectSchema
 } from "@/src/lib/api-client";
 import { getStoredSession } from "@/src/lib/session";
-import { ParsedSchema } from "@testseed/types";
+import type { ParsedSchema, SchemaField } from "@testseed/types";
 
 interface SchemaFileDraft {
   name: string;
@@ -743,6 +743,11 @@ mongoose.model('Product', ProductSchema);`;
                           <span className="bg-background px-1.5 py-0.5 rounded text-[10px] border border-border text-muted">
                             {coll.fields.length}
                           </span>
+                          {coll.warnings && coll.warnings.length > 0 ? (
+                            <span className="bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px] border border-amber-500/20 text-amber-400">
+                              !
+                            </span>
+                          ) : null}
                         </button>
                       ))}
                     </div>
@@ -756,7 +761,20 @@ mongoose.model('Product', ProductSchema);`;
                           <Layers className="h-4 w-4 text-accent" />
                           <h3 className="text-sm font-bold font-mono">{currentCollection.name} Collection</h3>
                         </div>
+                        {typeof currentCollection.sampleCount === "number" ? (
+                          <span className="font-mono text-[10px] uppercase text-muted">
+                            {currentCollection.sampleCount} samples
+                          </span>
+                        ) : null}
                       </div>
+
+                      {currentCollection.warnings && currentCollection.warnings.length > 0 ? (
+                        <div className="space-y-1 border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-400">
+                          {currentCollection.warnings.map((warning) => (
+                            <p key={warning}>{warning}</p>
+                          ))}
+                        </div>
+                      ) : null}
 
                       <div className="overflow-x-auto rounded border border-border bg-background">
                         <table className="w-full text-left font-mono text-xs">
@@ -765,67 +783,43 @@ mongoose.model('Product', ProductSchema);`;
                               <th className="p-3 font-semibold">Field</th>
                               <th className="p-3 font-semibold">Type</th>
                               <th className="p-3 font-semibold">Rules</th>
-                              <th className="p-3 font-semibold">Details</th>
+                              <th className="p-3 font-semibold">Review Evidence</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
-                            {currentCollection.fields.map((field) => (
-                              <tr key={field.name} className="hover:bg-surface/50">
-                                <td className="p-3 font-bold text-foreground">{field.name}</td>
-                                <td className="p-3">
-                                  <span className="rounded bg-accent/5 border border-accent/20 px-1.5 py-0.5 text-accent text-[10px]">
-                                    {field.type}
-                                  </span>
-                                </td>
-                                <td className="p-3 space-x-1">
-                                  {field.required && (
-                                    <span className="rounded bg-red-500/10 border border-red-500/20 px-1 py-0.2 text-[9px] text-red-400 font-bold">
-                                      REQ
-                                    </span>
-                                  )}
-                                  {field.unique && (
-                                    <span className="rounded bg-indigo-500/10 border border-indigo-500/20 px-1 py-0.2 text-[9px] text-indigo-400 font-bold">
-                                      UNIq
-                                    </span>
-                                  )}
-                                  {!field.required && !field.unique && (
-                                    <span className="text-muted text-[10px]">-</span>
-                                  )}
-                                </td>
-                                <td className="p-3 text-[10px] text-muted">
-                                  {field.ref && (
-                                    <span className="text-accent">
-                                      ref → <span className="underline">{field.ref}</span>
-                                    </span>
-                                  )}
-                                  {field.enum && (
-                                    <span>
-                                      enum: {JSON.stringify(field.enum)}
-                                    </span>
-                                  )}
-                                  {field.defaultValue && (
-                                    <span>
-                                      default: {field.defaultValue}
-                                    </span>
-                                  )}
-                                  {field.itemType && (
-                                    <span> items: {field.itemType}</span>
-                                  )}
-                                  {field.confidence && (
-                                    <span> confidence: {field.confidence}</span>
-                                  )}
-                                  {field.warnings && field.warnings.length > 0 && (
-                                    <span> warning: {field.warnings.join("; ")}</span>
-                                  )}
-                                  {field.children && field.children.length > 0 && (
-                                    <span> nested: {field.children.map((child) => child.name).join(", ")}</span>
-                                  )}
-                                  {!field.ref && !field.enum && !field.defaultValue && !field.itemType && !field.confidence && (
-                                    <span className="text-muted/40">none</span>
-                                  )}
+                            {currentCollection.fields.length > 0 ? (
+                              currentCollection.fields.map((field) => (
+                                <tr key={field.name} className="align-top hover:bg-surface/50">
+                                  <td className="p-3 font-bold text-foreground">{field.name}</td>
+                                  <td className="p-3">
+                                    <div className="flex flex-wrap gap-1">
+                                      <ReviewBadge tone="accent">{field.type}</ReviewBadge>
+                                      {field.itemType ? <ReviewBadge>items: {field.itemType}</ReviewBadge> : null}
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex flex-wrap gap-1">
+                                      {field.required ? <ReviewBadge tone="danger">required</ReviewBadge> : <ReviewBadge>optional</ReviewBadge>}
+                                      {field.unique ? <ReviewBadge tone="info">unique</ReviewBadge> : null}
+                                      {field.confidence ? (
+                                        <ReviewBadge tone={field.confidence === "low" ? "warning" : "neutral"}>
+                                          {field.confidence} confidence
+                                        </ReviewBadge>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <FieldEvidence field={field} />
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td className="p-4 text-xs text-muted" colSpan={4}>
+                                  No fields were inferred for this collection.
                                 </td>
                               </tr>
-                            ))}
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -855,4 +849,92 @@ function getProjectIdFromLocation(): string | null {
   }
 
   return new URLSearchParams(window.location.search).get("projectId");
+}
+
+type ReviewBadgeTone = "neutral" | "accent" | "danger" | "info" | "warning";
+
+function ReviewBadge({
+  children,
+  tone = "neutral"
+}: {
+  children: ReactNode;
+  tone?: ReviewBadgeTone;
+}) {
+  const toneClass = {
+    neutral: "border-border bg-surface text-muted",
+    accent: "border-accent/20 bg-accent/5 text-accent",
+    danger: "border-red-500/20 bg-red-500/10 text-red-400",
+    info: "border-indigo-500/20 bg-indigo-500/10 text-indigo-400",
+    warning: "border-amber-500/20 bg-amber-500/10 text-amber-400"
+  }[tone];
+
+  return (
+    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function FieldEvidence({ field }: { field: SchemaField }) {
+  const hasEvidence = Boolean(
+    field.ref ||
+      field.enum?.length ||
+      field.defaultValue ||
+      field.children?.length ||
+      field.warnings?.length
+  );
+
+  if (!hasEvidence) {
+    return <span className="text-[10px] text-muted/50">No extra review evidence.</span>;
+  }
+
+  return (
+    <div className="space-y-2 text-[10px] text-muted">
+      {field.ref ? (
+        <div>
+          <span className="font-bold text-accent">Reference:</span>{" "}
+          <span className="text-foreground">{field.ref}</span>
+          {field.refConfidence ? <span> ({field.refConfidence})</span> : null}
+        </div>
+      ) : null}
+      {field.enum && field.enum.length > 0 ? (
+        <div className="space-y-1">
+          <div>
+            <span className="font-bold text-accent">Enum-like values:</span>{" "}
+            {field.enumSource ? <span>{field.enumSource}</span> : null}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {field.enum.map((value) => (
+              <ReviewBadge key={value}>{value}</ReviewBadge>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {field.defaultValue ? (
+        <div>
+          <span className="font-bold text-accent">Default:</span>{" "}
+          <span className="text-foreground">{field.defaultValue}</span>
+        </div>
+      ) : null}
+      {field.children && field.children.length > 0 ? (
+        <div className="space-y-1">
+          <span className="font-bold text-accent">Nested fields:</span>
+          <div className="flex flex-wrap gap-1">
+            {field.children.map((child) => (
+              <ReviewBadge key={child.name}>
+                {child.name}: {child.type}
+              </ReviewBadge>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {field.warnings && field.warnings.length > 0 ? (
+        <div className="space-y-1 text-amber-400">
+          {field.warnings.map((warning) => (
+            <p key={warning}>{warning}</p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }

@@ -115,7 +115,9 @@ function parseSchemaDefinition(definition: any): SchemaField[] {
       required,
       unique,
       enum: enumValues,
+      enumSource: enumValues ? "declared" : undefined,
       ref,
+      refConfidence: ref ? "explicit" : undefined,
       defaultValue
     });
   }
