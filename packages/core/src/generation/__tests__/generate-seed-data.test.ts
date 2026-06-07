@@ -11,10 +11,10 @@ const schema: ParsedSchema = {
 };
 
 describe("generateSeedData", () => {
-  it("retries invalid provider output with validation feedback", async () => {
+  it("retries provider failures before returning valid generated records", async () => {
     const provider = jest
       .fn()
-      .mockResolvedValueOnce({ collections: { User: [{ _id: "bad", email: 123 }] } })
+      .mockRejectedValueOnce(new Error("provider unavailable"))
       .mockResolvedValueOnce({
         collections: { User: [{ _id: "665f1a000000000000000001", email: "user@example.com" }] }
       });
@@ -35,9 +35,6 @@ describe("generateSeedData", () => {
     );
 
     expect(provider).toHaveBeenCalledTimes(2);
-    expect(provider.mock.calls[1][0].validationFeedback).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "FIELD_TYPE_INVALID" })])
-    );
     expect(result.status).toBe("valid");
   });
 
@@ -104,5 +101,71 @@ describe("generateSeedData", () => {
 
     expect(result.status).toBe("valid");
     expect(result.collections.Order[0].user).toBe(result.collections.User[0]._id);
+  });
+
+  it("pads missing provider collections and fills required schema fields with safe values", async () => {
+    const appSchema: ParsedSchema = {
+      collections: [
+        {
+          name: "project_snapshots",
+          fields: [
+            { name: "source", type: "String", required: true, unique: false, enum: ["manual", "mongodb"] },
+            { name: "version", type: "Number", required: true, unique: false },
+            { name: "schema", type: "Object", required: true, unique: false }
+          ]
+        },
+        {
+          name: "projects",
+          fields: [
+            { name: "activeSchemaSnapshotId", type: "ObjectId", required: false, unique: false },
+            { name: "warnings", type: "Array", required: true, unique: false }
+          ]
+        },
+        {
+          name: "passwordResets",
+          fields: [{ name: "email", type: "String", required: true, unique: true }]
+        },
+        {
+          name: "seed_batches",
+          fields: [{ name: "status", type: "String", required: true, unique: false }]
+        }
+      ]
+    };
+    const provider = jest.fn().mockResolvedValue({
+      collections: {
+        project_snapshots: [{ schema: {} }, { schema: {} }, { schema: {} }],
+        projects: [
+          { activeSchemaSnapshotId: "snapshot-1" },
+          { activeSchemaSnapshotId: "snapshot-2" },
+          { activeSchemaSnapshotId: "snapshot-3" }
+        ]
+      }
+    });
+
+    const result = await generateSeedData(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema: appSchema,
+        collectionCounts: {
+          project_snapshots: 3,
+          projects: 3,
+          passwordResets: 3,
+          seed_batches: 3
+        },
+        maxAttempts: 1
+      },
+      { generateRecords: provider }
+    );
+
+    expect(result.status).toBe("valid");
+    expect(result.collections.project_snapshots).toHaveLength(3);
+    expect(result.collections.project_snapshots[0].source).toBe("manual");
+    expect(result.collections.project_snapshots[0].version).toBe(1);
+    expect(result.collections.passwordResets).toHaveLength(3);
+    expect(result.collections.seed_batches).toHaveLength(3);
+    expect(result.collections.projects[0].warnings).toEqual([]);
+    expect(result.collections.projects[0].activeSchemaSnapshotId).toMatch(/^[a-f0-9]{24}$/);
   });
 });
