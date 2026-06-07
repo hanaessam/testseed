@@ -13,7 +13,7 @@ import {
   updateProject,
   updateProjectContext
 } from "@testseed/core";
-import type { RepositoryContextCategory } from "@testseed/types";
+import type { RepositoryContextCategory, SchemaField } from "@testseed/types";
 import type {
   createProjectHistoryRepository,
   createProjectRepository
@@ -67,21 +67,31 @@ const deleteModeSchema = z.object({
   mode: z.enum(["archive", "hard"])
 });
 
-const schemaFieldSchema = z.object({
-  name: z.string().min(1),
-  type: z.string().min(1),
-  required: z.boolean(),
-  unique: z.boolean(),
-  enum: z.array(z.string()).optional(),
-  ref: z.string().optional(),
-  defaultValue: z.string().optional()
-});
+const schemaFieldSchema: z.ZodType<SchemaField> = z.lazy(() =>
+  z.object({
+    name: z.string().min(1),
+    type: z.string().min(1),
+    required: z.boolean(),
+    unique: z.boolean(),
+    enum: z.array(z.string()).optional(),
+    enumSource: z.enum(["declared", "inferred"]).optional(),
+    ref: z.string().optional(),
+    refConfidence: z.enum(["explicit", "inferred", "possible"]).optional(),
+    defaultValue: z.string().optional(),
+    confidence: z.enum(["high", "medium", "low"]).optional(),
+    warnings: z.array(z.string()).optional(),
+    children: z.array(schemaFieldSchema).optional(),
+    itemType: z.string().optional()
+  })
+);
 
 const parsedSchemaSchema = z.object({
   collections: z.array(
     z.object({
       name: z.string().min(1),
-      fields: z.array(schemaFieldSchema)
+      fields: z.array(schemaFieldSchema),
+      sampleCount: z.number().int().min(0).optional(),
+      warnings: z.array(z.string()).optional()
     })
   )
 });

@@ -172,14 +172,15 @@ function parseSchemaStatic(text: string): ParsedSchema {
       line = line.trim();
       if (!line || line.startsWith("//") || line.startsWith("/*") || line.startsWith("*")) continue;
 
-      const fieldMatch = /^["']?(\w+)["']?\s*:\s*([^,]+)/.exec(line);
+      const fieldMatch = /^["']?(\w+)["']?\s*:\s*(.+),?$/.exec(line);
       if (fieldMatch) {
         const fieldName = fieldMatch[1];
-        const rest = fieldMatch[2].trim();
+        const rest = fieldMatch[2].trim().replace(/,$/, "");
 
         let type = "Mixed";
         let required = false;
         let unique = false;
+        let enumValues: string[] | undefined = undefined;
         let ref: string | undefined = undefined;
 
         if (rest.startsWith("{")) {
@@ -198,6 +199,13 @@ function parseSchemaStatic(text: string): ParsedSchema {
           if (refMatch) {
             ref = refMatch[1];
             type = "ObjectId";
+          }
+          const enumMatch = /enum\s*:\s*\[([^\]]*)\]/i.exec(rest);
+          if (enumMatch) {
+            enumValues = enumMatch[1]
+              .split(",")
+              .map((value) => value.replace(/['"]/g, "").trim())
+              .filter(Boolean);
           }
         } else {
           // Direct type e.g., String
@@ -218,7 +226,10 @@ function parseSchemaStatic(text: string): ParsedSchema {
           type,
           required,
           unique,
-          ref
+          enum: enumValues,
+          enumSource: enumValues ? "declared" : undefined,
+          ref,
+          refConfidence: ref ? "explicit" : undefined
         });
       }
     }

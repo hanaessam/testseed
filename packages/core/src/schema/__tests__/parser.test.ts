@@ -12,6 +12,7 @@ describe("Manual Schema Parser", () => {
         const UserSchema = new Schema({
           email: { type: String, required: true, unique: true },
           age: Number,
+          status: { type: String, enum: ['active', 'disabled'] },
           roles: [{ type: String, enum: ['admin', 'member'] }],
           active: { type: Boolean, default: true },
           createdAt: { type: Date, default: Date.now }
@@ -41,6 +42,10 @@ describe("Manual Schema Parser", () => {
       const rolesField = userCol.fields.find(f => f.name === "roles");
       expect(rolesField).toBeDefined();
       expect(rolesField?.type).toBe("Array");
+
+      const statusField = userCol.fields.find(f => f.name === "status");
+      expect(statusField?.enum).toEqual(["active", "disabled"]);
+      expect(statusField?.enumSource).toBe("declared");
 
       const activeField = userCol.fields.find(f => f.name === "active");
       expect(activeField).toBeDefined();
@@ -82,19 +87,22 @@ describe("Manual Schema Parser", () => {
       const customerField = orderCol.fields.find(f => f.name === "customer");
       expect(customerField?.type).toBe("ObjectId");
       expect(customerField?.ref).toBe("User");
+      expect(customerField?.refConfidence).toBe("explicit");
       expect(customerField?.required).toBe(true);
     });
 
     it("should fallback to static regex parsing if syntax errors exist in the sandbox execution", () => {
       const schemaText = `
-        // Syntax error on purpose (missing closing bracket for example, or TypeScript syntax)
-        const PostSchema: Schema = new mongoose.Schema({
+        const PostSchema = new Schema({
           author: { type: Schema.Types.ObjectId, ref: 'User' },
+          status: { type: String, enum: ['draft', 'published'] },
           content: String
         });
+        throw new Error('sandbox failure');
       `;
 
       const result = parseManualSchemaLocal(schemaText);
+      expect(result.warnings[0]).toContain("Loaded schema via static analysis.");
       expect(result.schema.collections).toHaveLength(1);
       const postCol = result.schema.collections[0];
       expect(postCol.name).toBe("Post");
@@ -102,6 +110,11 @@ describe("Manual Schema Parser", () => {
       const authorField = postCol.fields.find(f => f.name === "author");
       expect(authorField?.type).toBe("ObjectId");
       expect(authorField?.ref).toBe("User");
+      expect(authorField?.refConfidence).toBe("explicit");
+
+      const statusField = postCol.fields.find(f => f.name === "status");
+      expect(statusField?.enum).toEqual(["draft", "published"]);
+      expect(statusField?.enumSource).toBe("declared");
     });
 
     it("should parse exported schema files without falling back to static analysis", () => {
