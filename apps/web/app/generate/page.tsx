@@ -2,12 +2,27 @@
 
 import { ChangeEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/layout/app-shell";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Stepper } from "@/components/ui/stepper";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Loader2, AlertCircle, Database, Layers, FileCode2, X } from "lucide-react";
+import {
+  Sparkles,
+  Loader2,
+  Database,
+  Layers,
+  FileCode2,
+  X,
+  ArrowLeft,
+  ArrowRight,
+  GitBranch,
+  Upload,
+  FileText
+} from "lucide-react";
 import {
   createProject,
   discoverMongoSchema,
@@ -20,12 +35,16 @@ import {
   updateProjectContext,
   updateProjectSchema
 } from "@/src/lib/api-client";
-import { getStoredSession } from "@/src/lib/session";
+import { redirectToLogin } from "@/src/lib/auth-session";
+import { getSessionStatus, getStoredSession } from "@/src/lib/session";
+import { useRouter } from "next/navigation";
 import type {
   ChatRefinementMessage,
   GeneratedDataset,
   GenerationValidationResult,
   ParsedSchema,
+  ContextWarning,
+  RepositoryContextSource,
   SchemaField
 } from "@testseed/types";
 
@@ -34,7 +53,21 @@ interface SchemaFileDraft {
   content: string;
 }
 
+type WizardStep =
+  | "project"
+  | "github"
+  | "schema-choose"
+  | "schema-paste"
+  | "schema-upload"
+  | "schema-mongodb"
+  | "review"
+  | "generate"
+  | "refine";
+
+type SchemaInputMethod = "paste" | "upload" | "mongodb";
+
 export default function GeneratePage() {
+  const router = useRouter();
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [repositoryDraft, setRepositoryDraft] = useState("");
@@ -68,18 +101,41 @@ export default function GeneratePage() {
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<ChatRefinementMessage[]>([]);
   const [isRefiningDataset, setIsRefiningDataset] = useState(false);
+  const [isGithubBusy, setIsGithubBusy] = useState(false);
+  const [schemaMethod, setSchemaMethod] = useState<SchemaInputMethod | null>(null);
+  const [schemaIsSaved, setSchemaIsSaved] = useState(false);
+  const [connectedRepository, setConnectedRepository] = useState<RepositoryContextSource | null>(null);
+  const [step, setStep] = useState<WizardStep>("project");
 
   // Retrieve auth token on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
+      const status = getSessionStatus();
+      if (status === "expired") {
+        redirectToLogin(router, "session_expired");
+        return;
+      }
+      if (status === "missing") {
+        redirectToLogin(router, "session_inactive");
+        return;
+      }
+
       const session = getStoredSession();
       const storedToken = session?.token ?? null;
       const existingProjectId = getProjectIdFromLocation();
+      const params = new URLSearchParams(window.location.search);
+      const mode = params.get("mode");
+      const urlStep = params.get("step") as WizardStep | null;
+      const githubConnected = params.get("context") === "github";
       setToken(storedToken);
-      setRequestedMode(new URLSearchParams(window.location.search).get("mode"));
+      setRequestedMode(mode);
 
       if (existingProjectId) {
         setProjectId(existingProjectId);
+      }
+
+      if (githubConnected) {
+        setProjectMessage("GitHub repository connected. Review the context below, then continue or skip.");
       }
 
       if (storedToken && existingProjectId) {
@@ -91,12 +147,32 @@ export default function GeneratePage() {
               setProjectDescription(
                 detail.project.context?.description ?? detail.project.description ?? detail.project.name
               );
-              setRepositoryDraft(detail.project.context?.repository?.repositoryFullName ?? "");
+              const repository = detail.project.context?.repository ?? null;
+              setRepositoryDraft(repository?.repositoryFullName ?? "");
+              setConnectedRepository(repository);
               setContextWarnings(
                 detail.project.context?.warnings.map((warning) => warning.message) ?? []
               );
-              setParsedSchema(detail.activeSchemaSnapshot?.schema ?? null);
+              const activeSchema = detail.activeSchemaSnapshot?.schema ?? null;
+              setParsedSchema(activeSchema);
               setActiveCollectionIdx(0);
+              setSchemaIsSaved(Boolean(activeSchema));
+
+              if (urlStep && isWizardStep(urlStep)) {
+                setStep(urlStep);
+              } else if (githubConnected) {
+                setStep("github");
+              } else if (mode === "generate") {
+                setStep(activeSchema ? "generate" : "schema-choose");
+              } else if (mode === "edit") {
+                setStep(activeSchema ? "review" : "schema-choose");
+              } else {
+                setStep("github");
+              }
+
+              if (githubConnected) {
+                clearGithubCallbackParams();
+              }
             }
           })
           .catch((loadError) => {
@@ -108,7 +184,7 @@ export default function GeneratePage() {
           });
       }
     }
-  }, []);
+  }, [router]);
 
   const hasSchemaInput = useMemo(
     () => Boolean(schemaText.trim()) || schemaFiles.some((file) => file.content.trim()),
@@ -171,15 +247,18 @@ export default function GeneratePage() {
       );
       setParsedSchema(response.schema);
       setSchemaSource("manual");
+      setSchemaMethod(schemaFiles.length > 0 ? "upload" : "paste");
+      setSchemaIsSaved(false);
       setSavedProjectId(null);
       setSchemaSaveMessage(null);
       if (response.warnings && response.warnings.length > 0) {
         setWarnings(response.warnings);
       }
       setActiveCollectionIdx(0);
-    } catch (err: any) {
+      setStep("review");
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "An unexpected error occurred while parsing the schema.");
+      setError(err instanceof Error ? err.message : "An unexpected error occurred while parsing the schema.");
       setParsedSchema(null);
     } finally {
       setIsLoading(false);
@@ -257,6 +336,8 @@ export default function GeneratePage() {
       );
       setParsedSchema(response.schema);
       setSchemaSource("mongodb");
+      setSchemaMethod("mongodb");
+      setSchemaIsSaved(false);
       setWarnings(response.warnings);
       setActiveCollectionIdx(0);
       setMongoConnectionMessage(
@@ -264,6 +345,7 @@ export default function GeneratePage() {
           ? `Discovered schema from ${response.databaseName}.`
           : "Discovered schema from MongoDB."
       );
+      setStep("review");
     } catch (discoverError) {
       setError(
         discoverError instanceof Error
@@ -320,16 +402,8 @@ export default function GeneratePage() {
       setContextWarnings(
         contextResponse.project.context?.warnings.map((warning) => warning.message) ?? []
       );
-      setProjectMessage("Project created and context saved.");
-
-      if (repositoryDraft.trim()) {
-        const auth = await startRepositoryContextAuthorization(
-          activeProjectId,
-          { repositoryFullName: repositoryDraft },
-          token
-        );
-        window.location.href = auth.authorizationUrl;
-      }
+      setProjectMessage("Project created. Add optional GitHub context next.");
+      setStep("github");
     } catch (createError) {
       setProjectMessage(
         createError instanceof Error ? createError.message : "Could not create project."
@@ -366,6 +440,7 @@ export default function GeneratePage() {
         contextResponse.project.context?.warnings.map((warning) => warning.message) ?? []
       );
       setProjectMessage("Project context saved.");
+      setStep("github");
     } catch (saveError) {
       setProjectMessage(
         saveError instanceof Error ? saveError.message : "Could not save project context."
@@ -373,6 +448,60 @@ export default function GeneratePage() {
     } finally {
       setIsCreatingProject(false);
     }
+  };
+
+  const handleGithubConnect = async () => {
+    if (!token || !projectId) {
+      setProjectMessage("Create a project before connecting GitHub.");
+      return;
+    }
+
+    if (!repositoryDraft.trim()) {
+      setProjectMessage("Enter owner/repo or a GitHub URL.");
+      return;
+    }
+
+    setIsGithubBusy(true);
+    setProjectMessage(null);
+
+    try {
+      const auth = await startRepositoryContextAuthorization(
+        projectId,
+        { repositoryFullName: repositoryDraft },
+        token
+      );
+      window.location.href = auth.authorizationUrl;
+    } catch (authError) {
+      setProjectMessage(
+        authError instanceof Error ? authError.message : "Could not start GitHub authorization."
+      );
+      setIsGithubBusy(false);
+    }
+  };
+
+  const handleGithubSkip = () => {
+    setProjectMessage(null);
+    setStep("schema-choose");
+  };
+
+  const handleGithubContinue = () => {
+    setProjectMessage(null);
+    setStep("schema-choose");
+  };
+
+  const handleChooseSchemaMethod = (method: SchemaInputMethod) => {
+    setSchemaMethod(method);
+    setError(null);
+    setSchemaSaveMessage(null);
+    if (method === "paste") {
+      setStep("schema-paste");
+      return;
+    }
+    if (method === "upload") {
+      setStep("schema-upload");
+      return;
+    }
+    setStep("schema-mongodb");
   };
 
   const handleSaveParsedSchema = async () => {
@@ -394,6 +523,7 @@ export default function GeneratePage() {
         token
       );
       setSavedProjectId(result.project.id);
+      setSchemaIsSaved(true);
       setSchemaSaveMessage(`Saved schema v${result.project.activeSchemaVersion}.`);
     } catch (saveError) {
       setSchemaSaveMessage(
@@ -573,342 +703,754 @@ mongoose.model('Product', ProductSchema);`;
 
   const currentCollection = parsedSchema?.collections[activeCollectionIdx] || null;
 
+  const steps = useMemo(
+    () => [
+      { id: "project", title: "Basics", description: "Name + domain context" },
+      { id: "github", title: "GitHub", description: "Optional repository" },
+      { id: "schema", title: "Schema", description: "Choose input method" },
+      { id: "review", title: "Review", description: "Edit + save snapshot" },
+      { id: "generate", title: "Generate", description: "Counts + run" },
+      { id: "refine", title: "Refine", description: "Optional AI chat" }
+    ],
+    []
+  );
+
+  const stepperActiveId = useMemo(() => getStepperActiveId(step), [step]);
+  const meaningfulRepositoryWarnings = useMemo(
+    () => getMeaningfulRepositoryWarnings(connectedRepository?.warnings ?? []),
+    [connectedRepository]
+  );
+
+  const isBusy =
+    isCreatingProject ||
+    isGithubBusy ||
+    isLoading ||
+    isTestingMongo ||
+    isDiscoveringMongo ||
+    isSavingSchema ||
+    isGeneratingSeedData ||
+    isRefiningDataset;
+
+  const canContinueFromReview = schemaIsSaved && Boolean(parsedSchema) && !isBusy;
+  const canContinueFromGenerate = Boolean(generatedDataset) && !isBusy;
+  const showTopContinue = step === "generate";
+
+  function goBack() {
+    setError(null);
+    setProjectMessage(null);
+    setSchemaSaveMessage(null);
+    setGenerationMessage(null);
+
+    setStep((current) => {
+      if (current === "refine") return "generate";
+      if (current === "generate") return "review";
+      if (current === "review") {
+        if (schemaMethod === "paste") return "schema-paste";
+        if (schemaMethod === "upload") return "schema-upload";
+        if (schemaMethod === "mongodb") return "schema-mongodb";
+        return "schema-choose";
+      }
+      if (current === "schema-paste" || current === "schema-upload" || current === "schema-mongodb") {
+        return "schema-choose";
+      }
+      if (current === "schema-choose") return "github";
+      if (current === "github") return "project";
+      return current;
+    });
+  }
+
+  function goNext() {
+    setError(null);
+    setProjectMessage(null);
+    setSchemaSaveMessage(null);
+    setGenerationMessage(null);
+
+    setStep((current) => {
+      if (current === "review" && canContinueFromReview) return "generate";
+      if (current === "generate" && canContinueFromGenerate) return "refine";
+      return current;
+    });
+  }
+
   return (
     <AppShell>
-      <section className="flex min-h-screen flex-col bg-background text-foreground font-sans">
-        {/* Top Context Bar */}
-        <div className="flex flex-col gap-4 border-b border-border bg-surface p-6 md:flex-row md:items-end">
-          <div className="grid flex-1 gap-3 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="project-name" className="text-xs uppercase tracking-wider text-muted font-mono">
-                Project Name
-              </Label>
-              <Input
-                id="project-name"
-                value={projectNameDraft}
-                onChange={(e) => setProjectNameDraft(e.target.value)}
-                placeholder="e.g., E-commerce API"
-                className="bg-background border-border text-sm font-medium focus:ring-accent"
-                disabled={Boolean(projectId)}
-              />
-            </div>
-            <div className="space-y-2">
-            <Label htmlFor="project-description" className="text-xs uppercase tracking-wider text-muted font-mono">
-              Project Context
-            </Label>
-            <Input
-              id="project-description"
-              value={projectDescription}
-              onChange={(e) => setProjectDescription(e.target.value)}
-              placeholder="e.g., E-commerce API with users, products, orders, and reviews"
-              className="bg-background border-border text-sm font-medium focus:ring-accent"
-            />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="repository-url" className="text-xs uppercase tracking-wider text-muted font-mono">
-                GitHub Repository
-              </Label>
-              <Input
-                id="repository-url"
-                value={repositoryDraft}
-                onChange={(e) => setRepositoryDraft(e.target.value)}
-                placeholder="owner/repo or GitHub URL"
-              className="bg-background border-border text-sm font-medium focus:ring-accent"
-              disabled={Boolean(projectId)}
-              />
-            </div>
-            <div className="md:col-span-3">
-            {projectId ? (
-              <p className="text-xs text-muted">
-                New analysis will update schema snapshots for {projectName ?? "this project"}.
+      <section className="min-h-screen bg-background text-foreground">
+        <div className="border-b border-border bg-surface px-6 py-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="font-mono text-xs text-accent">project.wizard</p>
+              <h1 className="mt-1 text-xl font-semibold tracking-tight">New project</h1>
+              <p className="mt-2 text-sm text-muted">
+                One step at a time. Optional steps can be skipped.
               </p>
-            ) : null}
-            {contextWarnings.length > 0 ? (
-              <div className="mt-2 space-y-1">
-                {contextWarnings.map((warning) => (
-                  <p key={warning} className="text-xs text-amber-400">
-                    {warning}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            {requestedMode === "generate" && parsedSchema ? (
-              <p className="text-xs text-accent">
-                Loaded the saved schema for {projectName ?? "this project"}.
-              </p>
-            ) : null}
-            {projectMessage ? (
-              <p className="mt-2 text-xs text-muted">{projectMessage}</p>
-            ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="secondary" disabled={step === "project"} onClick={goBack}>
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              {showTopContinue ? (
+                <Button
+                  type="button"
+                  disabled={step === "generate" && !canContinueFromGenerate}
+                  onClick={goNext}
+                >
+                  Continue
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : null}
             </div>
           </div>
-          {!projectId ? (
-            <Button
-              onClick={handleCreateProject}
-              disabled={isCreatingProject || !(projectNameDraft.trim() || projectDescription.trim())}
-              variant="secondary"
-            >
-              {isCreatingProject ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Database className="mr-2 h-4 w-4" />
-              )}
-              Create project
-            </Button>
-          ) : (
-            <Button
-              onClick={handleSaveExistingContext}
-              disabled={isCreatingProject}
-              variant="secondary"
-            >
-              {isCreatingProject ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Database className="mr-2 h-4 w-4" />
-              )}
-              Save context
-            </Button>
-          )}
-          <Button
-            onClick={handleReviewSchema}
-            disabled={isLoading || !hasSchemaInput || !projectId}
-            className="bg-accent text-background hover:bg-accent/90 font-semibold px-6 shadow-focus transition-all duration-200"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Parsing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Analyze schema
-              </>
-            )}
-          </Button>
+          <div className="mt-4">
+            <Stepper steps={steps} activeStepId={stepperActiveId} />
+          </div>
         </div>
 
-        {/* Main Grid Workspace */}
-        <div className="grid flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_480px] gap-6 p-6">
-          {/* Schema Input Panel */}
-          <div className="flex flex-col gap-6">
-          <Card className="flex flex-col bg-surface border-border overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-4">
-              <div>
-                <p className="font-mono text-xs text-accent">mongodb.discovery</p>
-                <h1 className="mt-1 text-lg font-bold tracking-tight">MongoDB Schema Discovery</h1>
-              </div>
-              <Database className="h-5 w-5 text-accent" />
-            </CardHeader>
-            <CardContent className="space-y-4 pt-6">
-              <div className="space-y-2">
-                <Label htmlFor="mongodb-connection" className="font-mono text-xs uppercase tracking-wider text-muted">
-                  Connection string
-                </Label>
-                <Input
-                  id="mongodb-connection"
-                  type="password"
-                  value={mongoConnectionString}
-                  onChange={(event) => setMongoConnectionString(event.target.value)}
-                  placeholder="mongodb+srv://..."
-                  autoComplete="off"
-                  className="bg-background border-border font-mono text-xs"
-                />
-                <p className="text-xs leading-5 text-muted">
-                  Used only for this test or discovery operation. TestSeed does not save it.
+        <div className="mx-auto w-full max-w-5xl p-6">
+          {error ? (
+            <Alert tone="danger" title="Action needed" className="mb-5">
+              {error}
+            </Alert>
+          ) : null}
+
+          {step === "project" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.project</p>
+                <h2 className="mt-1 text-lg font-semibold">Project basics</h2>
+                <p className="mt-2 text-sm text-muted">
+                  Give your project a name and describe the domain so generated data feels realistic.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleTestMongoConnection}
-                  disabled={isTestingMongo || !mongoConnectionString.trim()}
-                >
-                  {isTestingMongo ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Database className="h-4 w-4" />
-                  )}
-                  Test connection
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleDiscoverMongoSchema}
-                  disabled={isDiscoveringMongo || !projectId || !mongoConnectionString.trim()}
-                >
-                  {isDiscoveringMongo ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}
-                  Discover schema
-                </Button>
-              </div>
-              {mongoConnectionMessage ? (
-                <p className="text-xs text-muted">{mongoConnectionMessage}</p>
-              ) : null}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="project-name">Project name</Label>
+                    <Input
+                      id="project-name"
+                      value={projectNameDraft}
+                      onChange={(event) => setProjectNameDraft(event.target.value)}
+                      placeholder="e.g., E-commerce API"
+                      disabled={Boolean(projectId)}
+                    />
+                    {!projectId && !projectNameDraft.trim() ? (
+                      <p className="text-xs text-error">Project name is required.</p>
+                    ) : null}
+                  </div>
 
-          <Card className="flex flex-col bg-surface border-border overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-4">
-              <div>
-                <p className="font-mono text-xs text-accent">schema.input</p>
-                <h1 className="mt-1 text-lg font-bold tracking-tight">Mongoose Schema Definitions</h1>
-              </div>
-              <Button
-                variant="ghost"
-                onClick={handleDemoSchema}
-                className="text-xs font-mono border border-border text-muted hover:text-accent hover:border-accent/40"
-              >
-                Load Demo
-              </Button>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col pt-6">
-              <div className="mb-4 grid gap-3 border border-border bg-background p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                <div>
-                  <Label htmlFor="schema-files" className="font-mono text-xs uppercase tracking-wider text-muted">
-                    Schema files
-                  </Label>
-                  <p className="mt-1 text-xs leading-5 text-muted">
-                    Add one or more model files; TestSeed parses them together as one project schema.
-                  </p>
-                </div>
-                <Button asChild variant="secondary">
-                  <label htmlFor="schema-files" className="cursor-pointer">
-                    <FileCode2 className="h-4 w-4" />
-                    Add files
-                  </label>
-                </Button>
-                <input
-                  id="schema-files"
-                  type="file"
-                  multiple
-                  accept=".js,.jsx,.ts,.tsx,.mjs,.cjs,.txt"
-                  className="sr-only"
-                  onChange={handleSchemaFiles}
-                />
-              </div>
-
-              {schemaFiles.length > 0 ? (
-                <div className="mb-4 grid gap-2">
-                  {schemaFiles.map((file, index) => (
-                    <div
-                      key={`${file.name}-${index}`}
-                      className="flex min-h-10 items-center gap-3 border border-border bg-background px-3 text-xs"
-                    >
-                      <FileCode2 className="h-4 w-4 shrink-0 text-accent" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-mono text-foreground">{file.name}</p>
-                        <p className="text-muted">{file.content.length.toLocaleString()} chars</p>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${file.name}`}
-                        className="inline-flex h-7 w-7 items-center justify-center border border-border text-muted transition-colors hover:border-error hover:text-error"
-                        onClick={() => removeSchemaFile(index)}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              <Textarea
-                className="min-h-[30rem] flex-1 font-mono text-xs leading-relaxed p-4 bg-background border-border text-foreground/90 resize-none focus-visible:ring-accent focus:ring-accent focus:border-accent"
-                spellCheck={false}
-                value={schemaText}
-                onChange={(e) => setSchemaText(e.target.value)}
-                placeholder={`// Paste your Mongoose schemas here...\n\nconst UserSchema = new Schema({\n  email: { type: String, required: true, unique: true },\n  role: { type: String, enum: ["admin", "member"] }\n});`}
-              />
-            </CardContent>
-          </Card>
-          </div>
-
-          {/* Parsed Schema Review Panel */}
-          <Card className="flex flex-col bg-surface border-border overflow-hidden">
-            <CardHeader className="border-b border-border pb-4">
-              <p className="font-mono text-xs text-accent">preview.output</p>
-              <h2 className="mt-1 text-lg font-bold tracking-tight">Structured Schema Review</h2>
-            </CardHeader>
-
-            <CardContent className="flex flex-1 flex-col pt-6 justify-start">
-              {/* Warnings and Errors Box */}
-              {error && (
-                <div className="mb-4 flex items-start gap-3 rounded-md bg-error/10 border border-error/20 p-4 text-sm text-error">
-                  <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-semibold">Parsing Error</span>
-                    <p className="mt-1 text-xs leading-relaxed text-error/80">{error}</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="project-context">Project context</Label>
+                    <Textarea
+                      id="project-context"
+                      value={projectDescription}
+                      onChange={(event) => setProjectDescription(event.target.value)}
+                      placeholder="Describe users, products, orders, geography, tone, and relationships…"
+                      className="min-h-28"
+                    />
+                    <p className="text-xs text-muted">
+                      Recommended. More context helps AI generate domain-specific seed data.
+                    </p>
                   </div>
                 </div>
-              )}
 
-              {warnings.length > 0 && (
-                <div className="mb-4 rounded-md bg-amber-500/10 border border-amber-500/20 p-4 text-xs text-amber-500 space-y-1">
-                  <span className="font-semibold block font-mono">Warnings:</span>
-                  <ul className="list-disc pl-4 space-y-1">
-                    {warnings.map((w, idx) => (
-                      <li key={idx}>{w}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                {contextWarnings.length > 0 ? (
+                  <Alert tone="warning" title="Context warnings">
+                    <ul className="list-disc space-y-1 pl-4">
+                      {contextWarnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </Alert>
+                ) : null}
 
-              {parsedSchema ? (
-                <div className="flex flex-1 flex-col space-y-6">
-                  <div className="flex flex-wrap items-center gap-2">
+                {projectMessage ? (
+                  <Alert tone={projectMessage.toLowerCase().includes("saved") || projectMessage.toLowerCase().includes("created") ? "success" : "info"}>
+                    {projectMessage}
+                  </Alert>
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {!projectId ? (
                     <Button
                       type="button"
-                      onClick={handleSaveParsedSchema}
-                      disabled={isSavingSchema || !projectId}
+                      onClick={handleCreateProject}
+                      disabled={isCreatingProject || !projectNameDraft.trim()}
                     >
-                      {isSavingSchema ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {isCreatingProject ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Database className="mr-2 h-4 w-4" />
+                        <Database className="h-4 w-4" />
                       )}
-                      Save schema
+                      Create project & continue
+                      <ArrowRight className="h-4 w-4" />
                     </Button>
-                    {savedProjectId ? (
-                      <Button asChild variant="secondary">
-                        <a href={`/projects/${savedProjectId}`}>View project details</a>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleSaveExistingContext}
+                        disabled={isCreatingProject}
+                      >
+                        {isCreatingProject ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Database className="h-4 w-4" />
+                        )}
+                        Save context
                       </Button>
+                      <Button type="button" onClick={() => setStep("github")}>
+                        Continue
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "github" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.github</p>
+                <h2 className="mt-1 text-lg font-semibold">GitHub context (optional)</h2>
+                <p className="mt-2 text-sm text-muted">
+                  Connect a repository so TestSeed can read schemas, models, and docs for better generation context.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {!connectedRepository ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="project-repo">Repository</Label>
+                    <Input
+                      id="project-repo"
+                      value={repositoryDraft}
+                      onChange={(event) => setRepositoryDraft(event.target.value)}
+                      placeholder="owner/repo or GitHub URL"
+                    />
+                  </div>
+                ) : null}
+
+                {connectedRepository ? (
+                  <div className="space-y-4 rounded-lg border border-border bg-background p-4">
+                    <Alert tone="success" title="Connected repository">
+                      <a
+                        href={connectedRepository.repositoryUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-accent underline-offset-2 hover:underline"
+                      >
+                        {connectedRepository.repositoryFullName}
+                      </a>
+                    </Alert>
+                    {connectedRepository.summary ? (
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted">Repository context</p>
+                        <p className="text-sm leading-relaxed text-foreground">
+                          {connectedRepository.summary}
+                        </p>
+                      </div>
                     ) : null}
-                    {schemaSaveMessage ? (
-                      <p className="text-xs text-muted">{schemaSaveMessage}</p>
+                    {connectedRepository.contextCategories.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {connectedRepository.contextCategories.map((category) => (
+                          <span
+                            key={category}
+                            className="rounded border border-accent/20 bg-accent/5 px-2 py-0.5 font-mono text-[10px] text-accent"
+                          >
+                            {category.replace(/_/g, " ")}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {meaningfulRepositoryWarnings.length > 0 ? (
+                      <Alert tone="warning" title="Repository warnings">
+                        <ul className="list-disc space-y-1 pl-4">
+                          {meaningfulRepositoryWarnings.map((warning) => (
+                            <li key={`${warning.code}-${warning.message}`}>{warning.message}</li>
+                          ))}
+                        </ul>
+                      </Alert>
                     ) : null}
                   </div>
-                  <div className="space-y-4 rounded border border-border bg-background p-4">
+                ) : null}
+
+                {projectMessage ? (
+                  <Alert tone={connectedRepository ? "success" : "info"}>{projectMessage}</Alert>
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-5">
+                  {!connectedRepository ? (
+                    <>
+                      <Button
+                        type="button"
+                        onClick={handleGithubConnect}
+                        disabled={isGithubBusy || !repositoryDraft.trim() || !projectId}
+                      >
+                        {isGithubBusy ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <GitBranch className="h-4 w-4" />
+                        )}
+                        Connect GitHub
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={handleGithubSkip}>
+                        Skip for now
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <Button type="button" onClick={handleGithubContinue} disabled={!projectId}>
+                      Continue to schema
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "schema-choose" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.schema.choose</p>
+                <h2 className="mt-1 text-lg font-semibold">How do you want to add your schema?</h2>
+                <p className="mt-2 text-sm text-muted">Pick one method. Each option opens its own step.</p>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-3">
+                <SchemaMethodCard
+                  icon={FileText}
+                  title="Paste schema code"
+                  description="Paste Mongoose model definitions directly."
+                  onClick={() => handleChooseSchemaMethod("paste")}
+                />
+                <SchemaMethodCard
+                  icon={Upload}
+                  title="Upload schema files"
+                  description="Upload one or more Mongoose model files."
+                  onClick={() => handleChooseSchemaMethod("upload")}
+                />
+                <SchemaMethodCard
+                  icon={Database}
+                  title="MongoDB discovery"
+                  description="Infer schema from a live database connection."
+                  onClick={() => handleChooseSchemaMethod("mongodb")}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "schema-paste" ? (
+            <Card className="bg-surface">
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-xs text-accent">step.schema.paste</p>
+                  <h2 className="mt-1 text-lg font-semibold">Paste Mongoose schema</h2>
+                </div>
+                <Button type="button" variant="secondary" onClick={handleDemoSchema}>
+                  Load demo
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea
+                  className="min-h-[24rem] font-mono text-xs leading-relaxed"
+                  spellCheck={false}
+                  value={schemaText}
+                  onChange={(event) => setSchemaText(event.target.value)}
+                  placeholder={`// Paste Mongoose schema(s) here\n\nconst UserSchema = new Schema({\n  email: { type: String, required: true, unique: true }\n});`}
+                />
+                <Button
+                  type="button"
+                  onClick={handleReviewSchema}
+                  disabled={isLoading || !schemaText.trim() || !projectId}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Analyze schema
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "schema-upload" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.schema.upload</p>
+                <h2 className="mt-1 text-lg font-semibold">Upload Mongoose schema files</h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg border border-dashed border-border bg-background p-6 text-center">
+                  <Upload className="mx-auto h-8 w-8 text-accent" />
+                  <p className="mt-3 text-sm font-medium">Add model files</p>
+                  <p className="mt-1 text-xs text-muted">.js, .ts, .mjs, .cjs, or .txt</p>
+                  <Button asChild className="mt-4" variant="secondary">
+                    <label htmlFor="schema-files-upload" className="cursor-pointer">
+                      Choose files
+                    </label>
+                  </Button>
+                  <input
+                    id="schema-files-upload"
+                    type="file"
+                    multiple
+                    accept=".js,.jsx,.ts,.tsx,.mjs,.cjs,.txt"
+                    className="sr-only"
+                    onChange={handleSchemaFiles}
+                  />
+                </div>
+
+                {schemaFiles.length > 0 ? (
+                  <div className="grid gap-2">
+                    {schemaFiles.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex min-h-10 items-center gap-3 rounded border border-border bg-background px-3 text-xs"
+                      >
+                        <FileCode2 className="h-4 w-4 shrink-0 text-accent" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-foreground">{file.name}</p>
+                          <p className="text-muted">{file.content.length.toLocaleString()} chars</p>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${file.name}`}
+                          className="inline-flex h-7 w-7 items-center justify-center border border-border text-muted hover:border-error hover:text-error"
+                          onClick={() => removeSchemaFile(index)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Alert tone="info" title="Next action">
+                    Upload at least one schema file to continue.
+                  </Alert>
+                )}
+
+                <Button
+                  type="button"
+                  onClick={handleReviewSchema}
+                  disabled={isLoading || schemaFiles.length === 0 || !projectId}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Analyze uploaded files
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "schema-mongodb" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.schema.mongodb</p>
+                <h2 className="mt-1 text-lg font-semibold">Discover schema from MongoDB</h2>
+                <p className="mt-2 text-sm text-muted">
+                  The connection string is used only for this operation and is not stored.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mongodb-connection">Connection string</Label>
+                  <Input
+                    id="mongodb-connection"
+                    type="password"
+                    value={mongoConnectionString}
+                    onChange={(event) => setMongoConnectionString(event.target.value)}
+                    placeholder="mongodb+srv://..."
+                    autoComplete="off"
+                    className="font-mono text-xs"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleTestMongoConnection}
+                    disabled={isTestingMongo || !mongoConnectionString.trim()}
+                  >
+                    {isTestingMongo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+                    Test connection
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleDiscoverMongoSchema}
+                    disabled={isDiscoveringMongo || !projectId || !mongoConnectionString.trim()}
+                  >
+                    {isDiscoveringMongo ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    Discover schema
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {mongoConnectionMessage ? (
+                  <Alert tone={mongoConnectionMessage.toLowerCase().includes("successful") ? "success" : "info"}>
+                    {mongoConnectionMessage}
+                  </Alert>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "review" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.review</p>
+                <h2 className="mt-1 text-lg font-semibold">Review and save schema</h2>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {warnings.length > 0 ? (
+                  <Alert tone="warning" title="Schema warnings">
+                    <ul className="list-disc space-y-1 pl-4">
+                      {warnings.map((w, idx) => (
+                        <li key={idx}>{w}</li>
+                      ))}
+                    </ul>
+                  </Alert>
+                ) : null}
+
+                {!parsedSchema ? (
+                  <Alert tone="info" title="Next action">
+                    Go back and add a schema using paste, upload, or MongoDB discovery.
+                  </Alert>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider text-muted font-mono">
+                        Collections
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        {parsedSchema.collections.map((coll, idx) => (
+                          <button
+                            key={coll.name}
+                            type="button"
+                            onClick={() => setActiveCollectionIdx(idx)}
+                            className={`flex items-center gap-2 rounded border px-3 py-1.5 text-xs font-mono transition-colors ${
+                              idx === activeCollectionIdx
+                                ? "border-accent bg-accent/10 text-accent"
+                                : "border-border bg-background text-muted hover:text-foreground"
+                            }`}
+                          >
+                            <Database className="h-3 w-3" />
+                            {coll.name}
+                            <span className="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted">
+                              {coll.fields.length}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {currentCollection ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b border-border pb-2">
+                          <div className="flex items-center gap-2">
+                            <Layers className="h-4 w-4 text-accent" />
+                            <h3 className="text-sm font-semibold">
+                              {currentCollection.name} fields
+                            </h3>
+                          </div>
+                          {typeof currentCollection.sampleCount === "number" ? (
+                            <span className="font-mono text-[10px] uppercase text-muted">
+                              {currentCollection.sampleCount} samples
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {currentCollection.warnings?.length ? (
+                          <Alert tone="warning" title="Collection warnings">
+                            <ul className="list-disc space-y-1 pl-4">
+                              {currentCollection.warnings.map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          </Alert>
+                        ) : null}
+
+                        <div className="overflow-x-auto rounded border border-border bg-background">
+                          <table className="w-full text-left font-mono text-xs">
+                            <thead>
+                              <tr className="border-b border-border bg-surface text-muted">
+                                <th className="p-3 font-semibold">Field</th>
+                                <th className="p-3 font-semibold">Type</th>
+                                <th className="p-3 font-semibold">Rules</th>
+                                <th className="p-3 font-semibold">Review Evidence</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {currentCollection.fields.length > 0 ? (
+                                currentCollection.fields.map((field, fieldIndex) => (
+                                  <tr key={field.name} className="align-top hover:bg-surface/50">
+                                    <td className="p-3 font-bold text-foreground">{field.name}</td>
+                                    <td className="p-3">
+                                      <div className="space-y-2">
+                                        <select
+                                          aria-label={`${field.name} type`}
+                                          className="h-8 w-full rounded border border-border bg-surface px-2 text-xs text-foreground focus:border-accent focus:outline-none"
+                                          value={field.type}
+                                          onChange={(event) =>
+                                            updateReviewedField(activeCollectionIdx, fieldIndex, (currentField) => ({
+                                              ...currentField,
+                                              type: event.target.value,
+                                              itemType:
+                                                event.target.value === "Array"
+                                                  ? currentField.itemType
+                                                  : undefined,
+                                              children:
+                                                event.target.value === "Array" ||
+                                                event.target.value === "Object"
+                                                  ? currentField.children
+                                                  : undefined
+                                            }))
+                                          }
+                                        >
+                                          {!REVIEW_FIELD_TYPE_OPTIONS.includes(field.type) ? (
+                                            <option value={field.type}>{field.type}</option>
+                                          ) : null}
+                                          {REVIEW_FIELD_TYPE_OPTIONS.map((typeOption) => (
+                                            <option key={typeOption} value={typeOption}>
+                                              {typeOption}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        {field.itemType ? <ReviewBadge>items: {field.itemType}</ReviewBadge> : null}
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <div className="flex flex-wrap gap-2">
+                                        <label className="inline-flex h-7 items-center gap-2 rounded border border-border bg-surface px-2 text-[10px] font-bold text-muted">
+                                          <input
+                                            type="checkbox"
+                                            className="h-3 w-3 accent-current"
+                                            checked={field.required}
+                                            onChange={(event) =>
+                                              updateReviewedField(activeCollectionIdx, fieldIndex, (currentField) => ({
+                                                ...currentField,
+                                                required: event.target.checked
+                                              }))
+                                            }
+                                          />
+                                          required
+                                        </label>
+                                        {field.unique ? <ReviewBadge tone="info">unique</ReviewBadge> : null}
+                                        {field.confidence ? (
+                                          <ReviewBadge tone={field.confidence === "low" ? "warning" : "neutral"}>
+                                            {field.confidence} confidence
+                                          </ReviewBadge>
+                                        ) : null}
+                                      </div>
+                                    </td>
+                                    <td className="p-3">
+                                      <FieldEvidence
+                                        field={field}
+                                        onFieldChange={(nextField) =>
+                                          updateReviewedField(activeCollectionIdx, fieldIndex, () => nextField)
+                                        }
+                                      />
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td className="p-4 text-xs text-muted" colSpan={4}>
+                                    No fields were inferred for this collection.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-2">
+                        {schemaSaveMessage ? (
+                          <Alert tone="success">{schemaSaveMessage}</Alert>
+                        ) : (
+                          <p className="text-xs text-muted">
+                            Save your schema snapshot, then continue to generation.
+                          </p>
+                        )}
+                        {savedProjectId ? (
+                          <Button asChild variant="secondary" className="h-8">
+                            <a href={`/projects/${savedProjectId}`}>View project details</a>
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleSaveParsedSchema}
+                          disabled={isSavingSchema || !projectId}
+                        >
+                          {isSavingSchema ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Database className="h-4 w-4" />
+                          )}
+                          Save schema
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={goNext}
+                          disabled={!canContinueFromReview}
+                        >
+                          Next
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "generate" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.generate</p>
+                <h2 className="mt-1 text-lg font-semibold">Generate records</h2>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {!parsedSchema ? (
+                  <Alert tone="info" title="Next action">
+                    Go back and load a schema.
+                  </Alert>
+                ) : (
+                  <>
                     <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                       <div>
-                        <p className="font-mono text-xs text-accent">ai.seed_generation</p>
-                        <h3 className="mt-1 text-sm font-bold">Generate seed records</h3>
-                        <p className="mt-1 text-xs text-muted">
-                          Total requested records: {totalRequestedRecords}
+                        <p className="text-xs text-muted">
+                          Total requested records:{" "}
+                          <span className="font-mono text-accent">{totalRequestedRecords}</span>
                         </p>
                       </div>
                       <Button
                         type="button"
                         onClick={handleGenerateSeedData}
-                        disabled={isGeneratingSeedData || !projectId || !parsedSchema || totalRequestedRecords <= 0}
+                        disabled={isGeneratingSeedData || !projectId || totalRequestedRecords <= 0}
                       >
                         {isGeneratingSeedData ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Sparkles className="mr-2 h-4 w-4" />
+                          <Sparkles className="h-4 w-4" />
                         )}
                         Generate records
                       </Button>
                     </div>
+
                     <div className="grid gap-3 md:grid-cols-2">
                       {parsedSchema.collections.map((collection) => (
-                        <label
-                          key={collection.name}
-                          className="grid gap-1 text-xs font-mono text-muted"
-                        >
+                        <label key={collection.name} className="grid gap-1 text-xs font-mono text-muted">
                           {collection.name}
                           <Input
                             type="number"
@@ -921,248 +1463,238 @@ mongoose.model('Product', ProductSchema);`;
                                 [collection.name]: Math.max(0, Number(event.target.value) || 0)
                               }))
                             }
-                            className="h-9 bg-surface"
+                            className="h-9 bg-background"
                           />
                         </label>
                       ))}
                     </div>
-                    {generationMessage ? (
-                      <p className="text-xs text-muted">{generationMessage}</p>
-                    ) : null}
+
+                    {generationMessage ? <Alert tone="info">{generationMessage}</Alert> : null}
+
                     {generationValidationResults.length > 0 ? (
-                      <div className="space-y-1 rounded border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
-                        {generationValidationResults.map((result, index) => (
-                          <p key={`${result.code}-${index}`}>
-                            <span className="font-bold">{result.code}:</span> {result.message}
-                          </p>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  {generatedDataset ? (
-                    <div className="space-y-4 rounded border border-border bg-background p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-mono text-xs text-accent">generated.dataset</p>
-                          <h3 className="mt-1 text-sm font-bold">Valid JSON grouped by collection</h3>
-                        </div>
-                        <ReviewBadge tone={generatedDataset.status === "valid" ? "accent" : "danger"}>
-                          {generatedDataset.status}
-                        </ReviewBadge>
-                      </div>
-                      <pre className="max-h-80 overflow-auto rounded border border-border bg-surface p-3 text-xs leading-relaxed text-foreground">
-                        {JSON.stringify(generatedDataset.collections, null, 2)}
-                      </pre>
-                      <div className="space-y-3 rounded border border-border bg-surface p-3">
-                        <div>
-                          <p className="font-mono text-xs text-accent">ai.refinement_chat</p>
-                          <h3 className="mt-1 text-sm font-bold">Refine with AI chat</h3>
-                        </div>
-                        {chatHistory.length > 0 ? (
-                          <div className="max-h-40 space-y-2 overflow-auto text-xs">
-                            {chatHistory.map((message, index) => (
-                              <div
-                                key={`${message.role}-${index}`}
-                                className="rounded border border-border bg-background p-2"
-                              >
-                                <span className="font-mono text-accent">{message.role}</span>
-                                <p className="mt-1 text-muted">{message.content}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        <Textarea
-                          value={chatMessage}
-                          onChange={(event) => setChatMessage(event.target.value)}
-                          placeholder="Ask for a specific change, like: make user emails use a university.edu domain"
-                          className="min-h-24 bg-background text-xs"
-                        />
-                        <Button
-                          type="button"
-                          onClick={handleRefineGeneratedDataset}
-                          disabled={isRefiningDataset || !chatMessage.trim()}
-                        >
-                          {isRefiningDataset ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Sparkles className="mr-2 h-4 w-4" />
-                          )}
-                          Send refinement
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                  {/* Collections List (Tabs) */}
-                  <div className="space-y-2">
-                    <Label className="text-xs uppercase tracking-wider text-muted font-mono">Discovered Collections</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {parsedSchema.collections.map((coll, idx) => (
-                        <button
-                          key={coll.name}
-                          onClick={() => setActiveCollectionIdx(idx)}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-mono transition-all duration-150 ${
-                            idx === activeCollectionIdx
-                              ? "bg-accent/10 border-accent text-accent font-semibold"
-                              : "bg-background border-border text-muted hover:text-foreground hover:border-muted/50"
-                          }`}
-                        >
-                          <Database className="h-3 w-3" />
-                          {coll.name}
-                          <span className="bg-background px-1.5 py-0.5 rounded text-[10px] border border-border text-muted">
-                            {coll.fields.length}
-                          </span>
-                          {coll.warnings && coll.warnings.length > 0 ? (
-                            <span className="bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px] border border-amber-500/20 text-amber-400">
-                              !
-                            </span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Active Collection Fields Table */}
-                  {currentCollection && (
-                    <div className="flex-1 space-y-4">
-                      <div className="flex items-center justify-between border-b border-border pb-2">
-                        <div className="flex items-center gap-2">
-                          <Layers className="h-4 w-4 text-accent" />
-                          <h3 className="text-sm font-bold font-mono">{currentCollection.name} Collection</h3>
-                        </div>
-                        {typeof currentCollection.sampleCount === "number" ? (
-                          <span className="font-mono text-[10px] uppercase text-muted">
-                            {currentCollection.sampleCount} samples
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {currentCollection.warnings && currentCollection.warnings.length > 0 ? (
-                        <div className="space-y-1 border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-400">
-                          {currentCollection.warnings.map((warning) => (
-                            <p key={warning}>{warning}</p>
+                      <Alert tone="warning" title="Validation & warnings">
+                        <div className="space-y-1">
+                          {generationValidationResults.map((result, index) => (
+                            <p key={`${result.code}-${index}`}>
+                              <span className="font-semibold">{result.code}:</span> {result.message}
+                            </p>
                           ))}
                         </div>
-                      ) : null}
+                      </Alert>
+                    ) : null}
 
-                      <div className="overflow-x-auto rounded border border-border bg-background">
-                        <table className="w-full text-left font-mono text-xs">
-                          <thead>
-                            <tr className="border-b border-border bg-surface text-muted">
-                              <th className="p-3 font-semibold">Field</th>
-                              <th className="p-3 font-semibold">Type</th>
-                              <th className="p-3 font-semibold">Rules</th>
-                              <th className="p-3 font-semibold">Review Evidence</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {currentCollection.fields.length > 0 ? (
-                              currentCollection.fields.map((field, fieldIndex) => (
-                                <tr key={field.name} className="align-top hover:bg-surface/50">
-                                  <td className="p-3 font-bold text-foreground">{field.name}</td>
-                                  <td className="p-3">
-                                    <div className="space-y-2">
-                                      <select
-                                        aria-label={`${field.name} type`}
-                                        className="h-8 w-full rounded border border-border bg-surface px-2 text-xs text-foreground focus:border-accent focus:outline-none"
-                                        value={field.type}
-                                        onChange={(event) =>
-                                          updateReviewedField(activeCollectionIdx, fieldIndex, (currentField) => ({
-                                            ...currentField,
-                                            type: event.target.value,
-                                            itemType:
-                                              event.target.value === "Array"
-                                                ? currentField.itemType
-                                                : undefined,
-                                            children:
-                                              event.target.value === "Array" ||
-                                              event.target.value === "Object"
-                                                ? currentField.children
-                                                : undefined
-                                          }))
-                                        }
-                                      >
-                                        {!REVIEW_FIELD_TYPE_OPTIONS.includes(field.type) ? (
-                                          <option value={field.type}>{field.type}</option>
-                                        ) : null}
-                                        {REVIEW_FIELD_TYPE_OPTIONS.map((typeOption) => (
-                                          <option key={typeOption} value={typeOption}>
-                                            {typeOption}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      {field.itemType ? <ReviewBadge>items: {field.itemType}</ReviewBadge> : null}
-                                    </div>
-                                  </td>
-                                  <td className="p-3">
-                                    <div className="flex flex-wrap gap-2">
-                                      <label className="inline-flex h-7 items-center gap-2 rounded border border-border bg-surface px-2 text-[10px] font-bold text-muted">
-                                        <input
-                                          type="checkbox"
-                                          className="h-3 w-3 accent-current"
-                                          checked={field.required}
-                                          onChange={(event) =>
-                                            updateReviewedField(
-                                              activeCollectionIdx,
-                                              fieldIndex,
-                                              (currentField) => ({
-                                                ...currentField,
-                                                required: event.target.checked
-                                              })
-                                            )
-                                          }
-                                        />
-                                        required
-                                      </label>
-                                      {field.unique ? <ReviewBadge tone="info">unique</ReviewBadge> : null}
-                                      {field.confidence ? (
-                                        <ReviewBadge tone={field.confidence === "low" ? "warning" : "neutral"}>
-                                          {field.confidence} confidence
-                                        </ReviewBadge>
-                                      ) : null}
-                                    </div>
-                                  </td>
-                                  <td className="p-3">
-                                    <FieldEvidence
-                                      field={field}
-                                      onFieldChange={(nextField) =>
-                                        updateReviewedField(
-                                          activeCollectionIdx,
-                                          fieldIndex,
-                                          () => nextField
-                                        )
-                                      }
-                                    />
-                                  </td>
-                                </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td className="p-4 text-xs text-muted" colSpan={4}>
-                                  No fields were inferred for this collection.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
+                    {isGeneratingSeedData ? (
+                      <div className="space-y-3 rounded border border-border bg-background p-4">
+                        <p className="text-xs text-muted">Preparing output…</p>
+                        <Skeleton className="h-5 w-2/3" />
+                        <Skeleton className="h-5 w-full" />
+                        <Skeleton className="h-40 w-full" />
                       </div>
+                    ) : null}
+
+                    {generatedDataset ? (
+                      <div className="space-y-3 rounded border border-border bg-background p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-mono text-xs text-accent">generated.dataset</p>
+                            <p className="mt-1 text-sm font-semibold">Valid JSON grouped by collection</p>
+                          </div>
+                          <ReviewBadge tone={generatedDataset.status === "valid" ? "accent" : "danger"}>
+                            {generatedDataset.status}
+                          </ReviewBadge>
+                        </div>
+                        <pre className="max-h-80 overflow-auto rounded border border-border bg-surface p-3 text-xs leading-relaxed text-foreground">
+                          {JSON.stringify(generatedDataset.collections, null, 2)}
+                        </pre>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" onClick={() => setStep("refine")}>
+                            Continue to refinement
+                            <ArrowRight className="h-4 w-4" />
+                          </Button>
+                          <Button asChild type="button" variant="secondary">
+                            <a href={`/projects/${projectId ?? ""}`}>Finish and view project</a>
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Alert tone="info" title="Next action">
+                        Generate records to unlock refinement (optional) and project handoff.
+                      </Alert>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {step === "refine" ? (
+            <Card className="bg-surface">
+              <CardHeader>
+                <p className="font-mono text-xs text-accent">step.refine</p>
+                <h2 className="mt-1 text-lg font-semibold">Refine with AI (optional)</h2>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {!generatedDataset ? (
+                  <Alert tone="info" title="Next action">
+                    Go back and generate a dataset first.
+                  </Alert>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button asChild variant="secondary">
+                        <a href={`/projects/${projectId ?? ""}`}>Skip refinement</a>
+                      </Button>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
-                  <div className="mx-auto h-2 w-2 animate-pulse bg-accent rounded-full" />
-                  <p className="mt-4 text-sm font-semibold text-foreground">No schema reviewed yet.</p>
-                  <p className="mt-2 text-xs leading-5 text-muted max-w-[280px]">
-                    Paste your Mongoose schema code on the left and click <b>Analyze Schema</b> to extract fields, types, and model structures.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
+                    {chatHistory.length > 0 ? (
+                      <div className="max-h-64 space-y-2 overflow-auto rounded border border-border bg-background p-3 text-xs">
+                        {chatHistory.map((message, index) => (
+                          <div key={`${message.role}-${index}`} className="rounded border border-border bg-surface p-2">
+                            <span className="font-mono text-accent">{message.role}</span>
+                            <p className="mt-1 text-muted">{message.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Alert tone="info" title="Tip">
+                        Ask for a specific change like “Make users Canadian” or “Use university.edu emails”.
+                      </Alert>
+                    )}
+
+                    <Textarea
+                      value={chatMessage}
+                      onChange={(event) => setChatMessage(event.target.value)}
+                      placeholder="Ask for a change…"
+                      className="min-h-28 bg-background text-sm"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleRefineGeneratedDataset}
+                        disabled={isRefiningDataset || !chatMessage.trim()}
+                      >
+                        {isRefiningDataset ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        Send refinement
+                      </Button>
+                      <Button asChild variant="secondary">
+                        <a href={`/projects/${projectId ?? ""}`}>Finish</a>
+                      </Button>
+                    </div>
+
+                    {generationMessage ? <Alert tone="info">{generationMessage}</Alert> : null}
+
+                    <div className="space-y-2 rounded border border-border bg-background p-3">
+                      <p className="text-xs text-muted">Current dataset</p>
+                      <pre className="max-h-64 overflow-auto rounded border border-border bg-surface p-3 text-xs leading-relaxed text-foreground">
+                        {JSON.stringify(generatedDataset.collections, null, 2)}
+                      </pre>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </section>
     </AppShell>
   );
+}
+
+const WIZARD_STEPS: WizardStep[] = [
+  "project",
+  "github",
+  "schema-choose",
+  "schema-paste",
+  "schema-upload",
+  "schema-mongodb",
+  "review",
+  "generate",
+  "refine"
+];
+
+function isWizardStep(value: string): value is WizardStep {
+  return WIZARD_STEPS.includes(value as WizardStep);
+}
+
+function getStepperActiveId(step: WizardStep): string {
+  if (
+    step === "schema-choose" ||
+    step === "schema-paste" ||
+    step === "schema-upload" ||
+    step === "schema-mongodb"
+  ) {
+    return "schema";
+  }
+  return step;
+}
+
+function SchemaMethodCard({
+  icon: Icon,
+  title,
+  description,
+  onClick
+}: {
+  icon: typeof FileText;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex h-full flex-col rounded-lg border border-border bg-background p-5 text-left transition-colors hover:border-accent hover:bg-accent/5"
+    >
+      <Icon className="h-6 w-6 text-accent" />
+      <p className="mt-4 text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-2 text-xs leading-5 text-muted">{description}</p>
+      <span className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-accent opacity-0 transition-opacity group-hover:opacity-100">
+        Continue
+        <ArrowRight className="h-3.5 w-3.5" />
+      </span>
+    </button>
+  );
+}
+
+const GENERIC_REPOSITORY_WARNING_MESSAGE = "Repository context summary included a note.";
+
+function getMeaningfulRepositoryWarnings(warnings: ContextWarning[]): ContextWarning[] {
+  const seenMessages = new Set<string>();
+
+  return warnings.filter((warning) => {
+    const message = warning.message?.trim();
+    if (!message || message === GENERIC_REPOSITORY_WARNING_MESSAGE) {
+      return false;
+    }
+
+    const dedupeKey = message.toLowerCase();
+    if (seenMessages.has(dedupeKey)) {
+      return false;
+    }
+
+    seenMessages.add(dedupeKey);
+    return true;
+  });
+}
+
+function clearGithubCallbackParams(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("context")) {
+    return;
+  }
+
+  params.delete("context");
+  const query = params.toString();
+  const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+  window.history.replaceState(null, "", nextUrl);
 }
 
 function getProjectIdFromLocation(): string | null {

@@ -16,13 +16,17 @@ import type { PasswordRuleResult } from "@testseed/types";
 import { Check, Eye, EyeOff, GitBranch, KeyRound, Mail, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, type InputHTMLAttributes, useMemo, useState } from "react";
+import { FormEvent, type InputHTMLAttributes, useEffect, useMemo, useState } from "react";
+import { SessionNotice } from "@/components/auth/session-notice";
+import type { SessionLoginReason } from "@/src/lib/auth-session.shared";
+import { consumeSessionExpiredFlag } from "@/src/lib/session";
 
 interface AuthCardProps {
   mode: "login" | "register";
+  loginReason?: SessionLoginReason | null;
 }
 
-export function AuthCard({ mode }: AuthCardProps) {
+export function AuthCard({ mode, loginReason = null }: AuthCardProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +44,20 @@ export function AuthCard({ mode }: AuthCardProps) {
     [password, confirmPassword]
   );
   const isPasswordValid = passwordRules.every((rule) => rule.passed);
+  const [resolvedLoginReason, setResolvedLoginReason] = useState<SessionLoginReason | null>(
+    loginReason
+  );
+
+  useEffect(() => {
+    if (loginReason) {
+      setResolvedLoginReason(loginReason);
+      return;
+    }
+
+    if (consumeSessionExpiredFlag()) {
+      setResolvedLoginReason("session_expired");
+    }
+  }, [loginReason]);
 
   async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,6 +136,10 @@ export function AuthCard({ mode }: AuthCardProps) {
               </p>
             </div>
           </div>
+
+          {!isRegister && resolvedLoginReason ? (
+            <SessionNotice reason={resolvedLoginReason} />
+          ) : null}
 
           <Button type="button" variant="secondary" className="w-full" onClick={continueWithGitHub}>
             <GitBranch className="h-4 w-4" />

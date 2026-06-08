@@ -1,13 +1,16 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { logout } from "@/src/lib/api-client";
 import { clearStoredSession, getStoredAuthToken } from "@/src/lib/session";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function LogoutButton() {
+export function LogoutButton({
+  className,
+  variant = "secondary"
+}: Pick<ButtonProps, "className" | "variant">) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -27,9 +30,14 @@ export function LogoutButton() {
   }
 
   return (
-    <Button className="mt-3 w-full" variant="secondary" onClick={handleLogout} disabled={isLoading}>
-      <LogOut className="h-4 w-4" />
-      {isLoading ? "Logging out" : "Log out"}
+    <Button
+      className={className}
+      variant={variant}
+      onClick={handleLogout}
+      disabled={isLoading}
+    >
+      <LogOut className="h-3.5 w-3.5" />
+      {isLoading ? "..." : "Log out"}
     </Button>
   );
 }

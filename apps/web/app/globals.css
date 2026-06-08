@@ -6,7 +6,7 @@
 .dark {
   --background: #09090b;
   --surface: #111113;
-  --border: #27272a;
+  --border: color-mix(in srgb, var(--foreground) 7%, var(--surface));
   --foreground: #fafafa;
   --muted: #71717a;
   --accent: #4ade80;

@@ -50,4 +50,14 @@ Owns the Next.js user experience. It displays forms, previews, auth flows, feedb
 
 ## Web UI Direction
 
-The web UI uses the dark terminal-precision system documented in [`docs/ui-design.md`](docs/ui-design.md). Future screens should reuse the same tokens, shadcn-style primitives, Geist typography, 240px sidebar app shell, and API-client-only data access rule.
+The web UI uses the dark terminal-precision system documented in [`docs/ui-design.md`](docs/ui-design.md).
+
+Current product surfaces follow these conventions:
+
+- **Shell:** `w-60` sidebar; nav is Dashboard, New project, Projects; account via clickable user pane; session expiry banner when needed.
+- **Tokens:** soft `--border` via `color-mix`; primary buttons are borderless accent fills.
+- **Flows:** generate wizard (project → GitHub → schema → review → generate → refine); project details with tabbed Overview / Schema / History / Project settings; account settings with Profile / Security / Danger zone sections.
+- **Primitives:** `Card`, `Alert`, `Skeleton`, `Stepper`; messages and loading states use these instead of one-off bordered blocks.
+- **Auth:** `auth-session.shared.ts` for pure helpers; `auth-session.ts` client-only; API 401 clears session and notifies the shell.
+
+Future screens should reuse the same tokens, shadcn-style primitives, Geist typography, app shell, and API-client-only data access rule.

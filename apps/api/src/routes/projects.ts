@@ -291,7 +291,10 @@ export function createProjectsRouter(deps: ProjectsRouterDeps): Router {
           }
         );
 
-        response.redirect(`${deps.webAppUrl}/projects/${encodeURIComponent(params.projectId)}?context=github`);
+        // Return to the GitHub wizard step so the user can review connected context before continuing.
+        response.redirect(
+          `${deps.webAppUrl}/generate?projectId=${encodeURIComponent(params.projectId)}&step=github&context=github`
+        );
       } catch (error) {
         next(error);
       }
@@ -609,7 +612,8 @@ export async function completeRepositoryContextCallback(
     }
   );
 
-  return `${deps.webAppUrl}/projects/${encodeURIComponent(state.projectId)}?context=github`;
+  // Return to the GitHub wizard step so the user can review connected context before continuing.
+  return `${deps.webAppUrl}/generate?projectId=${encodeURIComponent(state.projectId)}&step=github&context=github`;
 }
 
 interface GitHubAccessTokenResponse {
@@ -870,6 +874,78 @@ async function summarizeRepositoryFiles(input: {
   };
 }
 
+function extractRepositoryWarningMessage(warning: unknown): string | null {
+  if (typeof warning === "string") {
+    const message = warning.trim();
+    return message || null;
+  }
+
+  if (!warning || typeof warning !== "object") {
+    return null;
+  }
+
+  const item = warning as Record<string, unknown>;
+  for (const key of ["message", "text", "note", "description"]) {
+    const value = item[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function normalizeRepositoryWarnings(warnings: unknown): Array<{
+  code: string;
+  message: string;
+  severity: "info" | "warning" | "error";
+}> {
+  if (!Array.isArray(warnings)) {
+    return [];
+  }
+
+  const seenMessages = new Set<string>();
+  const normalized: Array<{
+    code: string;
+    message: string;
+    severity: "info" | "warning" | "error";
+  }> = [];
+
+  for (const warning of warnings) {
+    const message = extractRepositoryWarningMessage(warning);
+    if (!message) {
+      continue;
+    }
+
+    const dedupeKey = message.toLowerCase();
+    if (seenMessages.has(dedupeKey)) {
+      continue;
+    }
+    seenMessages.add(dedupeKey);
+
+    const item =
+      warning && typeof warning === "object"
+        ? (warning as { code?: unknown; severity?: unknown })
+        : {};
+    const severity: "info" | "warning" | "error" =
+      item.severity === "error" || item.severity === "warning" || item.severity === "info"
+        ? item.severity
+        : "info";
+
+    normalized.push({
+      code: typeof item.code === "string" && item.code ? item.code : "repository_context_note",
+      message,
+      severity
+    });
+
+    if (normalized.length >= 5) {
+      break;
+    }
+  }
+
+  return normalized;
+}
+
 function normalizeRepositorySummary(value: unknown): {
   summary: string;
   contextCategories: RepositoryContextCategory[];
@@ -893,26 +969,7 @@ function normalizeRepositorySummary(value: unknown): {
       )
     : [];
 
-  const warnings = Array.isArray(candidate.warnings)
-    ? candidate.warnings
-        .map((warning) => {
-          const item = warning as { code?: unknown; message?: unknown; severity?: unknown };
-          const severity: "info" | "warning" | "error" =
-            item.severity === "error" || item.severity === "warning" || item.severity === "info"
-              ? item.severity
-              : "info";
-
-          return {
-            code: typeof item.code === "string" && item.code ? item.code : "repository_context_note",
-            message:
-              typeof item.message === "string" && item.message
-                ? item.message
-                : "Repository context summary included a note.",
-            severity
-          };
-        })
-        .slice(0, 5)
-    : [];
+  const warnings = normalizeRepositoryWarnings(candidate.warnings);
 
   return {
     summary:

@@ -16,7 +16,7 @@ export function ProjectContextSummary({
 
   return (
     <div className="space-y-3">
-      <div className="border border-border bg-background p-3">
+      <div className="rounded-md bg-background/50 p-3">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-accent" />
           <p className="text-sm font-medium">Domain context</p>
@@ -27,7 +27,7 @@ export function ProjectContextSummary({
       </div>
 
       {repository ? (
-        <div className="border border-border bg-background p-3">
+        <div className="rounded-md bg-background/50 p-3">
           <div className="flex items-center gap-2">
             <GitBranch className="h-4 w-4 text-accent" />
             <p className="text-sm font-medium">{repository.repositoryFullName}</p>

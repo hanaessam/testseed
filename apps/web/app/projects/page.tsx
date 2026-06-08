@@ -8,7 +8,11 @@ import {
   listProjects,
   restoreProject
 } from "@/src/lib/api-client";
-import { clearStoredSession, getStoredSession } from "@/src/lib/session";
+import {
+  isAuthenticationError,
+  redirectToLogin,
+  requireStoredSession
+} from "@/src/lib/auth-session";
 import type { Project } from "@testseed/types";
 import {
   Archive,
@@ -34,9 +38,8 @@ export default function ProjectsPage() {
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null);
 
   useEffect(() => {
-    const session = getStoredSession();
+    const session = requireStoredSession(router);
     if (!session) {
-      router.replace("/login");
       return;
     }
 
@@ -54,9 +57,8 @@ export default function ProjectsPage() {
           return;
         }
 
-        if (loadError instanceof Error && loadError.message.includes("Authentication")) {
-          clearStoredSession();
-          router.replace("/login");
+        if (isAuthenticationError(loadError)) {
+          redirectToLogin(router, "session_expired");
           return;
         }
 
@@ -86,9 +88,8 @@ export default function ProjectsPage() {
   const visibleProjects = filter === "active" ? activeProjects : archivedProjects;
 
   async function handleArchiveProject(project: Project) {
-    const session = getStoredSession();
+    const session = requireStoredSession(router);
     if (!session) {
-      router.replace("/login");
       return;
     }
 
@@ -119,9 +120,8 @@ export default function ProjectsPage() {
   }
 
   async function handleRestoreProject(project: Project) {
-    const session = getStoredSession();
+    const session = requireStoredSession(router);
     if (!session) {
-      router.replace("/login");
       return;
     }
 
@@ -146,9 +146,8 @@ export default function ProjectsPage() {
   }
 
   async function handleHardDeleteProject(project: Project) {
-    const session = getStoredSession();
+    const session = requireStoredSession(router);
     if (!session) {
-      router.replace("/login");
       return;
     }
 
@@ -186,7 +185,7 @@ export default function ProjectsPage() {
           </div>
           <Button asChild>
             <Link href="/generate">
-              New generation
+              New project
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -239,7 +238,7 @@ export default function ProjectsPage() {
                     </p>
                     <p className="mt-2 text-xs leading-5 text-muted">
                       {filter === "active"
-                        ? "Create a generation run to save your first project."
+                        ? "Create a new project to get started."
                         : "Archived projects will appear here after you archive them."}
                     </p>
                   </div>
@@ -278,10 +277,10 @@ function FilterButton({
     <button
       type="button"
       onClick={onClick}
-      className={`border px-3 py-2 text-sm transition-colors ${
+      className={`rounded-md px-3 py-2 text-sm transition-colors ${
         active
-          ? "border-accent bg-accent/10 text-accent"
-          : "border-border bg-surface text-muted hover:text-foreground"
+          ? "bg-accent/10 text-accent"
+          : "text-muted hover:bg-background/60 hover:text-foreground"
       }`}
     >
       {label}

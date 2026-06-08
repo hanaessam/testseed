@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,15 +34,7 @@ export function DeleteAccountPanel({ token }: { token: string }) {
   }
 
   return (
-    <form className="space-y-4 border border-error bg-surface p-4" onSubmit={submit}>
-      <div>
-        <p className="font-mono text-xs text-error">account.danger</p>
-        <h2 className="mt-1 text-lg font-semibold">Delete account</h2>
-        <p className="mt-2 text-sm leading-6 text-muted">
-          This immediately revokes access and schedules permanent deletion after 30 days.
-        </p>
-      </div>
-
+    <form className="space-y-4" onSubmit={submit}>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="deletePassword">Current password</Label>
@@ -54,19 +47,21 @@ export function DeleteAccountPanel({ token }: { token: string }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="deletePhrase">Type DELETE</Label>
+          <Label htmlFor="deletePhrase">Type DELETE to confirm</Label>
           <Input
             id="deletePhrase"
             value={confirmationPhrase}
             onChange={(event) => setConfirmationPhrase(event.target.value)}
+            placeholder="DELETE"
+            className="font-mono"
             required
           />
         </div>
       </div>
 
-      {error ? <p className="border border-error px-3 py-2 text-sm text-error">{error}</p> : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
 
-      <Button type="submit" variant="secondary" disabled={isLoading}>
+      <Button type="submit" variant="secondary" className="text-error" disabled={isLoading}>
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
         Delete account
       </Button>

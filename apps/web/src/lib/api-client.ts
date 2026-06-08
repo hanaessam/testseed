@@ -46,7 +46,12 @@ import type {
   Project
 } from "@testseed/types";
 
+import { AuthenticationError } from "@/src/lib/auth-session.shared";
+import { notifySessionExpired } from "@/src/lib/auth-session";
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+
+export { AuthenticationError } from "@/src/lib/auth-session.shared";
 
 export async function requestRegistrationOtp(
   request: RegistrationOtpRequest
@@ -542,10 +547,16 @@ async function requestJson<RequestBody, ResponseBody>(
         ?.map((result) => `${result.code ?? "VALIDATION"}: ${result.message ?? ""}`.trim())
         .filter(Boolean)
         .join("\n") ?? "";
+
+    if (response.status === 401 && token) {
+      notifySessionExpired();
+      throw new AuthenticationError(
+        errorBody.message ?? "Your session has expired. Please sign in again."
+      );
+    }
+
     throw new Error(
-      [errorBody.message ?? "Authentication failed", validationDetails]
-        .filter(Boolean)
-        .join("\n")
+      [errorBody.message ?? "Request failed", validationDetails].filter(Boolean).join("\n")
     );
   }
 
