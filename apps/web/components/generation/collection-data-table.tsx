@@ -25,6 +25,15 @@ export interface DatasetCellCommitPayload {
 
 interface CollectionDataTableProps {
   dataset: GeneratedDataset | null;
+  regenerationLifecycle?:
+    | "idle"
+    | "submitted"
+    | "in_progress"
+    | "accepted"
+    | "partial"
+    | "rejected"
+    | "cancelled"
+    | "failed";
   schema?: ParsedSchema | null;
   validationResults?: GenerationValidationResult[];
   activeCollection?: string;
@@ -40,6 +49,7 @@ interface CollectionDataTableProps {
 
 export function CollectionDataTable({
   dataset,
+  regenerationLifecycle = "idle",
   schema,
   validationResults = [],
   activeCollection,
@@ -52,6 +62,8 @@ export function CollectionDataTable({
   onCellCommit,
   className
 }: CollectionDataTableProps) {
+  const regenerationInFlight =
+    regenerationLifecycle === "submitted" || regenerationLifecycle === "in_progress";
   const collectionNames = useMemo(() => {
     if (!dataset) {
       return [];
@@ -160,6 +172,13 @@ export function CollectionDataTable({
 
         {dataset && collectionNames.length > 0 ? (
           <>
+            {regenerationInFlight ? (
+              <div className="rounded-md border border-info-border bg-info-subtle px-3 py-2 text-xs text-info-text">
+                Regeneration is running. Current preview remains editable and unchanged until an
+                accepted result is returned.
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap gap-2">
               {collectionNames.map((collectionName) => {
                 const isActive = collectionName === effectiveCollection;

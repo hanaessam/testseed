@@ -9,6 +9,7 @@ import {
   mapGenerationPlanToResponse,
   REFINEMENT_SYSTEM_PROMPT,
   buildRefinementUserPromptContent,
+  regenerateWithFeedback,
   refineGeneratedDataset,
   saveGeneratedDataset,
   updateSavedGeneratedDataset,
@@ -19,6 +20,7 @@ import {
 } from "@testseed/core";
 import type {
   ChatRefinementMessage,
+  FeedbackRegenerationResponse,
   GeneratedDataset,
   GeneratedRecord,
   GenerationValidationResult,
@@ -82,6 +84,16 @@ const refineGeneratedDatasetRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   chatHistory: z.array(chatMessageSchema).optional(),
   savedDatasetId: z.string().min(1).optional()
+});
+
+const feedbackRegenerationRequestSchema = z.object({
+  acceptedDataset: generatedDatasetSchema,
+  feedback: z.string().min(1).max(2000),
+  chatHistory: z.array(chatMessageSchema).optional(),
+  savedDatasetId: z.string().min(1).optional(),
+  projectContext: z.string().max(4000).optional(),
+  schemaContext: z.string().max(12000).optional(),
+  collectionCounts: z.record(z.number().int().min(0)).optional()
 });
 
 const datasetCellEditSchema = z.object({
@@ -529,6 +541,89 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
   );
 
   router.post(
+    "/:projectId/generations/regenerate",
+    validateBody(feedbackRegenerationRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before regenerating seed records." });
+          return;
+        }
+
+        if (request.body.acceptedDataset.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The generated dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        const schemaContext =
+          request.body.schemaContext ??
+          context.schemaSnapshot.schema.collections
+            .map((collection) => `${collection.name}(${collection.fields.length})`)
+            .join(", ");
+
+        const result = await regenerateWithFeedback(
+          {
+            projectId: context.project.id,
+            actorId: authenticatedRequest.auth.userId,
+            schemaSnapshotId: context.schemaSnapshot.id,
+            schema: context.schemaSnapshot.schema,
+            projectContext: context.project.context,
+            acceptedDataset: request.body.acceptedDataset,
+            feedback: request.body.feedback,
+            chatHistory: request.body.chatHistory,
+            projectContextText: request.body.projectContext,
+            schemaContext,
+            collectionCounts: request.body.collectionCounts
+          },
+          {
+            refineRecords: createOpenAIRefinementProvider(deps)
+          }
+        );
+
+        await deps.projectHistoryRepository.appendProjectEvent({
+          projectId: context.project.id,
+          actorId: authenticatedRequest.auth.userId,
+          kind: "chat_message",
+          message:
+            result.mode === "accepted"
+              ? "Feedback regeneration accepted a new dataset."
+              : "Feedback regeneration returned a non-accepted outcome.",
+          payload: { mode: result.mode },
+          createdAt: new Date()
+        });
+
+        const savedDatasetId = await persistFeedbackRegenerationOutcome(
+          deps,
+          context.project.id,
+          authenticatedRequest.auth.userId,
+          result,
+          request.body.savedDatasetId
+        );
+
+        response.status(statusForFeedbackMode(result.mode)).json({
+          ...result,
+          savedDatasetId
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
     "/:projectId/generations/refinements",
     validateBody(refineGeneratedDatasetRequestSchema),
     async (request: Request, response: Response, next: NextFunction) => {
@@ -839,6 +934,45 @@ async function persistRefinementOutcome(
   return undefined;
 }
 
+async function persistFeedbackRegenerationOutcome(
+  deps: GenerationRouterDeps,
+  projectId: string,
+  ownerId: string,
+  result: FeedbackRegenerationResponse,
+  activeSavedDatasetId?: string
+): Promise<string | undefined> {
+  if (result.mode === "accepted" && result.dataset?.status === "valid") {
+    const savedDataset = await persistValidDataset(
+      deps,
+      projectId,
+      ownerId,
+      result.dataset,
+      "refinement",
+      result.chatHistory
+    );
+    return savedDataset.id;
+  }
+
+  if (activeSavedDatasetId && result.chatHistory.length > 0) {
+    await updateSavedGeneratedDatasetChatHistory(
+      {
+        projectId,
+        datasetId: activeSavedDatasetId,
+        ownerId,
+        chatHistory: result.chatHistory
+      },
+      {
+        findProjectById: deps.projectRepository.findProjectById,
+        updateGeneratedDatasetChatHistory:
+          deps.generatedDatasetRepository.updateGeneratedDatasetChatHistory
+      }
+    );
+    return activeSavedDatasetId;
+  }
+
+  return undefined;
+}
+
 function createOpenAIGenerationProvider(deps: GenerationRouterDeps): SeedGenerationProvider {
   return async (providerRequest) => {
     if (!deps.openaiApiKey) {
@@ -1026,6 +1160,13 @@ function messageForValidation(validationResults: GenerationValidationResult[]): 
     return "Seed generation cannot start with the selected counts.";
   }
   return "Generated records did not pass validation.";
+}
+
+function statusForFeedbackMode(mode: FeedbackRegenerationResponse["mode"]): number {
+  if (mode === "accepted" || mode === "partial" || mode === "cancelled") {
+    return 200;
+  }
+  return 422;
 }
 
 void createGenerationRouter;
