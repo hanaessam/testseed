@@ -1,6 +1,6 @@
 # Generation UX Roadmap
 
-**Status**: Documented 2026-06-08 — **implementation not started**. The linear wizard remains the active UI until `006-generation-workbench` Phase 1 ships.
+**Status**: Workbench + setup wizard shipped. Streaming enabled by default. Saved runs persist dataset, counts, and chat history per generation/refinement snapshot. Export (2b) still gated by env flag.
 
 ## Purpose
 
@@ -10,13 +10,15 @@ This document summarizes why TestSeed is moving from a **generate wizard** to a 
 
 | Capability | Location | Notes |
 | --- | --- | --- |
-| Linear wizard | `apps/web/app/generate/page.tsx` | Project → GitHub → schema → review → generate → refine |
+| Setup wizard | `apps/web/components/generation/project-setup-wizard.tsx` | New projects: context → GitHub → schema → review |
+| Generation Workbench | `apps/web/app/generate/page.tsx` | Three-pane: setup rail · tables · agent dock |
+| Saved runs | `generated_dataset_records` + left-rail panel | Data, counts, chat history per snapshot |
 | AI generation | `packages/core/src/generation/` | Dependency order, validation, OpenAI via API |
-| Chat refinement | Same page, separate step | Uses `refineGeneratedDataset` API |
-| Schema review | Wizard review step + project schema tab | Save snapshot before generate |
-| Raw JSON preview | Generate step | `<pre>` block |
+| Chat refinement | Agent dock (streamed) | `refineGeneratedDataset` + persisted chat per run |
+| Collection counts | `collection-counts-panel.tsx` | Editable in workbench left rail |
+| Schema review | Wizard review step + project schema tab | Save snapshot before workbench |
 
-See `docs/ui-design.md` § Generate Wizard for UI conventions.
+See `docs/ui-design.md` § Generate Flow for UI conventions.
 
 ## Target state (planned)
 
@@ -53,10 +55,10 @@ Full specification: [`specs/006-generation-workbench/spec.md`](../specs/006-gene
 
 | Phase | Focus | User-visible outcome |
 | --- | --- | --- |
-| **1** | Workbench shell | One screen: setup rail + tables + chat; no refine step |
-| **2** | Export + trust | JSON export, validation badges, refinement summaries |
-| **3** | Streaming | Collections appear as they complete |
-| **4** | Handoff | Insert, rollback links, CI snippets |
+| **1** | Workbench shell | All users on one screen; setup rail + static tables + merged refine; Finish only |
+| **2a** | Streaming | Streamed chat + progressive tables + generation progress (Tonic-demo feel) |
+| **2b** | Export + trust | JSON export, validation badges, quick prompts, refinement summaries |
+| **3** | Handoff | Insert, rollback links, CI snippets |
 
 Details: [`specs/006-generation-workbench/plan.md`](../specs/006-generation-workbench/plan.md)
 

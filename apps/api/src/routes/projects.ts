@@ -15,6 +15,7 @@ import {
 } from "@testseed/core";
 import type { RepositoryContextCategory, SchemaField } from "@testseed/types";
 import type {
+  createGeneratedDatasetRepository,
   createProjectHistoryRepository,
   createProjectRepository
 } from "@testseed/db";
@@ -27,10 +28,12 @@ import { type AuthenticatedRequest } from "../middleware/auth";
 
 type ProjectRepository = ReturnType<typeof createProjectRepository>;
 type ProjectHistoryRepository = ReturnType<typeof createProjectHistoryRepository>;
+type GeneratedDatasetRepository = ReturnType<typeof createGeneratedDatasetRepository>;
 
 export interface ProjectsRouterDeps {
   projectRepository: ProjectRepository;
   projectHistoryRepository: ProjectHistoryRepository;
+  generatedDatasetRepository: GeneratedDatasetRepository;
   githubClientId?: string;
   githubClientSecret?: string;
   githubCallbackUrl?: string;
@@ -551,6 +554,7 @@ export function createProjectsRouter(deps: ProjectsRouterDeps): Router {
             hardDeleteProjectRecord: deps.projectRepository.hardDeleteProjectRecord,
             hardDeleteProjectSnapshots: deps.projectRepository.hardDeleteProjectSnapshots,
             hardDeleteProjectHistory: deps.projectHistoryRepository.hardDeleteProjectHistory,
+            hardDeleteGeneratedDatasets: deps.generatedDatasetRepository.hardDeleteGeneratedDatasetsByProject,
             appendProjectEvent: deps.projectHistoryRepository.appendProjectEvent
           }
         );

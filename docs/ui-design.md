@@ -191,46 +191,39 @@ Feedback: `Alert` for errors and success (archive/restore/delete). Loading: `Ske
 
 ## Generate Flow
 
-**Active UI (today):** linear wizard in `apps/web/app/generate/page.tsx`.
+**Active UI:** Setup wizard + Generation Workbench in `apps/web/app/generate/page.tsx`. See `docs/generation-ux-roadmap.md`.
 
-**Planned UI:** Generation Workbench (`specs/006-generation-workbench/`) — documented, not implemented. See `docs/generation-ux-roadmap.md`.
+### Setup wizard (new projects)
 
-### Current: Generate Wizard
+Stepper flow on `/generate` until the user opens the workbench:
 
-Step-based wizard (one primary card per step):
+1. **Project** — name and description  
+2. **GitHub** — optional repository context  
+3. **Schema** — paste, upload, or MongoDB discovery  
+4. **Review** — field review, save schema snapshot, **Open generation workbench**
 
-1. **Project** — name and description.
-2. **GitHub** — optional repository context; after OAuth, user stays on this step and continues manually (no auto-advance to schema).
-3. **Schema choose** — paste, upload, or MongoDB.
-4. **Schema input** — branch step (paste / upload / mongodb).
-5. **Review** — save schema at bottom; **Next** enabled after save.
-6. **Generate** — AI seed generation; raw JSON preview in `<pre>`.
-7. **Refine** — optional AI chat refinement (separate step).
+`?mode=edit` returns to the wizard for an existing project. GitHub OAuth callback lands on the GitHub step.
 
-Optional steps expose **Skip**. Repository warnings shown in UI are filtered to meaningful messages only (generic AI placeholders hidden).
+### Generation Workbench (006 — shipped)
 
-Finish actions use `router.push` (not `<a href>`) to navigate to `/projects/[projectId]`.
-
-### Planned: Generation Workbench (006)
-
-Three-pane layout on the same `/generate` route:
+Three-pane layout after setup (`?projectId=…&mode=generate`):
 
 | Pane | Contents |
 | --- | --- |
-| **Left — Setup rail** | Collapsible: project context, GitHub, schema input, generation plan, per-collection counts |
-| **Center — Data canvas** | Collection tabs, table preview, validation badges, generation progress (later) |
-| **Right — Agent dock** | Chat refinement, quick prompts, message history |
+| **Left — Setup rail** | Edit setup link, context sources, **collection counts**, generation plan, **saved runs** |
+| **Center — Data canvas** | Collection tabs, table preview, validation badges, generation progress |
+| **Right — Agent dock** | Streamed refinement chat (You / TestSeed bubbles), quick prompts |
 
-**Sticky action bar:** Generate · Regenerate · Export (phase 2) · Finish.
+**Sticky action bar:** Setup wizard · Generate · Finish. Export when `NEXT_PUBLIC_GENERATION_WORKBENCH_EXPORT=true`.
 
-**Behavior changes vs wizard:**
+**Behavior:**
 
-- No separate refine wizard step; chat lives in the agent dock after first valid dataset.
-- Generation plan visible before run (collection order, references, warnings).
-- Table preview replaces JSON-only inspection (JSON remains as secondary/export view).
-- Returning users with saved schema land directly in the workbench (`?projectId=&mode=generate`).
-
-Do not remove wizard code until workbench Phase 1 passes the manual test plan in `specs/006-generation-workbench/plan.md`.
+- Collection counts are editable in the left rail; the generation plan refreshes when counts change.
+- Context sources panel shows project description and GitHub summary before Generate.
+- **Saved runs** persist per project: generated data, collection counts, and refinement **chat history**. Selecting a run restores preview + agent dock transcript.
+- New generation clears the in-memory chat; guidance-only refinements update chat on the active saved run; dataset-changing refinements create a new saved run with full chat history.
+- Refinement streaming is on by default (`NEXT_PUBLIC_GENERATION_WORKBENCH_STREAMING` — set to `false` to disable).
+- Finish navigates to `/projects/[projectId]`.
 
 ## Project Details
 

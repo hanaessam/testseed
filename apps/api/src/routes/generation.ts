@@ -1,6 +1,15 @@
 import {
+  buildGenerationPlan,
   generateSeedData,
+  generateSeedDataProgressive,
+  getSavedGeneratedDataset,
+  listSavedGeneratedDatasets,
+  mapGenerationPlanToResponse,
+  REFINEMENT_SYSTEM_PROMPT,
+  buildRefinementUserPromptContent,
   refineGeneratedDataset,
+  saveGeneratedDataset,
+  updateSavedGeneratedDatasetChatHistory,
   type SeedGenerationProvider,
   type SeedRefinementProvider
 } from "@testseed/core";
@@ -10,9 +19,11 @@ import type {
   GeneratedRecord,
   GenerationValidationResult,
   ParsedSchema,
+  RefineGeneratedDatasetResponse,
   SchemaField
 } from "@testseed/types";
 import type {
+  createGeneratedDatasetRepository,
   createProjectHistoryRepository,
   createProjectRepository
 } from "@testseed/db";
@@ -24,10 +35,12 @@ import { validateBody } from "../middleware/validate";
 
 type ProjectRepository = ReturnType<typeof createProjectRepository>;
 type ProjectHistoryRepository = ReturnType<typeof createProjectHistoryRepository>;
+type GeneratedDatasetRepository = ReturnType<typeof createGeneratedDatasetRepository>;
 
 export interface GenerationRouterDeps {
   projectRepository: ProjectRepository;
   projectHistoryRepository: ProjectHistoryRepository;
+  generatedDatasetRepository: GeneratedDatasetRepository;
   openaiApiKey?: string;
   model?: string;
 }
@@ -62,11 +75,129 @@ const generatedDatasetSchema: z.ZodType<GeneratedDataset> = z.object({
 const refineGeneratedDatasetRequestSchema = z.object({
   currentDataset: generatedDatasetSchema,
   message: z.string().min(1).max(2000),
-  chatHistory: z.array(chatMessageSchema).optional()
+  chatHistory: z.array(chatMessageSchema).optional(),
+  savedDatasetId: z.string().min(1).optional()
 });
+
+function writeSseEvent(response: Response, event: string, data: unknown): void {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(data)}\n\n`);
+}
 
 export function createGenerationRouter(deps: GenerationRouterDeps): Router {
   const router = Router();
+
+  router.get(
+    "/:projectId/generated-datasets",
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const datasets = await listSavedGeneratedDatasets(
+          {
+            projectId: params.projectId,
+            ownerId: authenticatedRequest.auth.userId
+          },
+          {
+            findProjectById: deps.projectRepository.findProjectById,
+            listGeneratedDatasetSummaries: deps.generatedDatasetRepository.listGeneratedDatasetSummaries
+          }
+        );
+
+        response.status(200).json({ datasets });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("was not found")) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
+  router.get(
+    "/:projectId/generated-datasets/:datasetId",
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z
+          .object({ projectId: z.string().min(1), datasetId: z.string().min(1) })
+          .parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const dataset = await getSavedGeneratedDataset(
+          {
+            projectId: params.projectId,
+            datasetId: params.datasetId,
+            ownerId: authenticatedRequest.auth.userId
+          },
+          {
+            findProjectById: deps.projectRepository.findProjectById,
+            findGeneratedDatasetById: deps.generatedDatasetRepository.findGeneratedDatasetById
+          }
+        );
+
+        response.status(200).json({ dataset });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("was not found")) {
+          response.status(404).json({ message: error.message });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
+  router.get(
+    "/:projectId/generation-plan",
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const countsParam = z.string().min(1).parse(request.query.collectionCounts);
+        let collectionCounts: Record<string, number>;
+        try {
+          collectionCounts = collectionCountsSchema.parse(JSON.parse(countsParam));
+        } catch {
+          response.status(400).json({ message: "Invalid collectionCounts query parameter." });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before generating seed records." });
+          return;
+        }
+
+        const plan = buildGenerationPlan(context.schemaSnapshot.schema, collectionCounts, {
+          safeGenerationLimit: 100
+        });
+        response.status(200).json(
+          mapGenerationPlanToResponse(plan, collectionCounts)
+        );
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
 
   router.post(
     "/:projectId/generations",
@@ -123,20 +254,17 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           return;
         }
 
-        await deps.projectHistoryRepository.appendProjectEvent({
-          projectId: context.project.id,
-          actorId: authenticatedRequest.auth.userId,
-          kind: "generation_completed",
-          message: "AI seed generation completed.",
-          payload: {
-            collectionCounts: dataset.collectionCounts,
-            generationOrder: dataset.generationOrder
-          },
-          createdAt: new Date()
-        });
+        const savedDataset = await persistValidDataset(
+          deps,
+          context.project.id,
+          authenticatedRequest.auth.userId,
+          dataset,
+          "generation"
+        );
 
         response.status(201).json({
           dataset,
+          savedDatasetId: savedDataset.id,
           message: "Generated valid seed records."
         });
       } catch (error) {
@@ -198,7 +326,192 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           createdAt: new Date()
         });
 
-        response.status(result.mode === "rejected" ? 422 : 200).json(result);
+        const savedDatasetId = await persistRefinementOutcome(
+          deps,
+          context.project.id,
+          authenticatedRequest.auth.userId,
+          result,
+          request.body.savedDatasetId
+        );
+
+        response.status(result.mode === "rejected" ? 422 : 200).json({
+          ...result,
+          savedDatasetId
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/generations/stream",
+    validateBody(generateSeedDataRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before generating seed records." });
+          return;
+        }
+
+        response.setHeader("Content-Type", "text/event-stream");
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("Connection", "keep-alive");
+        response.flushHeaders?.();
+
+        let cancelled = false;
+        request.on("close", () => {
+          cancelled = true;
+        });
+
+        const plan = buildGenerationPlan(context.schemaSnapshot.schema, request.body.collectionCounts, {
+          safeGenerationLimit: 100
+        });
+        const planResponse = mapGenerationPlanToResponse(plan, request.body.collectionCounts);
+        writeSseEvent(response, "plan", {
+          orderedCollections: planResponse.orderedCollections,
+          totalRecords: planResponse.totalRecords
+        });
+
+        const dataset = await generateSeedDataProgressive(
+          {
+            projectId: context.project.id,
+            actorId: authenticatedRequest.auth.userId,
+            schemaSnapshotId: context.schemaSnapshot.id,
+            schema: context.schemaSnapshot.schema,
+            projectContext: context.project.context,
+            collectionCounts: request.body.collectionCounts
+          },
+          {
+            generateRecords: createOpenAIGenerationProvider(deps),
+            safeGenerationLimit: 100,
+            onCollectionStart: (collectionName, index, total) => {
+              if (!cancelled) {
+                writeSseEvent(response, "collection_start", { collectionName, index, total });
+              }
+            },
+            onCollectionComplete: (collectionName, records, validationResults) => {
+              if (!cancelled) {
+                writeSseEvent(response, "collection_complete", {
+                  collectionName,
+                  records,
+                  validationResults
+                });
+              }
+            }
+          }
+        );
+
+        if (cancelled) {
+          writeSseEvent(response, "cancelled", {});
+          response.end();
+          return;
+        }
+
+        if (dataset.status !== "valid") {
+          writeSseEvent(response, "error", {
+            message: messageForValidation(dataset.validationResults),
+            code: "VALIDATION_FAILED",
+            validationResults: dataset.validationResults
+          });
+          response.end();
+          return;
+        }
+
+        const savedDataset = await persistValidDataset(
+          deps,
+          context.project.id,
+          authenticatedRequest.auth.userId,
+          dataset,
+          "generation"
+        );
+
+        writeSseEvent(response, "complete", {
+          dataset,
+          savedDatasetId: savedDataset.id
+        });
+        response.end();
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/generations/refinements/stream",
+    validateBody(refineGeneratedDatasetRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before refining seed records." });
+          return;
+        }
+
+        response.setHeader("Content-Type", "text/event-stream");
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("Connection", "keep-alive");
+        response.flushHeaders?.();
+
+        const result = await refineGeneratedDataset(
+          {
+            projectId: context.project.id,
+            actorId: authenticatedRequest.auth.userId,
+            schemaSnapshotId: context.schemaSnapshot.id,
+            schema: context.schemaSnapshot.schema,
+            projectContext: context.project.context,
+            currentDataset: request.body.currentDataset,
+            message: request.body.message,
+            chatHistory: request.body.chatHistory
+          },
+          {
+            refineRecords: createOpenAIRefinementProvider(deps, {
+              onToken: (content) => writeSseEvent(response, "token", { content })
+            })
+          }
+        );
+
+        const savedDatasetId = await persistRefinementOutcome(
+          deps,
+          context.project.id,
+          authenticatedRequest.auth.userId,
+          result,
+          request.body.savedDatasetId
+        );
+
+        writeSseEvent(response, "complete", {
+          dataset: result.dataset,
+          savedDatasetId,
+          chatHistory: result.chatHistory,
+          guidance: result.mode === "guidance" ? result.message : undefined,
+          message: result.message
+        });
+        response.end();
       } catch (error) {
         next(error);
       }
@@ -206,6 +519,69 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
   );
 
   return router;
+}
+
+async function persistValidDataset(
+  deps: GenerationRouterDeps,
+  projectId: string,
+  ownerId: string,
+  dataset: GeneratedDataset,
+  source: "generation" | "refinement",
+  chatHistory: ChatRefinementMessage[] = []
+) {
+  return saveGeneratedDataset(
+    {
+      projectId,
+      ownerId,
+      dataset,
+      source,
+      chatHistory
+    },
+    {
+      findProjectById: deps.projectRepository.findProjectById,
+      createGeneratedDatasetRecord: deps.generatedDatasetRepository.createGeneratedDatasetRecord,
+      appendProjectEvent: deps.projectHistoryRepository.appendProjectEvent
+    }
+  );
+}
+
+async function persistRefinementOutcome(
+  deps: GenerationRouterDeps,
+  projectId: string,
+  ownerId: string,
+  result: RefineGeneratedDatasetResponse,
+  activeSavedDatasetId?: string
+): Promise<string | undefined> {
+  if (result.mode === "updated_dataset" && result.dataset?.status === "valid") {
+    const savedDataset = await persistValidDataset(
+      deps,
+      projectId,
+      ownerId,
+      result.dataset,
+      "refinement",
+      result.chatHistory
+    );
+    return savedDataset.id;
+  }
+
+  if (activeSavedDatasetId && result.chatHistory.length > 0) {
+    await updateSavedGeneratedDatasetChatHistory(
+      {
+        projectId,
+        datasetId: activeSavedDatasetId,
+        ownerId,
+        chatHistory: result.chatHistory
+      },
+      {
+        findProjectById: deps.projectRepository.findProjectById,
+        updateGeneratedDatasetChatHistory:
+          deps.generatedDatasetRepository.updateGeneratedDatasetChatHistory
+      }
+    );
+    return activeSavedDatasetId;
+  }
+
+  return undefined;
 }
 
 function createOpenAIGenerationProvider(deps: GenerationRouterDeps): SeedGenerationProvider {
@@ -242,36 +618,52 @@ function createOpenAIGenerationProvider(deps: GenerationRouterDeps): SeedGenerat
   };
 }
 
-function createOpenAIRefinementProvider(deps: GenerationRouterDeps): SeedRefinementProvider {
+function createOpenAIRefinementProvider(
+  deps: GenerationRouterDeps,
+  options: { onToken?: (content: string) => void } = {}
+): SeedRefinementProvider {
   return async (providerRequest) => {
     if (!deps.openaiApiKey) {
       throw new Error("OpenAI seed refinement is not configured");
     }
 
     const openai = new OpenAI({ apiKey: deps.openaiApiKey });
-    const completion = await openai.chat.completions.create({
+    const stream = await openai.chat.completions.create({
       model: deps.model ?? "gpt-4o-mini",
       response_format: { type: "json_object" },
+      stream: Boolean(options.onToken),
       messages: [
         {
           role: "system",
-          content:
-            "You refine generated MongoDB seed data. Return strict JSON. If changing records, return {\"mode\":\"updated_dataset\",\"message\":\"...\",\"collections\":{...}}. If answering only, return {\"mode\":\"guidance\",\"message\":\"...\"}. Preserve schema constraints, counts, ObjectId references, and grouped collections. Do not include prompts, secrets, or raw provider details."
+          content: REFINEMENT_SYSTEM_PROMPT
         },
         {
           role: "user",
-          content: JSON.stringify({
+          content: buildRefinementUserPromptContent({
             schema: sanitizeSchema(providerRequest.schema),
             currentDataset: providerRequest.currentDataset,
             message: providerRequest.message,
             chatHistory: providerRequest.chatHistory,
-            validationFeedback: providerRequest.validationFeedback ?? []
+            projectContext: providerRequest.projectContext,
+            repositoryContext: providerRequest.repositoryContext,
+            validationFeedback: providerRequest.validationFeedback
           })
         }
       ]
     });
 
-    const content = completion.choices[0]?.message?.content;
+    let content = "";
+    if (options.onToken && Symbol.asyncIterator in stream) {
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content ?? "";
+        if (delta) {
+          content += delta;
+          options.onToken(delta);
+        }
+      }
+    } else {
+      content = (stream as OpenAI.Chat.Completions.ChatCompletion).choices[0]?.message?.content ?? "";
+    }
     if (!content) {
       throw new Error("OpenAI returned an empty refinement response");
     }

@@ -124,18 +124,17 @@ OpenAI is the generation provider for AI seed data. Keep `OPENAI_API_KEY` in `.e
 
 From the Generate screen:
 
-1. Create or load a project.
-2. Add project context.
-3. Review and save a manual or MongoDB-discovered schema.
-4. Choose record counts per collection.
-5. Generate seed records.
-6. Review the returned JSON grouped by collection.
-7. Use the AI refinement chat box for targeted edits such as changing email domains, names, statuses, or other realistic values.
+1. **Setup wizard** (new projects): create project, optional GitHub context, schema input, review, and save schema.
+2. **Generation workbench**: set per-collection counts, generate seed records, preview tables, and refine with the agent dock chat.
+3. **Saved runs**: each successful generation or refinement is stored with collection counts, generated data, and refinement chat history. Select a saved run in the left rail to restore preview and chat.
+4. Use refinement for targeted edits (email domains, locale, names, numeric variance) — responses stream in the agent dock.
 
 The API exposes:
 
 - `POST /projects/:projectId/generations`
-- `POST /projects/:projectId/generations/refinements`
+- `POST /projects/:projectId/generations/refinements` (optional `savedDatasetId` to attach chat updates to the active run)
+- `GET /projects/:projectId/generated-datasets`
+- `GET /projects/:projectId/generated-datasets/:datasetId`
 
 TestSeed validates every generated or refined dataset before accepting it. Parent collections must come before child collections, ObjectId references must point to generated parent records, and values must respect required fields, field types, enum values, uniqueness, arrays, nested fields, and references. Rejected chat refinements leave the current valid dataset unchanged.
 

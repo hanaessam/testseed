@@ -94,6 +94,47 @@ describe("refineGeneratedDataset", () => {
     );
   });
 
+  it("forwards project context to the refinement provider", async () => {
+    const refineRecords = jest.fn(async () => ({
+      mode: "guidance" as const,
+      message: "You can change email domains."
+    }));
+
+    await refineGeneratedDataset(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema,
+        projectContext: {
+          description: "Canadian fintech demo",
+          repository: {
+            provider: "github",
+            repositoryFullName: "acme/payments",
+            repositoryUrl: "https://github.com/acme/payments",
+            accessStatus: "connected",
+            summary: "Payments API with users and transactions",
+            contextCategories: ["models"],
+            warnings: [],
+            connectedAt: new Date("2026-06-07T00:00:00.000Z")
+          },
+          warnings: [],
+          updatedAt: new Date("2026-06-07T00:00:00.000Z")
+        },
+        currentDataset,
+        message: "What can I change?"
+      },
+      { refineRecords }
+    );
+
+    expect(refineRecords).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectContext: "Canadian fintech demo",
+        repositoryContext: "Payments API with users and transactions"
+      })
+    );
+  });
+
   it("supports non-mutating guidance responses", async () => {
     const result = await refineGeneratedDataset(
       {

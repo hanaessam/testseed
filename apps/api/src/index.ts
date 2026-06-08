@@ -4,7 +4,8 @@ import {
   createRegistrationOtpCache,
   createUserRepository,
   createProjectRepository,
-  createProjectHistoryRepository
+  createProjectHistoryRepository,
+  createGeneratedDatasetRepository
 } from "@testseed/db";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -77,6 +78,7 @@ const connection = createConnection(mongoUri);
 const userRepository = createUserRepository(connection);
 const projectRepository = createProjectRepository(connection);
 const projectHistoryRepository = createProjectHistoryRepository(connection);
+const generatedDatasetRepository = createGeneratedDatasetRepository(connection);
 const redis = createRedisClient({
   url: redisUrl,
   token: redisToken
@@ -118,6 +120,7 @@ const authRouterConfig = {
     completeRepositoryContextCallback(request, {
       projectRepository,
       projectHistoryRepository,
+      generatedDatasetRepository,
       githubClientId,
       githubClientSecret,
       githubCallbackUrl,
@@ -155,6 +158,7 @@ app.use(
   createProjectsRouter({
     projectRepository,
     projectHistoryRepository,
+    generatedDatasetRepository,
     githubClientId,
     githubClientSecret,
     githubCallbackUrl,
@@ -168,6 +172,7 @@ app.use(
   createGenerationRouter({
     projectRepository,
     projectHistoryRepository,
+    generatedDatasetRepository,
     openaiApiKey
   })
 );

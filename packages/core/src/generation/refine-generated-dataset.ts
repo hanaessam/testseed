@@ -63,6 +63,8 @@ export async function refineGeneratedDataset(
         projectId: input.projectId,
         schemaSnapshotId: input.schemaSnapshotId,
         schema: input.schema,
+        projectContext: input.projectContext?.description,
+        repositoryContext: input.projectContext?.repository?.summary,
         currentDataset: input.currentDataset,
         message,
         chatHistory,

@@ -13,6 +13,7 @@ export interface DeleteProjectDeps {
   hardDeleteProjectRecord(projectId: string): Promise<boolean>;
   hardDeleteProjectSnapshots(projectId: string): Promise<number>;
   hardDeleteProjectHistory(projectId: string): Promise<number>;
+  hardDeleteGeneratedDatasets?(projectId: string): Promise<number>;
   appendProjectEvent(input: {
     projectId: string;
     actorId: string;
@@ -64,6 +65,9 @@ export async function deleteProject(
   });
 
   await deps.hardDeleteProjectHistory(request.projectId);
+  if (deps.hardDeleteGeneratedDatasets) {
+    await deps.hardDeleteGeneratedDatasets(request.projectId);
+  }
   await deps.hardDeleteProjectSnapshots(request.projectId);
   const deleted = await deps.hardDeleteProjectRecord(request.projectId);
 

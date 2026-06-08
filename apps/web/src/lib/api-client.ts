@@ -41,8 +41,11 @@ import type {
   RestoreProjectSchemaResponse,
   GenerateSeedDataRequest,
   GenerateSeedDataResponse,
+  GenerationPlanResponse,
   RefineGeneratedDatasetRequest,
   RefineGeneratedDatasetResponse,
+  ListSavedGeneratedDatasetsResponse,
+  GetSavedGeneratedDatasetResponse,
   Project
 } from "@testseed/types";
 
@@ -388,6 +391,26 @@ export async function restoreProjectSchema(
   };
 }
 
+export async function getGenerationPlan(
+  projectId: string,
+  collectionCounts: Record<string, number>,
+  token: string
+): Promise<GenerationPlanResponse> {
+  const query = encodeURIComponent(JSON.stringify(collectionCounts));
+  return getJson<GenerationPlanResponse>(
+    `/projects/${encodeURIComponent(projectId)}/generation-plan?collectionCounts=${query}`,
+    token
+  );
+}
+
+export function getGenerationStreamUrl(projectId: string): string {
+  return `${apiBaseUrl}/projects/${encodeURIComponent(projectId)}/generations/stream`;
+}
+
+export function getRefinementStreamUrl(projectId: string): string {
+  return `${apiBaseUrl}/projects/${encodeURIComponent(projectId)}/generations/refinements/stream`;
+}
+
 export async function generateSeedData(
   projectId: string,
   request: GenerateSeedDataRequest,
@@ -408,6 +431,27 @@ export async function refineGeneratedDataset(
   return postJson<RefineGeneratedDatasetRequest, RefineGeneratedDatasetResponse>(
     `/projects/${encodeURIComponent(projectId)}/generations/refinements`,
     request,
+    token
+  );
+}
+
+export async function listSavedGeneratedDatasets(
+  projectId: string,
+  token: string
+): Promise<ListSavedGeneratedDatasetsResponse> {
+  return getJson<ListSavedGeneratedDatasetsResponse>(
+    `/projects/${encodeURIComponent(projectId)}/generated-datasets`,
+    token
+  );
+}
+
+export async function getSavedGeneratedDataset(
+  projectId: string,
+  datasetId: string,
+  token: string
+): Promise<GetSavedGeneratedDatasetResponse> {
+  return getJson<GetSavedGeneratedDatasetResponse>(
+    `/projects/${encodeURIComponent(projectId)}/generated-datasets/${encodeURIComponent(datasetId)}`,
     token
   );
 }
