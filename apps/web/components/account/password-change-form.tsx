@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,13 +39,8 @@ export function PasswordChangeForm({ token }: { token: string }) {
   }
 
   return (
-    <form className="space-y-4 border border-border bg-surface p-4" onSubmit={submit}>
-      <div>
-        <p className="font-mono text-xs text-accent">account.password</p>
-        <h2 className="mt-1 text-lg font-semibold">Password</h2>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
+    <form className="space-y-4" onSubmit={submit}>
+      <div className="grid gap-4 md:grid-cols-2">
         <PasswordField
           id="currentPassword"
           label="Current password"
@@ -62,11 +58,12 @@ export function PasswordChangeForm({ token }: { token: string }) {
           label="Verify new password"
           value={confirmPassword}
           onChange={setConfirmPassword}
+          className="md:col-span-2 md:max-w-sm"
         />
       </div>
 
-      {message ? <p className="border border-accent px-3 py-2 text-sm text-accent">{message}</p> : null}
-      {error ? <p className="border border-error px-3 py-2 text-sm text-error">{error}</p> : null}
+      {message ? <Alert tone="success">{message}</Alert> : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
 
       <Button type="submit" disabled={isLoading}>
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
@@ -80,15 +77,17 @@ function PasswordField({
   id,
   label,
   value,
-  onChange
+  onChange,
+  className
 }: {
   id: string;
   label: string;
   value: string;
   onChange(value: string): void;
+  className?: string;
 }) {
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${className ?? ""}`}>
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}

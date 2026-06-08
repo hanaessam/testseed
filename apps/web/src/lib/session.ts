@@ -4,7 +4,10 @@ import type { AuthResponse, AuthUser } from "@testseed/types";
 
 const sessionStorageKey = "testseedSession";
 const legacyTokenKey = "testseedToken";
+const sessionExpiredFlagKey = "testseedSessionExpired";
 const fallbackSessionTtlMs = 7 * 24 * 60 * 60 * 1000;
+
+export type SessionStatus = "active" | "expired" | "missing";
 
 export interface StoredSession {
   token: string;
@@ -40,18 +43,50 @@ export function updateStoredSessionUser(user: AuthUser): StoredSession | null {
   return nextSession;
 }
 
-export function getStoredSession(): StoredSession | null {
+export function getSessionStatus(): SessionStatus {
   const session = readStoredSession();
   if (!session) {
-    return null;
+    return "missing";
   }
 
   if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    return "expired";
+  }
+
+  return "active";
+}
+
+export function markSessionExpired(): void {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(sessionExpiredFlagKey, "1");
+  }
+}
+
+export function consumeSessionExpiredFlag(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const flagged = window.sessionStorage.getItem(sessionExpiredFlagKey) === "1";
+  if (flagged) {
+    window.sessionStorage.removeItem(sessionExpiredFlagKey);
+  }
+  return flagged;
+}
+
+export function getStoredSession(): StoredSession | null {
+  const status = getSessionStatus();
+  if (status === "expired") {
+    markSessionExpired();
     clearStoredSession();
     return null;
   }
 
-  return session;
+  if (status === "missing") {
+    return null;
+  }
+
+  return readStoredSession();
 }
 
 export function getStoredAuthToken(): string | null {

@@ -16,13 +16,18 @@ import type { PasswordRuleResult } from "@testseed/types";
 import { Check, Eye, EyeOff, GitBranch, KeyRound, Mail, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, type InputHTMLAttributes, useMemo, useState } from "react";
+import { FormEvent, type InputHTMLAttributes, useEffect, useMemo, useState } from "react";
+import { SessionNotice } from "@/components/auth/session-notice";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import type { SessionLoginReason } from "@/src/lib/auth-session.shared";
+import { consumeSessionExpiredFlag } from "@/src/lib/session";
 
 interface AuthCardProps {
   mode: "login" | "register";
+  loginReason?: SessionLoginReason | null;
 }
 
-export function AuthCard({ mode }: AuthCardProps) {
+export function AuthCard({ mode, loginReason = null }: AuthCardProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +45,20 @@ export function AuthCard({ mode }: AuthCardProps) {
     [password, confirmPassword]
   );
   const isPasswordValid = passwordRules.every((rule) => rule.passed);
+  const [resolvedLoginReason, setResolvedLoginReason] = useState<SessionLoginReason | null>(
+    loginReason
+  );
+
+  useEffect(() => {
+    if (loginReason) {
+      setResolvedLoginReason(loginReason);
+      return;
+    }
+
+    if (consumeSessionExpiredFlag()) {
+      setResolvedLoginReason("session_expired");
+    }
+  }, [loginReason]);
 
   async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -102,7 +121,10 @@ export function AuthCard({ mode }: AuthCardProps) {
   }
 
   return (
-    <div className="terminal-grid flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="terminal-grid relative flex min-h-screen items-center justify-center bg-background px-4 py-8">
+      <div className="absolute right-4 top-4 w-36 sm:right-6 sm:top-6">
+        <ThemeToggle compact />
+      </div>
       <Card className="w-full max-w-md animate-fade-in">
         <CardContent className="space-y-5 p-5">
           <div className="space-y-3">
@@ -118,6 +140,10 @@ export function AuthCard({ mode }: AuthCardProps) {
               </p>
             </div>
           </div>
+
+          {!isRegister && resolvedLoginReason ? (
+            <SessionNotice reason={resolvedLoginReason} />
+          ) : null}
 
           <Button type="button" variant="secondary" className="w-full" onClick={continueWithGitHub}>
             <GitBranch className="h-4 w-4" />

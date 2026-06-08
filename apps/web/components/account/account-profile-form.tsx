@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,12 +52,7 @@ export function AccountProfileForm({ token, user, onUserChange }: AccountProfile
   }
 
   return (
-    <form className="space-y-4 border border-border bg-surface p-4" onSubmit={submit}>
-      <div>
-        <p className="font-mono text-xs text-accent">account.profile</p>
-        <h2 className="mt-1 text-lg font-semibold">Profile</h2>
-      </div>
-
+    <form className="space-y-4" onSubmit={submit}>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="displayName">Display name</Label>
@@ -77,11 +73,14 @@ export function AccountProfileForm({ token, user, onUserChange }: AccountProfile
             onChange={(event) => setEmail(event.target.value)}
             required
           />
+          {user.pendingEmail ? (
+            <p className="text-xs text-muted">Pending change to {user.pendingEmail}</p>
+          ) : null}
         </div>
       </div>
 
-      {message ? <p className="border border-accent px-3 py-2 text-sm text-accent">{message}</p> : null}
-      {error ? <p className="border border-error px-3 py-2 text-sm text-error">{error}</p> : null}
+      {message ? <Alert tone="success">{message}</Alert> : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
 
       <Button type="submit" disabled={isLoading}>
         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
