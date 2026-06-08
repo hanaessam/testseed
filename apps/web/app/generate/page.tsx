@@ -1744,9 +1744,9 @@ function ReviewBadge({
   const toneClass = {
     neutral: "border-border bg-surface text-muted",
     accent: "border-accent/20 bg-accent/5 text-accent",
-    danger: "border-red-500/20 bg-red-500/10 text-red-400",
-    info: "border-indigo-500/20 bg-indigo-500/10 text-indigo-400",
-    warning: "border-amber-500/20 bg-amber-500/10 text-amber-400"
+    danger: "border-danger-border bg-danger-subtle text-danger-text",
+    info: "border-info-border bg-info-subtle text-info-text",
+    warning: "border-warning-border bg-warning-subtle text-warning-text"
   }[tone];
 
   return (
@@ -1860,7 +1860,7 @@ function FieldEvidence({
         <span className="font-bold text-accent">Warnings:</span>
         <Textarea
           aria-label={`${field.name} warnings`}
-          className="min-h-16 resize-y border-border bg-surface p-2 font-mono text-[10px] text-amber-400"
+          className="min-h-16 resize-y border-border bg-surface p-2 font-mono text-[10px] text-warning-text"
           value={(field.warnings ?? []).join("\n")}
           onChange={(event) => {
             const nextWarnings = splitReviewLines(event.target.value);

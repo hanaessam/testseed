@@ -2,8 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-:root,
+:root {
+  color-scheme: light;
+  --background: #fafafa;
+  --surface: #ffffff;
+  --border: color-mix(in srgb, var(--foreground) 8%, var(--surface));
+  --foreground: #09090b;
+  --muted: #71717a;
+  --accent: #16a34a;
+  --accent-foreground: #ffffff;
+  --error: #dc2626;
+  --success: #16a34a;
+  --info-subtle: #eef2ff;
+  --info-border: #c7d2fe;
+  --info-text: #3730a3;
+  --warning-subtle: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-text: #92400e;
+  --danger-subtle: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-text: #991b1b;
+  --shadow-color: rgb(9 9 11 / 0.08);
+  --focus-ring: rgb(22 163 74 / 0.35);
+}
+
 .dark {
+  color-scheme: dark;
   --background: #09090b;
   --surface: #111113;
   --border: color-mix(in srgb, var(--foreground) 7%, var(--surface));
@@ -13,6 +37,17 @@
   --accent-foreground: #09090b;
   --error: #ef4444;
   --success: #4ade80;
+  --info-subtle: rgb(99 102 241 / 0.12);
+  --info-border: rgb(99 102 241 / 0.28);
+  --info-text: #c7d2fe;
+  --warning-subtle: rgb(245 158 11 / 0.12);
+  --warning-border: rgb(245 158 11 / 0.28);
+  --warning-text: #fde68a;
+  --danger-subtle: rgb(239 68 68 / 0.12);
+  --danger-border: rgb(239 68 68 / 0.28);
+  --danger-text: #fecaca;
+  --shadow-color: rgb(0 0 0 / 0.22);
+  --focus-ring: rgb(74 222 128 / 0.22);
 }
 
 html,
@@ -20,7 +55,6 @@ body {
   min-height: 100%;
   max-width: 100vw;
   overflow-x: hidden;
-  color-scheme: dark;
 }
 
 body {

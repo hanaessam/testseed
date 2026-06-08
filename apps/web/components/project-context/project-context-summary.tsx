@@ -42,7 +42,7 @@ export function ProjectContextSummary({
           {warnings.map((warning) => (
             <div
               key={warning.code}
-              className="flex items-start gap-2 border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-400"
+              className="flex items-start gap-2 border border-warning-border bg-warning-subtle p-2 text-xs text-warning-text"
             >
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{warning.message}</span>

@@ -110,7 +110,7 @@ export default function AccountPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {user.pendingEmail ? (
-                    <span className="rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-200">
+                    <span className="rounded-md border border-warning-border bg-warning-subtle px-2 py-1 text-xs text-warning-text">
                       Email verification pending
                     </span>
                   ) : (

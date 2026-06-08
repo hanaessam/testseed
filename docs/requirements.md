@@ -10,6 +10,8 @@ The updated main user flow is: the user creates an account or logs in, enters a 
 
 **UX evolution (documented, not yet shipped):** The linear generate wizard remains the active UI. A Tonic-inspired **Generation Workbench** (single-screen preview, integrated chat refinement, generation plan, table preview) is specified in `specs/006-generation-workbench/` with an executive summary in `docs/generation-ux-roadmap.md`. Implement workbench Phase 1 before removing the wizard.
 
+**Projects list UI (shipped):** The projects page uses page sections, labeled filter groups, Cards/List/Compact view modes (preference in `localStorage`), bordered list containers with row dividers, and clickable project items with separate action buttons. See `docs/ui-design.md` § Projects List.
+
 ## 2. Requirements
 
 ### 2.1 Core and Non-Core Requirements
