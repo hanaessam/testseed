@@ -41,6 +41,8 @@ import type {
   RestoreProjectSchemaResponse,
   GenerateSeedDataRequest,
   GenerateSeedDataResponse,
+  FeedbackRegenerationRequest,
+  FeedbackRegenerationResponse,
   GenerationPlanResponse,
   RefineGeneratedDatasetRequest,
   RefineGeneratedDatasetResponse,
@@ -442,6 +444,21 @@ export async function refineGeneratedDataset(
   );
 }
 
+export async function regenerateWithFeedback(
+  projectId: string,
+  request: FeedbackRegenerationRequest,
+  token: string,
+  signal?: AbortSignal
+): Promise<FeedbackRegenerationResponse> {
+  return requestJson<FeedbackRegenerationRequest, FeedbackRegenerationResponse>(
+    "POST",
+    `/projects/${encodeURIComponent(projectId)}/generations/regenerate`,
+    request,
+    token,
+    signal
+  );
+}
+
 export async function listSavedGeneratedDatasets(
   projectId: string,
   token: string
@@ -607,7 +624,8 @@ async function requestJson<RequestBody, ResponseBody>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   request: RequestBody,
-  token?: string
+  token?: string,
+  signal?: AbortSignal
 ): Promise<ResponseBody> {
   let response: Response;
   const headers: HeadersInit = {
@@ -622,7 +640,8 @@ async function requestJson<RequestBody, ResponseBody>(
     response = await fetch(`${apiBaseUrl}${path}`, {
       method,
       headers,
-      body: request === undefined ? undefined : JSON.stringify(request)
+      body: request === undefined ? undefined : JSON.stringify(request),
+      signal
     });
   } catch {
     throw new Error(`Could not reach the API at ${apiBaseUrl}. Start @testseed/api and check its server logs.`);

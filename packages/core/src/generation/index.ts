@@ -18,6 +18,11 @@ export {
   type SeedRefinementProvider
 } from "./refine-generated-dataset";
 export {
+  regenerateWithFeedback,
+  type RegenerateWithFeedbackDeps,
+  type RegenerateWithFeedbackInput
+} from "./regenerate-with-feedback";
+export {
   REFINEMENT_SYSTEM_PROMPT,
   buildRefinementUserPromptContent,
   type BuildRefinementUserPromptInput

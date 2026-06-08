@@ -25,6 +25,9 @@ export type {
 } from "./schema";
 export type {
   ChatRefinementMessage,
+  FeedbackRegenerationMode,
+  FeedbackRegenerationRequest,
+  FeedbackRegenerationResponse,
   GeneratedDataset,
   GeneratedRecord,
   GenerateSeedDataRequest,
