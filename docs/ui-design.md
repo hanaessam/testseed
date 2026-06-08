@@ -224,6 +224,7 @@ Three-pane layout after setup (`?projectId=…&mode=generate`):
 - New generation clears the in-memory chat; guidance-only refinements update chat on the active saved run; dataset-changing refinements create a new saved run with full chat history.
 - Refinement streaming is on by default (`NEXT_PUBLIC_GENERATION_WORKBENCH_STREAMING` — set to `false` to disable).
 - Finish navigates to `/projects/[projectId]`.
+- **Editable cells** are not shipped in 006; planned in epic `007-preview-editing` (see `docs/generation-ux-roadmap.md`).
 
 ## Project Details
 

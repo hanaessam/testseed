@@ -81,6 +81,7 @@ Requirements, architecture notes, ADRs, and Superpowers planning artifacts.
 - `docs/requirements.md`: source of product requirements.
 - `docs/adr`: durable architecture decisions.
 - `docs/superpowers`: implementation plans, specs, and workflow notes.
+- `docs/ai-assisted-tooling.md`: living inventory of MCPs, skills, Spec Kit, and agent workflows (keep updated).
 
 ## Current Separation Notes
 

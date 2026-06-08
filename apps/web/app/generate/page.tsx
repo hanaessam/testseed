@@ -11,7 +11,9 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import type { DatasetCellCommitPayload } from "@/components/generation/collection-data-table";
 import {
+  applyDatasetCellEdit,
   createProject,
   discoverMongoSchema,
   generateSeedData,
@@ -22,7 +24,9 @@ import {
   getSavedGeneratedDataset,
   listSavedGeneratedDatasets,
   parseSchema,
+  patchSavedGeneratedDataset,
   refineGeneratedDataset,
+  saveManualEditDataset,
   startRepositoryContextAuthorization,
   testMongoConnection,
   updateProjectContext,
@@ -127,6 +131,34 @@ export default function GeneratePage() {
   const [savedDatasets, setSavedDatasets] = useState<SavedGeneratedDatasetSummary[]>([]);
   const [isSavedDatasetsLoading, setIsSavedDatasetsLoading] = useState(false);
   const [activeSavedDatasetId, setActiveSavedDatasetId] = useState<string | null>(null);
+  const [datasetBaselineFingerprint, setDatasetBaselineFingerprint] = useState<string | null>(null);
+  const [editedCellKeys, setEditedCellKeys] = useState<Set<string>>(() => new Set());
+  const [isSavingDataset, setIsSavingDataset] = useState(false);
+  const [isCommittingCellEdit, setIsCommittingCellEdit] = useState(false);
+
+  const hasUnsavedEdits = useMemo(() => {
+    if (!generatedDataset) {
+      return false;
+    }
+
+    if (!datasetBaselineFingerprint) {
+      return editedCellKeys.size > 0;
+    }
+
+    return computeDatasetFingerprint(generatedDataset) !== datasetBaselineFingerprint;
+  }, [datasetBaselineFingerprint, editedCellKeys, generatedDataset]);
+
+  const canSaveDataset = useMemo(() => {
+    if (!generatedDataset) {
+      return false;
+    }
+
+    const hasErrors = generationValidationResults.some((result) => result.severity === "error");
+    return generatedDataset.status === "valid" && !hasErrors;
+  }, [generatedDataset, generationValidationResults]);
+
+  const editingDisabled =
+    isGeneratingSeedData || isRefiningDataset || isCommittingCellEdit || isSavingDataset;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -404,10 +436,167 @@ export default function GeneratePage() {
     setGeneratedDataset(dataset);
     setGenerationValidationResults([...dataset.validationResults, ...dataset.warnings]);
     setActiveCollectionTab(dataset.generationOrder[0] ?? Object.keys(dataset.collections)[0] ?? "");
+    setDatasetBaselineFingerprint(computeDatasetFingerprint(dataset));
+    setEditedCellKeys(new Set());
     if (savedDatasetId) {
       setActiveSavedDatasetId(savedDatasetId);
     }
   };
+
+  const handleCellCommit = async (payload: DatasetCellCommitPayload) => {
+    if (!token || !projectId || !generatedDataset || !schemaSnapshot?.id) {
+      setGenerationMessage("Save your schema and generate data before editing cells.");
+      return;
+    }
+
+    const cellKey = `${payload.recordId}:${payload.fieldName}`;
+    setIsCommittingCellEdit(true);
+
+    try {
+      const response = await applyDatasetCellEdit(
+        projectId,
+        {
+          schemaSnapshotId: schemaSnapshot.id,
+          collectionCounts,
+          dataset: generatedDataset,
+          edit: {
+            collectionName: payload.collectionName,
+            recordId: payload.recordId,
+            fieldName: payload.fieldName,
+            rawValue: payload.rawValue
+          }
+        },
+        token
+      );
+
+      setGeneratedDataset(response.dataset);
+      setGenerationValidationResults([...response.validationResults, ...response.warnings]);
+      setEditedCellKeys((current) => {
+        const next = new Set(current);
+        next.add(cellKey);
+        return next;
+      });
+    } catch (commitError) {
+      setGenerationMessage(
+        commitError instanceof Error ? commitError.message : "Could not apply the cell edit."
+      );
+    } finally {
+      setIsCommittingCellEdit(false);
+    }
+  };
+
+  const handleSaveDataset = async () => {
+    if (!token || !projectId || !generatedDataset || !canSaveDataset || !hasUnsavedEdits) {
+      return;
+    }
+
+    setIsSavingDataset(true);
+
+    try {
+      if (activeSavedDatasetId) {
+        const response = await patchSavedGeneratedDataset(
+          projectId,
+          activeSavedDatasetId,
+          { dataset: generatedDataset },
+          token
+        );
+        syncDatasetState(response.dataset, response.dataset.id);
+        setGenerationMessage("Saved changes to the active dataset run.");
+      } else {
+        const response = await saveManualEditDataset(
+          projectId,
+          {
+            dataset: generatedDataset,
+            chatHistory: toChatHistoryPayload(agentMessages)
+          },
+          token
+        );
+        syncDatasetState(response.dataset, response.savedDatasetId);
+        setGenerationMessage("Saved dataset as a new run.");
+      }
+
+      await refreshSavedDatasets(projectId, token);
+    } catch (saveError) {
+      setGenerationMessage(
+        saveError instanceof Error ? saveError.message : "Could not save the edited dataset."
+      );
+    } finally {
+      setIsSavingDataset(false);
+    }
+  };
+
+  const handleSaveDatasetAsNew = async () => {
+    if (!token || !projectId || !generatedDataset || !canSaveDataset || !hasUnsavedEdits) {
+      return;
+    }
+
+    setIsSavingDataset(true);
+
+    try {
+      const response = await saveManualEditDataset(
+        projectId,
+        {
+          dataset: generatedDataset,
+          chatHistory: toChatHistoryPayload(agentMessages)
+        },
+        token
+      );
+      syncDatasetState(response.dataset, response.savedDatasetId);
+      setGenerationMessage("Saved a new dataset run from your edits.");
+      await refreshSavedDatasets(projectId, token);
+    } catch (saveError) {
+      setGenerationMessage(
+        saveError instanceof Error ? saveError.message : "Could not save the edited dataset."
+      );
+    } finally {
+      setIsSavingDataset(false);
+    }
+  };
+
+  const handleNavigateToValidationIssue = (issue: GenerationValidationResult) => {
+    if (issue.collectionName) {
+      setActiveCollectionTab(issue.collectionName);
+    }
+  };
+
+  useEffect(() => {
+    if (!hasUnsavedEdits) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      const anchor = (event.target as HTMLElement | null)?.closest("a");
+      if (!anchor?.href) {
+        return;
+      }
+
+      const nextUrl = new URL(anchor.href, window.location.href);
+      if (nextUrl.origin !== window.location.origin || nextUrl.pathname === pathname) {
+        return;
+      }
+
+      const shouldLeave = window.confirm(
+        "You have unsaved edits on the data canvas. Leave without saving?"
+      );
+      if (!shouldLeave) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [hasUnsavedEdits, pathname]);
 
   const refreshSavedDatasets = async (targetProjectId: string, authToken: string) => {
     setIsSavedDatasetsLoading(true);
@@ -1434,6 +1623,15 @@ mongoose.model('Product', ProductSchema);`;
           collectionCounts={collectionCounts}
           onCollectionCountChange={handleCollectionCountChange}
           countsDisabled={isBusy}
+          editingDisabled={editingDisabled}
+          editedCellKeys={editedCellKeys}
+          onCellCommit={handleCellCommit}
+          hasUnsavedEdits={hasUnsavedEdits}
+          canSaveDataset={canSaveDataset}
+          isSavingDataset={isSavingDataset}
+          onSaveDataset={handleSaveDataset}
+          onSaveDatasetAsNew={handleSaveDatasetAsNew}
+          onNavigateToValidationIssue={handleNavigateToValidationIssue}
         />
       </div>
     </section>
@@ -1595,4 +1793,8 @@ function mergeCollectionIntoDataset(
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function computeDatasetFingerprint(dataset: GeneratedDataset) {
+  return JSON.stringify(dataset.collections);
 }

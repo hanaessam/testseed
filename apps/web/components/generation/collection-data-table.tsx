@@ -1,19 +1,27 @@
 "use client";
 
-import { Alert } from "@/components/ui/alert";
+import { EditableTableCell } from "@/components/generation/editable-table-cell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/src/lib/utils";
 import type {
+  FieldInputKind,
   GeneratedDataset,
   GenerationValidationResult,
   ParsedSchema,
   SchemaField
 } from "@testseed/types";
-import { ChevronLeft, ChevronRight, Database, Loader2, ShieldAlert, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Database, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const PAGE_SIZE = 10;
+
+export interface DatasetCellCommitPayload {
+  collectionName: string;
+  recordId: string;
+  fieldName: string;
+  rawValue: string;
+}
 
 interface CollectionDataTableProps {
   dataset: GeneratedDataset | null;
@@ -24,6 +32,9 @@ interface CollectionDataTableProps {
   onGenerate?(): void;
   generateDisabled?: boolean;
   isGenerating?: boolean;
+  editingDisabled?: boolean;
+  editedCellKeys?: Set<string>;
+  onCellCommit?(payload: DatasetCellCommitPayload): void;
   className?: string;
 }
 
@@ -36,6 +47,9 @@ export function CollectionDataTable({
   onGenerate,
   generateDisabled = false,
   isGenerating = false,
+  editingDisabled = false,
+  editedCellKeys = new Set<string>(),
+  onCellCommit,
   className
 }: CollectionDataTableProps) {
   const collectionNames = useMemo(() => {
@@ -70,14 +84,26 @@ export function CollectionDataTable({
   const schemaFields = schema?.collections.find(
     (collection) => collection.name === effectiveCollection
   )?.fields;
+  const fieldByName = useMemo(
+    () => new Map((schemaFields ?? []).map((field) => [field.name, field])),
+    [schemaFields]
+  );
   const columns = getColumns(schemaFields, rows);
-  const collectionValidation = validationResults.filter(
-    (result) => !result.collectionName || result.collectionName === effectiveCollection
-  );
   const validationByCell = useMemo(
-    () => buildValidationByCell(collectionValidation),
-    [collectionValidation]
+    () => buildValidationByCell(validationResults.filter((result) => result.collectionName === effectiveCollection || !result.collectionName)),
+    [effectiveCollection, validationResults]
   );
+  const collectionErrorCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const result of validationResults) {
+      if (result.severity === "error" && result.collectionName) {
+        counts.set(result.collectionName, (counts.get(result.collectionName) ?? 0) + 1);
+      }
+    }
+
+    return counts;
+  }, [validationResults]);
 
   const updateCollection = (collectionName: string) => {
     setCurrentCollection(collectionName);
@@ -99,8 +125,8 @@ export function CollectionDataTable({
           <h2 className="text-sm font-semibold text-foreground">Generated data preview</h2>
         </div>
         <p className="text-xs leading-5 text-muted">
-          Inspect each collection in a paginated table. Reference fields are rendered in monospace,
-          and validation messages stay visible alongside the preview.
+          Click editable cells to fix values directly on the data canvas. Reference and identifier
+          fields stay read-only to preserve links between collections.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -138,6 +164,7 @@ export function CollectionDataTable({
               {collectionNames.map((collectionName) => {
                 const isActive = collectionName === effectiveCollection;
                 const rowCount = dataset.collections[collectionName]?.length ?? 0;
+                const hasErrors = (collectionErrorCounts.get(collectionName) ?? 0) > 0;
 
                 return (
                   <button
@@ -152,6 +179,9 @@ export function CollectionDataTable({
                     )}
                   >
                     <span>{collectionName}</span>
+                    {hasErrors ? (
+                      <span className="h-2 w-2 rounded-full bg-danger-text" aria-hidden="true" />
+                    ) : null}
                     <span className="rounded-full bg-background/70 px-2 py-0.5 text-[11px] font-medium">
                       {rowCount}
                     </span>
@@ -159,22 +189,6 @@ export function CollectionDataTable({
                 );
               })}
             </div>
-
-            {collectionValidation.length > 0 ? (
-              <Alert tone="warning" title="Validation messages">
-                <div className="space-y-2">
-                  {collectionValidation.map((result, index) => (
-                    <div key={`${result.code}-${index}`} className="text-xs leading-5">
-                      <span className="font-medium text-foreground">{result.code}</span>:{" "}
-                      {result.message}
-                      {result.fieldName ? (
-                        <span className="ml-1 font-mono text-muted">[{result.fieldName}]</span>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </Alert>
-            ) : null}
 
             <div className="overflow-x-auto rounded-md border border-border">
               <table className="min-w-full divide-y divide-border text-left text-sm">
@@ -216,41 +230,41 @@ export function CollectionDataTable({
                       <tr key={rowId} className="align-top">
                         {columns.map((column) => {
                           const value = row[column.name];
-                          const cellWarnings = validationByCell.get(`${rowId}:${column.name}`) ?? [];
+                          const field = fieldByName.get(column.name);
+                          const inputKind = resolveFieldInputKind(column.name, field);
+                          const cellKey = `${rowId}:${column.name}`;
+                          const cellErrors = validationByCell.get(cellKey) ?? [];
+                          const primaryError = cellErrors.find((entry) => entry.severity === "error");
 
                           return (
                             <td
                               key={`${rowId}-${column.name}`}
                               className="max-w-[260px] px-3 py-2 text-xs text-foreground"
                             >
-                              <div className="space-y-1">
-                                <div
-                                  className={cn(
-                                    "break-words leading-5",
-                                    column.isReference && "font-mono text-accent"
-                                  )}
-                                >
-                                  {formatCellValue(value)}
-                                </div>
-                                {cellWarnings.length > 0 ? (
-                                  <div className="flex flex-wrap gap-1">
-                                    {cellWarnings.map((warning, index) => (
-                                      <span
-                                        key={`${warning.code}-${index}`}
-                                        className={cn(
-                                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                          warning.severity === "error"
-                                            ? "border-danger-border bg-danger-subtle text-danger-text"
-                                            : "border-warning-border bg-warning-subtle text-warning-text"
-                                        )}
-                                      >
-                                        <ShieldAlert className="h-3 w-3" />
-                                        {warning.code}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
+                              <EditableTableCell
+                                value={value}
+                                inputKind={inputKind}
+                                enumOptions={field?.enum ?? []}
+                                isEdited={editedCellKeys.has(cellKey)}
+                                isReadOnly={inputKind === "readonly"}
+                                readOnlyReason={
+                                  column.name === "_id"
+                                    ? "Document identifiers cannot be edited."
+                                    : column.isReference
+                                      ? "Reference fields preserve links between collections."
+                                      : "This field cannot be edited in the table preview."
+                                }
+                                errorMessage={primaryError?.message ?? null}
+                                disabled={editingDisabled || !onCellCommit}
+                                onCommit={(rawValue) =>
+                                  onCellCommit?.({
+                                    collectionName: effectiveCollection,
+                                    recordId: rowId,
+                                    fieldName: column.name,
+                                    rawValue
+                                  })
+                                }
+                              />
                             </td>
                           );
                         })}
@@ -315,6 +329,35 @@ function getColumns(
   }));
 }
 
+function resolveFieldInputKind(fieldName: string, field?: SchemaField): FieldInputKind {
+  if (
+    fieldName === "_id" ||
+    !field ||
+    field.ref ||
+    field.type === "ObjectId" ||
+    field.type === "Array" ||
+    field.type === "Object" ||
+    field.type === "Mixed"
+  ) {
+    return "readonly";
+  }
+
+  if (field.enum && field.enum.length > 0) {
+    return "enum";
+  }
+
+  switch (field.type) {
+    case "Number":
+      return "number";
+    case "Boolean":
+      return "boolean";
+    case "Date":
+      return "date";
+    default:
+      return "text";
+  }
+}
+
 function buildValidationByCell(results: GenerationValidationResult[]) {
   const map = new Map<string, GenerationValidationResult[]>();
 
@@ -336,28 +379,4 @@ function buildValidationByCell(results: GenerationValidationResult[]) {
 function getRowId(row: Record<string, unknown>, rowIndex: number, page: number) {
   const explicitId = typeof row._id === "string" ? row._id : undefined;
   return explicitId ?? `${page}-${rowIndex}`;
-}
-
-function formatCellValue(value: unknown) {
-  if (value === null) {
-    return "null";
-  }
-
-  if (value === undefined) {
-    return "—";
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
 }

@@ -187,26 +187,35 @@ function validateUniqueField(
     return;
   }
 
-  const seen = new Map<string, string>();
+  const valueToRecordIds = new Map<string, string[]>();
+
   for (const record of records) {
     const value = record[field.name];
     if (value === undefined || value === null) {
       continue;
     }
+
     const key = JSON.stringify(value);
-    const existingRecordId = seen.get(key);
-    if (existingRecordId) {
+    const recordIds = valueToRecordIds.get(key) ?? [];
+    recordIds.push(record._id);
+    valueToRecordIds.set(key, recordIds);
+  }
+
+  for (const recordIds of valueToRecordIds.values()) {
+    if (recordIds.length < 2) {
+      continue;
+    }
+
+    for (const recordId of recordIds) {
       validationResults.push({
         severity: "error",
         collectionName,
-        recordId: record._id,
+        recordId,
         fieldName: field.name,
         code: "UNIQUE_VALUE_DUPLICATE",
         message: `${collectionName}.${field.name} duplicates another generated value.`,
         suggestedAction: "Regenerate with unique values for this field."
       });
-    } else {
-      seen.set(key, record._id);
     }
   }
 }

@@ -1,5 +1,7 @@
 import {
+  applyCellEditToDataset,
   buildGenerationPlan,
+  CellEditRejectedError,
   generateSeedData,
   generateSeedDataProgressive,
   getSavedGeneratedDataset,
@@ -9,7 +11,9 @@ import {
   buildRefinementUserPromptContent,
   refineGeneratedDataset,
   saveGeneratedDataset,
+  updateSavedGeneratedDataset,
   updateSavedGeneratedDatasetChatHistory,
+  validateGeneratedDataset,
   type SeedGenerationProvider,
   type SeedRefinementProvider
 } from "@testseed/core";
@@ -20,6 +24,7 @@ import type {
   GenerationValidationResult,
   ParsedSchema,
   RefineGeneratedDatasetResponse,
+  SavedGeneratedDatasetSource,
   SchemaField
 } from "@testseed/types";
 import type {
@@ -77,6 +82,35 @@ const refineGeneratedDatasetRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   chatHistory: z.array(chatMessageSchema).optional(),
   savedDatasetId: z.string().min(1).optional()
+});
+
+const datasetCellEditSchema = z.object({
+  collectionName: z.string().min(1),
+  recordId: z.string().min(1),
+  fieldName: z.string().min(1),
+  rawValue: z.string()
+});
+
+const datasetCellEditRequestSchema = z.object({
+  schemaSnapshotId: z.string().min(1),
+  collectionCounts: z.record(z.number().int().min(0)),
+  dataset: generatedDatasetSchema,
+  edit: datasetCellEditSchema
+});
+
+const validateDatasetRequestSchema = z.object({
+  schemaSnapshotId: z.string().min(1),
+  collectionCounts: z.record(z.number().int().min(0)),
+  dataset: generatedDatasetSchema
+});
+
+const patchSavedGeneratedDatasetRequestSchema = z.object({
+  dataset: generatedDatasetSchema
+});
+
+const saveManualEditDatasetRequestSchema = z.object({
+  dataset: generatedDatasetSchema,
+  chatHistory: z.array(chatMessageSchema).optional()
 });
 
 function writeSseEvent(response: Response, event: string, data: unknown): void {
@@ -151,6 +185,227 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           response.status(404).json({ message: error.message });
           return;
         }
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/dataset-edits",
+    validateBody(datasetCellEditRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before editing seed records." });
+          return;
+        }
+
+        if (request.body.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        if (request.body.dataset.projectId !== params.projectId) {
+          response.status(409).json({ message: "The dataset does not match the requested project." });
+          return;
+        }
+
+        try {
+          const dataset = applyCellEditToDataset({
+            dataset: request.body.dataset,
+            schema: context.schemaSnapshot.schema,
+            collectionCounts: request.body.collectionCounts,
+            edit: request.body.edit
+          });
+
+          response.status(200).json({
+            dataset,
+            status: dataset.status,
+            validationResults: dataset.validationResults,
+            warnings: dataset.warnings
+          });
+        } catch (error) {
+          if (error instanceof CellEditRejectedError) {
+            response.status(422).json({
+              error: error.code,
+              message: error.message,
+              collectionName: error.collectionName,
+              fieldName: error.fieldName
+            });
+            return;
+          }
+          throw error;
+        }
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/datasets/validate",
+    validateBody(validateDatasetRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before validating seed records." });
+          return;
+        }
+
+        if (request.body.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        const validation = validateGeneratedDataset({
+          dataset: request.body.dataset,
+          schema: context.schemaSnapshot.schema,
+          collectionCounts: request.body.collectionCounts
+        });
+
+        const dataset: GeneratedDataset = {
+          ...request.body.dataset,
+          status: validation.status === "valid" ? "valid" : "invalid",
+          validationResults: validation.validationResults,
+          warnings: validation.warnings
+        };
+
+        response.status(200).json({
+          dataset,
+          status: dataset.status,
+          validationResults: dataset.validationResults,
+          warnings: dataset.warnings
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.patch(
+    "/:projectId/generated-datasets/:datasetId",
+    validateBody(patchSavedGeneratedDatasetRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z
+          .object({ projectId: z.string().min(1), datasetId: z.string().min(1) })
+          .parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        try {
+          const dataset = await updateSavedGeneratedDataset(
+            {
+              projectId: params.projectId,
+              datasetId: params.datasetId,
+              ownerId: authenticatedRequest.auth.userId,
+              dataset: request.body.dataset
+            },
+            {
+              findProjectById: deps.projectRepository.findProjectById,
+              findGeneratedDatasetById: deps.generatedDatasetRepository.findGeneratedDatasetById,
+              updateGeneratedDatasetRecord: deps.generatedDatasetRepository.updateGeneratedDatasetRecord
+            }
+          );
+
+          response.status(200).json({ dataset });
+        } catch (error) {
+          if (error instanceof Error) {
+            if (error.message.includes("was not found")) {
+              response.status(404).json({ message: error.message });
+              return;
+            }
+            if (
+              error.message.includes("Only valid datasets") ||
+              error.message.includes("Resolve validation errors")
+            ) {
+              response.status(422).json({ message: error.message });
+              return;
+            }
+          }
+          throw error;
+        }
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/generated-datasets",
+    validateBody(saveManualEditDatasetRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (request.body.dataset.status !== "valid") {
+          response.status(422).json({ message: "Resolve validation errors before saving edits." });
+          return;
+        }
+
+        if (
+          request.body.dataset.validationResults.some(
+            (result: GenerationValidationResult) => result.severity === "error"
+          )
+        ) {
+          response.status(422).json({ message: "Resolve validation errors before saving edits." });
+          return;
+        }
+
+        const savedDataset = await persistValidDataset(
+          deps,
+          params.projectId,
+          authenticatedRequest.auth.userId,
+          request.body.dataset,
+          "manual_edit",
+          request.body.chatHistory ?? []
+        );
+
+        response.status(201).json({
+          dataset: savedDataset,
+          savedDatasetId: savedDataset.id
+        });
+      } catch (error) {
         next(error);
       }
     }
@@ -526,7 +781,7 @@ async function persistValidDataset(
   projectId: string,
   ownerId: string,
   dataset: GeneratedDataset,
-  source: "generation" | "refinement",
+  source: SavedGeneratedDatasetSource,
   chatHistory: ChatRefinementMessage[] = []
 ) {
   return saveGeneratedDataset(

@@ -122,7 +122,56 @@ export interface GenerationPlanResponse {
   riskLevel: GenerationPlanRiskLevel;
 }
 
-export type SavedGeneratedDatasetSource = "generation" | "refinement";
+export type SavedGeneratedDatasetSource = "generation" | "refinement" | "manual_edit";
+
+export type FieldInputKind = "text" | "number" | "boolean" | "date" | "enum" | "readonly";
+
+export interface DatasetCellEdit {
+  collectionName: string;
+  recordId: string;
+  fieldName: string;
+  rawValue: string;
+}
+
+export interface DatasetCellEditRequest {
+  schemaSnapshotId: string;
+  collectionCounts: Record<string, number>;
+  dataset: GeneratedDataset;
+  edit: DatasetCellEdit;
+}
+
+export interface DatasetCellEditResponse {
+  dataset: GeneratedDataset;
+  status: Exclude<GenerationStatus, "failed">;
+  validationResults: GenerationValidationResult[];
+  warnings: GenerationValidationResult[];
+}
+
+export interface ValidateDatasetRequest {
+  schemaSnapshotId: string;
+  collectionCounts: Record<string, number>;
+  dataset: GeneratedDataset;
+}
+
+export interface ValidateDatasetResponse {
+  dataset: GeneratedDataset;
+  status: Exclude<GenerationStatus, "failed">;
+  validationResults: GenerationValidationResult[];
+  warnings: GenerationValidationResult[];
+}
+
+export interface PatchSavedGeneratedDatasetRequest {
+  dataset: GeneratedDataset;
+}
+
+export interface PatchSavedGeneratedDatasetResponse {
+  dataset: SavedGeneratedDataset;
+}
+
+export interface SaveManualEditDatasetRequest {
+  dataset: GeneratedDataset;
+  chatHistory?: ChatRefinementMessage[];
+}
 
 export interface SavedGeneratedDatasetSummary {
   id: string;

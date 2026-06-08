@@ -2,9 +2,9 @@
   "name": "testseed",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "dev:docker": "docker compose up --build",
+    "build": "node init && turbo run build",
+    "dev": "node init && turbo run dev",
+    "dev:docker": "node init && docker compose up --build",
     "lint": "turbo run lint",
     "setup:dev": "node scripts/setup-dev.mjs",
     "test": "turbo run test",
@@ -25,5 +25,8 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
 }

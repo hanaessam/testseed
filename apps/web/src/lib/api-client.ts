@@ -46,6 +46,13 @@ import type {
   RefineGeneratedDatasetResponse,
   ListSavedGeneratedDatasetsResponse,
   GetSavedGeneratedDatasetResponse,
+  DatasetCellEditRequest,
+  DatasetCellEditResponse,
+  ValidateDatasetRequest,
+  ValidateDatasetResponse,
+  PatchSavedGeneratedDatasetRequest,
+  PatchSavedGeneratedDatasetResponse,
+  SaveManualEditDatasetRequest,
   Project
 } from "@testseed/types";
 
@@ -452,6 +459,55 @@ export async function getSavedGeneratedDataset(
 ): Promise<GetSavedGeneratedDatasetResponse> {
   return getJson<GetSavedGeneratedDatasetResponse>(
     `/projects/${encodeURIComponent(projectId)}/generated-datasets/${encodeURIComponent(datasetId)}`,
+    token
+  );
+}
+
+export async function applyDatasetCellEdit(
+  projectId: string,
+  request: DatasetCellEditRequest,
+  token: string
+): Promise<DatasetCellEditResponse> {
+  return postJson<DatasetCellEditRequest, DatasetCellEditResponse>(
+    `/projects/${encodeURIComponent(projectId)}/dataset-edits`,
+    request,
+    token
+  );
+}
+
+export async function validateProjectDataset(
+  projectId: string,
+  request: ValidateDatasetRequest,
+  token: string
+): Promise<ValidateDatasetResponse> {
+  return postJson<ValidateDatasetRequest, ValidateDatasetResponse>(
+    `/projects/${encodeURIComponent(projectId)}/datasets/validate`,
+    request,
+    token
+  );
+}
+
+export async function patchSavedGeneratedDataset(
+  projectId: string,
+  datasetId: string,
+  request: PatchSavedGeneratedDatasetRequest,
+  token: string
+): Promise<PatchSavedGeneratedDatasetResponse> {
+  return patchJson<PatchSavedGeneratedDatasetRequest, PatchSavedGeneratedDatasetResponse>(
+    `/projects/${encodeURIComponent(projectId)}/generated-datasets/${encodeURIComponent(datasetId)}`,
+    request,
+    token
+  );
+}
+
+export async function saveManualEditDataset(
+  projectId: string,
+  request: SaveManualEditDatasetRequest,
+  token: string
+): Promise<PatchSavedGeneratedDatasetResponse & { savedDatasetId: string }> {
+  return postJson<SaveManualEditDatasetRequest, PatchSavedGeneratedDatasetResponse & { savedDatasetId: string }>(
+    `/projects/${encodeURIComponent(projectId)}/generated-datasets`,
+    request,
     token
   );
 }
