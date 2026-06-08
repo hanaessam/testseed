@@ -175,7 +175,7 @@ As a new user, I still want guided setup for project context, GitHub, and schema
 
 ### Functional Requirements
 
-- **FR-001**: System MUST provide a Generation Workbench as the sole generate experience for all authenticated users in Phase 1, replacing the linear wizard entirely.
+- **FR-001**: System MUST provide a Generation Workbench for generate, preview, refine, and finish. **Amendment (shipped):** a dedicated **setup wizard** handles new-project onboarding (context, GitHub, schema, review); the workbench is entered after schema save or via `?mode=generate` for returning users.
 - **FR-002**: Workbench MUST show schema snapshot summary (version, collection count, field count) when available.
 - **FR-003**: Workbench MUST allow per-collection record count editing and display total requested records before generation.
 - **FR-004**: Workbench MUST display a generation plan showing collection order, reference relationships, and warnings before generation starts.
@@ -189,7 +189,7 @@ As a new user, I still want guided setup for project context, GitHub, and schema
 - **FR-011**: Workbench MUST expose Finish as the Phase 1 handoff action; JSON export and copy actions MUST NOT ship until Phase 2 export slice (after streaming).
 - **FR-011a**: Workbench MUST show which context sources (project description, connected repository summary) are active before Generate.
 - **FR-011b**: Workbench MUST pass project description and repository summary (when each is available) into every generation and refinement request so they are included in the AI prompt.
-- **FR-012**: System MUST NOT expose a separate linear wizard route or stepper once Phase 1 ships; onboarding flows live only inside the collapsible Setup rail.
+- **FR-012**: **Amendment (shipped):** New projects use a stepper **setup wizard** on `/generate`. The workbench setup rail is for edit/resume links and context summary—not a replacement for the wizard onboarding flow.
 - **FR-013**: Agent dock MUST stream assistant refinement text into the chat transcript as content arrives, matching the responsive feel of agent-centric synthetic-data demos (Phase 2).
 - **FR-014**: Data canvas MUST populate collection tables progressively during generation so users see rows for completed collections before the full dataset finishes (Phase 2).
 - **FR-015**: Workbench MUST show per-collection generation progress (pending, in progress, complete) while streaming generation runs (Phase 2).
@@ -223,7 +223,8 @@ As a new user, I still want guided setup for project context, GitHub, and schema
 - JS seed script export and direct MongoDB insert remain separate product epics beyond Phase 2.
 - Mobile view may collapse the three-pane layout into stacked sections; desktop is the primary design target.
 - Users are authenticated before accessing the workbench.
-- Phase 1 ships a single workbench for all users; the legacy wizard is removed, not run in parallel.
+- **Shipped flow:** setup wizard for create → workbench for generation; saved runs persist dataset, counts, and refinement chat per snapshot (`generated_dataset_records`).
+- Editable preview cells remain **out of scope** — see epic **007-preview-editing** (planned).
 
 ## Out of Scope (this epic)
 

@@ -84,6 +84,34 @@ export function createGeneratedDatasetRepository(connection: Connection) {
       return document ? toSavedGeneratedDataset(document) : null;
     },
 
+    async updateGeneratedDatasetRecord(input: {
+      projectId: string;
+      datasetId: string;
+      status: GeneratedDataset["status"];
+      generationOrder: string[];
+      collectionCounts: Record<string, number>;
+      collections: GeneratedDataset["collections"];
+      validationResults: GenerationValidationResult[];
+      warnings: GenerationValidationResult[];
+    }): Promise<SavedGeneratedDataset | null> {
+      const document = await GeneratedDatasetRecordModel.findOneAndUpdate(
+        { _id: input.datasetId, projectId: input.projectId },
+        {
+          $set: {
+            status: input.status,
+            generationOrder: input.generationOrder,
+            collectionCounts: input.collectionCounts,
+            collections: input.collections,
+            validationResults: input.validationResults,
+            warnings: input.warnings
+          }
+        },
+        { new: true }
+      ).exec();
+
+      return document ? toSavedGeneratedDataset(document) : null;
+    },
+
     async hardDeleteGeneratedDatasetsByProject(projectId: string): Promise<number> {
       const result = await GeneratedDatasetRecordModel.deleteMany({ projectId }).exec();
       return result.deletedCount;

@@ -27,6 +27,22 @@ export {
   type ValidateGeneratedDatasetInput
 } from "./validate-generated-dataset";
 export {
+  applyCellEditToDataset,
+  CellEditRejectedError,
+  type ApplyCellEditToDatasetInput,
+  type CellEditRejectCode
+} from "./apply-cell-edit-to-dataset";
+export {
+  getFieldInputKind,
+  isFieldEditable,
+  type FieldInputKind
+} from "./field-editability";
+export {
+  updateSavedGeneratedDataset,
+  type UpdateSavedGeneratedDatasetDeps,
+  type UpdateSavedGeneratedDatasetRequest
+} from "./update-saved-generated-dataset";
+export {
   generateSeedDataProgressive,
   type GenerateSeedDataProgressiveDeps
 } from "./generate-seed-data-progressive";
