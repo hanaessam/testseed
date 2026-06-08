@@ -6,7 +6,7 @@
 
 **Date**: 2026-06-08 (revised after `/speckit-clarify`)
 
-**Status**: Planned — Phase 1 replaces the wizard for all users; streaming ships in Phase 2 before JSON export.
+**Status**: **Shipped** (Phases 1, 2a, 2b). Post-ship amendments: dedicated **setup wizard** for new projects; workbench for generation; **saved runs** with dataset, counts, and chat history. Phase 3 (insert/rollback handoff) deferred to a later epic.
 
 ## Summary
 
@@ -18,7 +18,7 @@ Reuse `005` generation and refinement APIs in Phase 1. Phase 2 adds **streaming*
 
 | Topic | Decision |
 | --- | --- |
-| Default UX | All users land in workbench in Phase 1; wizard removed |
+| Default UX | New projects: **setup wizard** → workbench. Returning users: workbench (`?mode=generate`) |
 | Plan warnings | Soft warn — Generate stays enabled with risk notice |
 | Phase 1 handoff | Finish only — no export |
 | Context in prompts | Show active sources; pass description + repo summary when available |
@@ -29,8 +29,8 @@ Reuse `005` generation and refinement APIs in Phase 1. Phase 2 adds **streaming*
 
 | Area | Current (`005` + wizard) | Phase 1 workbench | Phase 2 workbench |
 | --- | --- | --- | --- |
-| Navigation | 7 wizard steps + Stepper | Single route; collapsible Setup rail | Same |
-| Default route | Wizard for all | Workbench for all (wizard removed) | Same |
+| Navigation | 7 wizard steps + Stepper | Wizard for create; workbench for generate | Same |
+| Default route | Wizard for all | `/generate` wizard (new) or workbench (resume) | Same |
 | Preview | Raw JSON `<pre>` | Per-collection tables after full response | Progressive rows per collection |
 | Refinement | Separate `refine` step | Agent dock; full response then update | Streamed assistant text |
 | Planning | Hidden in core | Visible plan card; soft-warn on issues | Same |
@@ -44,7 +44,7 @@ Reuse `005` generation and refinement APIs in Phase 1. Phase 2 adds **streaming*
 
 **Primary Dependencies**: Existing `AppShell`, shadcn-style primitives, `@testseed/types`, `api-client.ts`
 
-**Storage**: Client session state only (workbench UI); datasets remain ephemeral until history/export epics persist them
+**Storage**: Workbench UI is client session state; **saved runs** persist in `generated_dataset_records` (dataset, counts, chat history per snapshot)
 
 **Testing**: `npx turbo build lint test`; contract tests for new streaming/plan routes; manual workbench test plan below
 

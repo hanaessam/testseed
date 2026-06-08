@@ -16,6 +16,7 @@ This document summarizes why TestSeed is moving from a **generate wizard** to a 
 | AI generation | `packages/core/src/generation/` | Dependency order, validation, OpenAI via API |
 | Chat refinement | Agent dock (streamed) | `refineGeneratedDataset` + persisted chat per run |
 | Collection counts | `collection-counts-panel.tsx` | Editable in workbench left rail |
+| Preview editing | `collection-data-table.tsx` + `editable-table-cell.tsx` | Inline edit, enum dropdown, edited indicator, save bar |
 | Schema review | Wizard review step + project schema tab | Save snapshot before workbench |
 
 See `docs/ui-design.md` § Generate Flow for UI conventions.
@@ -46,10 +47,11 @@ Full specification: [`specs/006-generation-workbench/spec.md`](../specs/006-gene
 
 | Epic | Priority | Scope |
 | --- | --- | --- |
-| **005** AI Seed Generation | Done (API/core) | Generate, validate, refine |
-| **006** Generation Workbench | Next | UI restructure, tables, plan, merged refine |
-| Export (requirements §2.2) | After 006 Phase 2 | JSON download, seed script |
-| Direct insert + rollback | Later | Workbench entry points only |
+| **005** AI Seed Generation | Done | Generate, validate, refine (core + API) |
+| **006** Generation Workbench | Done | Wizard + workbench, tables, plan, streaming, JSON export, saved runs |
+| **007** Preview and Editing | **Done** | Canvas-like cell editing, revalidation on commit, export/save gating, persist patches |
+| Export (requirements §2.2) | Partial | JSON shipped; JS seed script after 007 or 008 |
+| Direct insert + rollback | Later | Workbench handoff (006 Phase 3 concept) |
 
 ## Phased delivery (006)
 
@@ -70,7 +72,7 @@ Demo reference: [YouTube — Tonic-style workflow](https://www.youtube.com/watch
 
 ## Rules for implementers
 
-1. **Do not remove the wizard** until Phase 1 manual tests pass (see plan verification).
+1. **Keep the setup wizard** for new projects; workbench is for generation after schema save.
 2. **No business logic in `apps/web`** — workbench components render API state only.
 3. **Use `router.push` or `Link`** for finish/navigation; never raw `<a href>` to internal routes.
 4. Update `docs/ui-design.md` when workbench ships; keep wizard section until deprecation.

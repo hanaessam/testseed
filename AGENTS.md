@@ -70,12 +70,12 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For the active Spec Kit feature, read:
 
-- `specs/006-generation-workbench/spec.md`
-- `specs/006-generation-workbench/plan.md`
+- `specs/007-preview-editing/spec.md`
+- `specs/007-preview-editing/plan.md`
 
-Generation APIs and core behavior remain defined in:
+**Shipped (reference only):** `specs/006-generation-workbench/`, `specs/005-ai-seed-generation/`
 
-- `specs/005-ai-seed-generation/spec.md`
+Roadmap: `docs/generation-ux-roadmap.md` · Requirements: `docs/requirements.md`
 
-UX roadmap summary: `docs/generation-ux-roadmap.md`
+AI tooling inventory (MCPs, skills, Spec Kit, Superpowers): `docs/ai-assisted-tooling.md` — update when tooling changes.
 <!-- SPECKIT END -->
