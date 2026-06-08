@@ -8,6 +8,8 @@ The project has evolved from the original Assignment 1 proposal in three importa
 
 The updated main user flow is: the user creates an account or logs in, enters a short project description, chooses either manual schema input or MongoDB schema discovery, optionally provides a GitHub repository link for additional project context, selects record counts per collection, generates realistic relational seed data, previews the generated records, edits values or adds feedback comments, regenerates if needed, and then exports the final dataset or inserts it directly into MongoDB. When records are inserted directly, TestSeed tags them with a `seedBatchId` so the user can view an insertion report and roll back that batch later.
 
+**UX evolution (documented, not yet shipped):** The linear generate wizard remains the active UI. A Tonic-inspired **Generation Workbench** (single-screen preview, integrated chat refinement, generation plan, table preview) is specified in `specs/006-generation-workbench/` with an executive summary in `docs/generation-ux-roadmap.md`. Implement workbench Phase 1 before removing the wizard.
+
 ## 2. Requirements
 
 ### 2.1 Core and Non-Core Requirements

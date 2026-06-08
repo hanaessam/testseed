@@ -94,19 +94,48 @@ All API calls from UI components must go through `apps/web/src/lib/api-client.ts
 - Empty states: illustrated CTA for no projects; clear-search action when filters match nothing.
 - Loading uses `Skeleton`; feedback uses `Alert` (success after archive/restore/delete).
 
-## Generate Wizard
+## Generate Flow
 
-`apps/web/app/generate/page.tsx` is a step-based wizard (one primary card per step):
+**Active UI (today):** linear wizard in `apps/web/app/generate/page.tsx`.
+
+**Planned UI:** Generation Workbench (`specs/006-generation-workbench/`) — documented, not implemented. See `docs/generation-ux-roadmap.md`.
+
+### Current: Generate Wizard
+
+Step-based wizard (one primary card per step):
 
 1. **Project** — name and description.
 2. **GitHub** — optional repository context; after OAuth, user stays on this step and continues manually (no auto-advance to schema).
 3. **Schema choose** — paste, upload, or MongoDB.
 4. **Schema input** — branch step (paste / upload / mongodb).
 5. **Review** — save schema at bottom; **Next** enabled after save.
-6. **Generate** — AI seed generation.
-7. **Refine** — regeneration feedback.
+6. **Generate** — AI seed generation; raw JSON preview in `<pre>`.
+7. **Refine** — optional AI chat refinement (separate step).
 
 Optional steps expose **Skip**. Repository warnings shown in UI are filtered to meaningful messages only (generic AI placeholders hidden).
+
+Finish actions use `router.push` (not `<a href>`) to navigate to `/projects/[projectId]`.
+
+### Planned: Generation Workbench (006)
+
+Three-pane layout on the same `/generate` route:
+
+| Pane | Contents |
+| --- | --- |
+| **Left — Setup rail** | Collapsible: project context, GitHub, schema input, generation plan, per-collection counts |
+| **Center — Data canvas** | Collection tabs, table preview, validation badges, generation progress (later) |
+| **Right — Agent dock** | Chat refinement, quick prompts, message history |
+
+**Sticky action bar:** Generate · Regenerate · Export (phase 2) · Finish.
+
+**Behavior changes vs wizard:**
+
+- No separate refine wizard step; chat lives in the agent dock after first valid dataset.
+- Generation plan visible before run (collection order, references, warnings).
+- Table preview replaces JSON-only inspection (JSON remains as secondary/export view).
+- Returning users with saved schema land directly in the workbench (`?projectId=&mode=generate`).
+
+Do not remove wizard code until workbench Phase 1 passes the manual test plan in `specs/006-generation-workbench/plan.md`.
 
 ## Project Details
 
