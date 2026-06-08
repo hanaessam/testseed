@@ -81,6 +81,19 @@ All API calls from UI components must go through `apps/web/src/lib/api-client.ts
 - Metric and summary cards use subtle fills, not nested harsh white borders.
 - Primary actions use borderless accent buttons.
 
+## Projects List
+
+`apps/web/app/projects/page.tsx`:
+
+- Header with mono tag, description, and **New project** primary action.
+- **Summary metrics:** Active, Ready to generate (schema saved), Archived.
+- **Toolbar:** search by name/description; Active / Archived filter tabs; Recent / Name sort.
+- **Project cards** in a responsive grid (`md:grid-cols-2`), soft `bg-background/50` fills (no nested harsh borders).
+- Each card shows status badge (`Ready`, `Needs schema`, `Archived`), relative updated time, and description.
+- **Actions:** Open (primary), smart continue (**Generate** if schema exists, **Add schema** otherwise), Archive as ghost (active) or Restore + Delete (archived).
+- Empty states: illustrated CTA for no projects; clear-search action when filters match nothing.
+- Loading uses `Skeleton`; feedback uses `Alert` (success after archive/restore/delete).
+
 ## Generate Wizard
 
 `apps/web/app/generate/page.tsx` is a step-based wizard (one primary card per step):

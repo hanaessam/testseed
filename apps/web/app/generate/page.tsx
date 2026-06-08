@@ -37,6 +37,7 @@ import {
 } from "@/src/lib/api-client";
 import { redirectToLogin } from "@/src/lib/auth-session";
 import { getSessionStatus, getStoredSession } from "@/src/lib/session";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
   ChatRefinementMessage,
@@ -1380,7 +1381,7 @@ mongoose.model('Product', ProductSchema);`;
                         )}
                         {savedProjectId ? (
                           <Button asChild variant="secondary" className="h-8">
-                            <a href={`/projects/${savedProjectId}`}>View project details</a>
+                            <Link href={`/projects/${savedProjectId}`}>View project details</Link>
                           </Button>
                         ) : null}
                       </div>
@@ -1511,8 +1512,13 @@ mongoose.model('Product', ProductSchema);`;
                             Continue to refinement
                             <ArrowRight className="h-4 w-4" />
                           </Button>
-                          <Button asChild type="button" variant="secondary">
-                            <a href={`/projects/${projectId ?? ""}`}>Finish and view project</a>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={!projectId}
+                            onClick={() => projectId && router.push(`/projects/${projectId}`)}
+                          >
+                            Finish and view project
                           </Button>
                         </div>
                       </div>
@@ -1541,8 +1547,13 @@ mongoose.model('Product', ProductSchema);`;
                 ) : (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button asChild variant="secondary">
-                        <a href={`/projects/${projectId ?? ""}`}>Skip refinement</a>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={!projectId}
+                        onClick={() => projectId && router.push(`/projects/${projectId}`)}
+                      >
+                        Skip refinement
                       </Button>
                     </div>
 
@@ -1580,8 +1591,13 @@ mongoose.model('Product', ProductSchema);`;
                         )}
                         Send refinement
                       </Button>
-                      <Button asChild variant="secondary">
-                        <a href={`/projects/${projectId ?? ""}`}>Finish</a>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={!projectId}
+                        onClick={() => projectId && router.push(`/projects/${projectId}`)}
+                      >
+                        Finish
                       </Button>
                     </div>
 

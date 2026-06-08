@@ -41,7 +41,7 @@ Read [`docs/ui-design.md`](../../docs/ui-design.md) before changing layouts or s
 
 | Page | Pattern |
 | --- | --- |
-| Dashboard / Projects list | `p-6`, header divider, soft metric cards |
+| Dashboard / Projects list | `p-6`, header divider, metric cards, project cards with search/filter/sort |
 | Generate | Wizard `Stepper`, one step per card, Skip on optional steps |
 | Project details | Horizontal tabs; schema tab is master-detail |
 | Account | Summary card + left section nav (Profile / Security / Danger zone) |

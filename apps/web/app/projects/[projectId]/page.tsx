@@ -1245,11 +1245,16 @@ function formatFieldDetails(field: {
   return details.join("; ") || "none";
 }
 
-function formatDate(date: Date): string {
+function formatDate(date: Date | string): string {
+  const value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) {
+    return "Unknown";
+  }
+
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit"
-  }).format(date);
+  }).format(value);
 }
