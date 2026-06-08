@@ -174,7 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="ml-60 min-h-screen animate-fade-in">
+      <main className="ml-60 flex min-h-svh flex-col overflow-y-auto animate-fade-in">
         {sessionIssue ? (
           <div className="border-b border-warning-border bg-warning-subtle px-6 py-4">
             <SessionNotice reason={sessionIssue} />
