@@ -38,6 +38,7 @@ export interface GenerateSeedDataRequest {
 export interface GenerateSeedDataResponse {
   dataset: GeneratedDataset;
   message: string;
+  savedDatasetId?: string;
 }
 
 export interface GenerationProviderRequest {
@@ -65,6 +66,7 @@ export interface RefineGeneratedDatasetRequest {
   currentDataset: GeneratedDataset;
   message: string;
   chatHistory?: ChatRefinementMessage[];
+  savedDatasetId?: string;
 }
 
 export type RefinementMode = "updated_dataset" | "guidance" | "rejected";
@@ -73,6 +75,8 @@ export interface RefinementProviderRequest {
   projectId: string;
   schemaSnapshotId: string;
   schema: ParsedSchema;
+  projectContext?: string;
+  repositoryContext?: string;
   currentDataset: GeneratedDataset;
   message: string;
   chatHistory: ChatRefinementMessage[];
@@ -89,7 +93,59 @@ export interface RefineGeneratedDatasetResponse {
   mode: RefinementMode;
   message: string;
   dataset?: GeneratedDataset;
+  savedDatasetId?: string;
   validationResults: GenerationValidationResult[];
   warnings: GenerationValidationResult[];
   chatHistory: ChatRefinementMessage[];
+}
+
+export type GenerationPlanRiskLevel = "none" | "elevated";
+
+export interface GenerationPlanReferenceField {
+  fieldName: string;
+  referencedCollection: string;
+}
+
+export interface GenerationPlanItem {
+  collectionName: string;
+  count: number;
+  dependencyOrder: number;
+  referenceFields: GenerationPlanReferenceField[];
+  warnings: GenerationValidationResult[];
+}
+
+export interface GenerationPlanResponse {
+  orderedCollections: string[];
+  items: GenerationPlanItem[];
+  totalRecords: number;
+  blockingWarnings: GenerationValidationResult[];
+  riskLevel: GenerationPlanRiskLevel;
+}
+
+export type SavedGeneratedDatasetSource = "generation" | "refinement";
+
+export interface SavedGeneratedDatasetSummary {
+  id: string;
+  projectId: string;
+  schemaSnapshotId: string;
+  status: GenerationStatus;
+  source: SavedGeneratedDatasetSource;
+  collectionCounts: Record<string, number>;
+  totalRecords: number;
+  chatMessageCount: number;
+  createdAt: string;
+}
+
+export interface SavedGeneratedDataset extends GeneratedDataset {
+  id: string;
+  source: SavedGeneratedDatasetSource;
+  chatHistory: ChatRefinementMessage[];
+}
+
+export interface ListSavedGeneratedDatasetsResponse {
+  datasets: SavedGeneratedDatasetSummary[];
+}
+
+export interface GetSavedGeneratedDatasetResponse {
+  dataset: SavedGeneratedDataset;
 }

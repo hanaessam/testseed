@@ -15,6 +15,7 @@ import {
   deleteProjectSchema,
   getProjectDetail,
   listProjectHistory,
+  listSavedGeneratedDatasets,
   removeRepositoryContext,
   restoreProject as restoreProjectRequest,
   restoreProjectSchema,
@@ -35,6 +36,7 @@ import type {
   ProjectEvent,
   ProjectHistoryResponse,
   ProjectSchemaSnapshot,
+  SavedGeneratedDatasetSummary,
   SeedBatch
 } from "@testseed/types";
 import {
@@ -87,6 +89,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
   const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
   const [isLifecycleBusy, setIsLifecycleBusy] = useState(false);
   const [activeCollectionIdx, setActiveCollectionIdx] = useState(0);
+  const [savedDatasets, setSavedDatasets] = useState<SavedGeneratedDatasetSummary[]>([]);
 
   useEffect(() => {
     const session = requireStoredSession(router);
@@ -99,9 +102,10 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
 
     async function loadProject() {
       try {
-        const [detailResponse, historyResponse] = await Promise.all([
+        const [detailResponse, historyResponse, savedDatasetsResponse] = await Promise.all([
           getProjectDetail(params.projectId, token),
-          listProjectHistory(params.projectId, token)
+          listProjectHistory(params.projectId, token),
+          listSavedGeneratedDatasets(params.projectId, token)
         ]);
 
         if (!isMounted) {
@@ -116,6 +120,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
         setProject(detailResponse.project);
         setProjectNameDraft(detailResponse.project.name);
         setSnapshot(detailResponse.activeSchemaSnapshot ?? null);
+        setSavedDatasets(savedDatasetsResponse.datasets);
         setSchemaDraft(
           detailResponse.activeSchemaSnapshot
             ? JSON.stringify(detailResponse.activeSchemaSnapshot.schema, null, 2)
@@ -515,7 +520,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
 
             {view === "overview" ? (
               <div className="space-y-5">
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Metric
                     label="Schema version"
                     value={
@@ -526,6 +531,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
                   />
                   <Metric label="Collections" value={String(collectionCount)} />
                   <Metric label="Fields" value={String(fieldCount)} />
+                  <Metric label="Saved runs" value={String(savedDatasets.length)} />
                 </div>
 
                 <Card>
@@ -558,6 +564,56 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
                         {snapshot ? "Review / edit schema" : "Add schema"}
                       </Link>
                     </Button>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-start justify-between gap-3">
+                    <div>
+                      <p className="font-mono text-xs text-accent">overview.datasets</p>
+                      <h2 className="mt-1 text-lg font-semibold">Saved seed previews</h2>
+                      <p className="mt-2 text-sm text-muted">
+                        Each successful generation or refinement is stored so you can reopen it in
+                        the workbench.
+                      </p>
+                    </div>
+                    {snapshot ? (
+                      <Button asChild variant="secondary" className="h-8 shrink-0">
+                        <Link href={`/generate?projectId=${project.id}&mode=generate`}>
+                          Open workbench
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {savedDatasets.length === 0 ? (
+                      <p className="text-sm text-muted">
+                        No saved previews yet. Generate seed data to create the first run.
+                      </p>
+                    ) : (
+                      savedDatasets.slice(0, 3).map((dataset) => (
+                        <div
+                          key={dataset.id}
+                          className="flex flex-col gap-2 rounded-lg border border-border bg-background/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {dataset.totalRecords.toLocaleString()} records ·{" "}
+                              {dataset.source === "refinement" ? "Refined" : "Generated"}
+                            </p>
+                            <p className="mt-1 text-xs text-muted">
+                              {formatDate(new Date(dataset.createdAt))}
+                            </p>
+                          </div>
+                          <Button asChild variant="ghost" className="h-8 shrink-0 text-xs">
+                            <Link href={`/generate?projectId=${project.id}&mode=generate`}>
+                              View in workbench
+                            </Link>
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </CardContent>
                 </Card>
 
