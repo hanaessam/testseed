@@ -139,7 +139,7 @@ export function AgentDock({
   dataset,
   messages,
   isSubmitting = false,
-  placeholder = "Ask TestSeed to refine the dataset...",
+  placeholder = "Describe how the accepted dataset should change...",
   quickPromptChips,
   onSubmit,
   className
@@ -171,13 +171,13 @@ export function AgentDock({
           <h2 className="text-sm font-semibold text-foreground">Agent dock</h2>
         </div>
         <p className="text-xs leading-5 text-muted">
-          Refine the current dataset in place. Responses stream in as TestSeed works.
+          Submit feedback to iteratively regenerate from the last accepted dataset.
         </p>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden pb-4">
         {!dataset ? (
           <Alert tone="info" title="Dataset required" className="shrink-0">
-            Generate a dataset before starting AI refinement.
+            Generate a dataset before submitting regeneration feedback.
           </Alert>
         ) : null}
 
@@ -201,8 +201,8 @@ export function AgentDock({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain rounded-md border border-border bg-background/30 p-3">
           {messages.length === 0 ? (
             <p className="text-sm text-muted">
-              No refinement messages yet. Ask for more realistic names, pricing variety, location
-              changes, or consistency fixes once data has been generated.
+              No feedback messages yet. Ask for more realistic names, pricing variance, location
+              updates, or consistency fixes once data has been generated.
             </p>
           ) : null}
 
@@ -226,7 +226,7 @@ export function AgentDock({
             ) : (
               <SendHorizonal className="h-4 w-4" />
             )}
-            {isSubmitting ? "Sending..." : "Send refinement"}
+            {isSubmitting ? "Sending..." : "Send feedback"}
           </Button>
         </form>
       </CardContent>

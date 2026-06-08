@@ -71,6 +71,28 @@ export interface RefineGeneratedDatasetRequest {
 
 export type RefinementMode = "updated_dataset" | "guidance" | "rejected";
 
+export type FeedbackRegenerationMode = "accepted" | "partial" | "rejected" | "cancelled";
+
+export interface FeedbackRegenerationRequest {
+  acceptedDataset: GeneratedDataset;
+  feedback: string;
+  chatHistory?: ChatRefinementMessage[];
+  savedDatasetId?: string;
+  projectContext?: string;
+  schemaContext?: string;
+  collectionCounts?: Record<string, number>;
+}
+
+export interface FeedbackRegenerationResponse {
+  mode: FeedbackRegenerationMode;
+  message: string;
+  dataset?: GeneratedDataset;
+  savedDatasetId?: string;
+  validationResults: GenerationValidationResult[];
+  warnings: GenerationValidationResult[];
+  chatHistory: ChatRefinementMessage[];
+}
+
 export interface RefinementProviderRequest {
   projectId: string;
   schemaSnapshotId: string;

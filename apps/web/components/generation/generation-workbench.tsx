@@ -31,6 +31,15 @@ interface GenerationWorkbenchProps {
   schema?: ParsedSchema | null;
   plan: GenerationPlanResponse | null;
   planIsLoading?: boolean;
+  regenerationLifecycle?:
+    | "idle"
+    | "submitted"
+    | "in_progress"
+    | "accepted"
+    | "partial"
+    | "rejected"
+    | "cancelled"
+    | "failed";
   dataset: GeneratedDataset | null;
   validationResults?: GenerationValidationResult[];
   progress?: CollectionProgress[];
@@ -73,6 +82,7 @@ export function GenerationWorkbench({
   schema,
   plan,
   planIsLoading = false,
+  regenerationLifecycle = "idle",
   dataset,
   validationResults = [],
   progress = [],
@@ -111,6 +121,34 @@ export function GenerationWorkbench({
 }: GenerationWorkbenchProps) {
   const errorCount = validationResults.filter((result) => result.severity === "error").length;
   const datasetIsValid = Boolean(dataset && dataset.status === "valid" && errorCount === 0);
+  const lifecycleLabel =
+    regenerationLifecycle === "in_progress"
+      ? "Regeneration in progress"
+      : regenerationLifecycle === "submitted"
+        ? "Regeneration submitted"
+        : regenerationLifecycle === "accepted"
+          ? "Feedback accepted"
+          : regenerationLifecycle === "partial"
+            ? "Partial result"
+            : regenerationLifecycle === "rejected"
+              ? "Regeneration rejected"
+              : regenerationLifecycle === "cancelled"
+                ? "Regeneration cancelled"
+                : regenerationLifecycle === "failed"
+                  ? "Regeneration failed"
+                  : null;
+  const lifecycleSummary =
+    regenerationLifecycle === "accepted"
+      ? "Feedback was accepted and a schema-valid regenerated dataset replaced the preview."
+      : regenerationLifecycle === "partial"
+        ? "Feedback was partially applied. Some requested changes were skipped to preserve constraints."
+        : regenerationLifecycle === "rejected"
+          ? "Feedback was rejected to protect schema validity and reference integrity."
+          : regenerationLifecycle === "cancelled"
+            ? "Regeneration was cancelled. The last accepted dataset remains active."
+            : regenerationLifecycle === "failed"
+              ? "Regeneration failed. Adjust feedback and retry."
+              : null;
 
   return (
     <div className={cn("flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden", className)}>
@@ -185,6 +223,17 @@ export function GenerationWorkbench({
                     {errorCount} validation {errorCount === 1 ? "issue" : "issues"}
                   </span>
                 ) : null}
+                {lifecycleLabel ? (
+                  <span className="inline-flex items-center rounded-full border border-info-border bg-info-subtle px-2.5 py-1 text-[11px] font-medium text-info-text">
+                    {lifecycleLabel}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {lifecycleSummary ? (
+              <div className="rounded-md border border-info-border bg-info-subtle px-3 py-2 text-xs text-info-text">
+                {lifecycleSummary}
               </div>
             ) : null}
 
@@ -206,6 +255,7 @@ export function GenerationWorkbench({
 
             <CollectionDataTable
               dataset={dataset}
+              regenerationLifecycle={regenerationLifecycle}
               schema={schema}
               validationResults={validationResults}
               activeCollection={activeCollection}

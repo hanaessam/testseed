@@ -20,12 +20,11 @@ import {
   getGenerationPlan,
   getGenerationStreamUrl,
   getProjectDetail,
-  getRefinementStreamUrl,
   getSavedGeneratedDataset,
   listSavedGeneratedDatasets,
   parseSchema,
   patchSavedGeneratedDataset,
-  refineGeneratedDataset,
+  regenerateWithFeedback,
   saveManualEditDataset,
   startRepositoryContextAuthorization,
   testMongoConnection,
@@ -34,10 +33,6 @@ import {
 } from "@/src/lib/api-client";
 import { redirectToLogin } from "@/src/lib/auth-session";
 import { streamWorkbenchRequest } from "@/src/lib/generation-stream";
-import {
-  extractStreamingRefinementText,
-  resolveRefinementAssistantContent
-} from "@/src/lib/refinement-message";
 import type { CollectionProgress } from "@/src/lib/generation-workbench-state";
 import { getSessionStatus, getStoredSession } from "@/src/lib/session";
 import type {
@@ -73,6 +68,16 @@ const QUICK_PROMPT_CHIPS = [
   "Use university.edu emails",
   "Increase product price variance"
 ];
+
+type RegenerationLifecycleState =
+  | "idle"
+  | "submitted"
+  | "in_progress"
+  | "accepted"
+  | "partial"
+  | "rejected"
+  | "cancelled"
+  | "failed";
 
 export default function GeneratePage() {
   const router = useRouter();
@@ -131,6 +136,9 @@ export default function GeneratePage() {
   const [savedDatasets, setSavedDatasets] = useState<SavedGeneratedDatasetSummary[]>([]);
   const [isSavedDatasetsLoading, setIsSavedDatasetsLoading] = useState(false);
   const [activeSavedDatasetId, setActiveSavedDatasetId] = useState<string | null>(null);
+  const [lastAcceptedDataset, setLastAcceptedDataset] = useState<GeneratedDataset | null>(null);
+  const [regenerationLifecycle, setRegenerationLifecycle] =
+    useState<RegenerationLifecycleState>("idle");
   const [datasetBaselineFingerprint, setDatasetBaselineFingerprint] = useState<string | null>(null);
   const [editedCellKeys, setEditedCellKeys] = useState<Set<string>>(() => new Set());
   const [isSavingDataset, setIsSavingDataset] = useState(false);
@@ -335,8 +343,10 @@ export default function GeneratePage() {
       )
     );
     setGeneratedDataset(null);
+    setLastAcceptedDataset(null);
     setGenerationValidationResults([]);
     setGenerationMessage(null);
+    setRegenerationLifecycle("idle");
     setAgentMessages([]);
     setGenerationProgress([]);
     setActiveCollectionIdx(0);
@@ -432,12 +442,19 @@ export default function GeneratePage() {
     return controller;
   };
 
-  const syncDatasetState = (dataset: GeneratedDataset, savedDatasetId?: string) => {
+  const syncDatasetState = (
+    dataset: GeneratedDataset,
+    savedDatasetId?: string,
+    options: { setAsAccepted?: boolean } = {}
+  ) => {
     setGeneratedDataset(dataset);
     setGenerationValidationResults([...dataset.validationResults, ...dataset.warnings]);
     setActiveCollectionTab(dataset.generationOrder[0] ?? Object.keys(dataset.collections)[0] ?? "");
     setDatasetBaselineFingerprint(computeDatasetFingerprint(dataset));
     setEditedCellKeys(new Set());
+    if (options.setAsAccepted ?? true) {
+      setLastAcceptedDataset(dataset);
+    }
     if (savedDatasetId) {
       setActiveSavedDatasetId(savedDatasetId);
     }
@@ -622,6 +639,7 @@ export default function GeneratePage() {
       syncDatasetState(response.dataset, response.dataset.id);
       setGenerationProgress(buildCompleteProgress(response.dataset, response.dataset.collectionCounts));
       setGenerationMessage("Loaded a saved dataset preview.");
+      setRegenerationLifecycle("idle");
       setAgentMessages(buildAgentMessagesFromChatHistory(response.dataset.chatHistory ?? []));
       setExportOpen(false);
     } catch (loadError) {
@@ -1006,6 +1024,8 @@ export default function GeneratePage() {
     setGenerationMessage(null);
     setGenerationValidationResults([]);
     setGeneratedDataset(null);
+    setLastAcceptedDataset(null);
+    setRegenerationLifecycle("idle");
     setAgentMessages([]);
     setExportOpen(false);
     setGenerationProgress(buildInitialProgress(parsedSchema, collectionCounts));
@@ -1122,6 +1142,8 @@ export default function GeneratePage() {
           generateError instanceof Error ? generateError.message : "Could not generate seed data."
         );
       }
+      setLastAcceptedDataset(null);
+      setRegenerationLifecycle("idle");
     } finally {
       abortControllerRef.current = null;
       setIsGeneratingSeedData(false);
@@ -1130,20 +1152,35 @@ export default function GeneratePage() {
 
   const handleRefineGeneratedDataset = async (message: string) => {
     if (!token || !projectId || !generatedDataset) {
-      setGenerationMessage("Generate a valid dataset before using AI chat refinement.");
+      setGenerationMessage("Generate a valid dataset before submitting regeneration feedback.");
+      return;
+    }
+
+    if (isRefiningDataset) {
       return;
     }
 
     const trimmedMessage = message.trim();
     if (!trimmedMessage) {
+      setGenerationMessage("Feedback cannot be empty.");
+      return;
+    }
+
+    const acceptedDataset = lastAcceptedDataset;
+    if (!acceptedDataset) {
+      setGenerationMessage("Generate a valid dataset before submitting regeneration feedback.");
       return;
     }
 
     const userMessage = createAgentMessage("user", trimmedMessage);
     const assistantMessageId = createMessageId();
     const priorChatHistory = toChatHistoryPayload(agentMessages);
+    const schemaContext = parsedSchema
+      ? parsedSchema.collections.map((collection) => `${collection.name}(${collection.fields.length})`).join(", ")
+      : undefined;
 
     setIsRefiningDataset(true);
+    setRegenerationLifecycle("submitted");
     setGenerationMessage(null);
     setAgentMessages((currentMessages) => [
       ...currentMessages,
@@ -1158,182 +1195,60 @@ export default function GeneratePage() {
     ]);
 
     try {
-      if (STREAMING_ENABLED) {
-        const controller = startAbortableOperation();
-        let streamedAssistantText = "";
+      const controller = startAbortableOperation();
+      setRegenerationLifecycle("in_progress");
 
-        const fallbackResult = await streamWorkbenchRequest({
-          url: getRefinementStreamUrl(projectId),
-          token,
-          body: {
-            currentDataset: generatedDataset,
-            message: trimmedMessage,
-            chatHistory: priorChatHistory,
-            savedDatasetId: activeSavedDatasetId ?? undefined
-          },
-          signal: controller.signal,
-          fallback: () =>
-            refineGeneratedDataset(
-              projectId,
-              {
-                currentDataset: generatedDataset,
-                message: trimmedMessage,
-                chatHistory: priorChatHistory,
-                savedDatasetId: activeSavedDatasetId ?? undefined
-              },
-              token
-            ),
-          onEvent: (event) => {
-            if (event.type === "token") {
-              streamedAssistantText += event.payload.content;
-              const preview =
-                extractStreamingRefinementText(streamedAssistantText) ?? streamedAssistantText;
+      const result = await regenerateWithFeedback(
+        projectId,
+        {
+          acceptedDataset,
+          feedback: trimmedMessage,
+          chatHistory: priorChatHistory,
+          savedDatasetId: activeSavedDatasetId ?? undefined,
+          projectContext: projectContext?.description,
+          schemaContext,
+          collectionCounts: acceptedDataset.collectionCounts
+        },
+        token,
+        controller.signal
+      );
 
-              setAgentMessages((currentMessages) =>
-                currentMessages.map((currentMessage) =>
-                  currentMessage.id === assistantMessageId
-                    ? {
-                        ...currentMessage,
-                        content: preview,
-                        status: "streaming"
-                      }
-                    : currentMessage
-                )
-              );
-              return;
-            }
+      setAgentMessages(buildAgentMessagesFromChatHistory(result.chatHistory));
+      setGenerationValidationResults([...result.validationResults, ...result.warnings]);
 
-            if (event.type === "complete") {
-              const resolvedContent = resolveRefinementAssistantContent({
-                streamedText: streamedAssistantText,
-                guidance: event.payload.guidance,
-                message: event.payload.message
-              });
-
-              setAgentMessages((currentMessages) =>
-                currentMessages.map((currentMessage) =>
-                  currentMessage.id === assistantMessageId
-                    ? {
-                        ...currentMessage,
-                        content: resolvedContent,
-                        status: "complete"
-                      }
-                    : currentMessage
-                )
-              );
-
-              if (event.payload.dataset) {
-                syncDatasetState(event.payload.dataset, event.payload.savedDatasetId);
-              } else if (event.payload.savedDatasetId) {
-                setActiveSavedDatasetId(event.payload.savedDatasetId);
-              }
-
-              if (event.payload.chatHistory) {
-                setAgentMessages(buildAgentMessagesFromChatHistory(event.payload.chatHistory));
-              }
-
-              if (event.payload.message) {
-                setGenerationMessage(event.payload.message);
-              }
-              return;
-            }
-
-            if (event.type === "error") {
-              setAgentMessages((currentMessages) =>
-                currentMessages.map((currentMessage) =>
-                  currentMessage.id === assistantMessageId
-                    ? {
-                        ...currentMessage,
-                        content: event.payload.message,
-                        status: "error"
-                      }
-                    : currentMessage
-                )
-              );
-              if (event.payload.validationResults) {
-                setGenerationValidationResults(event.payload.validationResults);
-              }
-              setGenerationMessage(event.payload.message);
-              return;
-            }
-
-            if (event.type === "cancelled") {
-              setAgentMessages((currentMessages) =>
-                currentMessages.filter((currentMessage) => currentMessage.id !== assistantMessageId)
-              );
-            }
-          }
-        });
-
-        if (fallbackResult) {
-          setAgentMessages(buildAgentMessagesFromChatHistory(fallbackResult.chatHistory));
-          setGenerationValidationResults([
-            ...fallbackResult.validationResults,
-            ...fallbackResult.warnings
-          ]);
-          if (fallbackResult.dataset) {
-            syncDatasetState(fallbackResult.dataset, fallbackResult.savedDatasetId);
-          } else if (fallbackResult.savedDatasetId) {
-            setActiveSavedDatasetId(fallbackResult.savedDatasetId);
-          }
-          setGenerationMessage(fallbackResult.message);
-        }
-      } else {
-        const result = await refineGeneratedDataset(
-          projectId,
-          {
-            currentDataset: generatedDataset,
-            message: trimmedMessage,
-            chatHistory: priorChatHistory,
-            savedDatasetId: activeSavedDatasetId ?? undefined
-          },
-          token
-        );
-
-        setAgentMessages(buildAgentMessagesFromChatHistory(result.chatHistory));
-        setGenerationValidationResults([...result.validationResults, ...result.warnings]);
-        if (result.dataset) {
-          syncDatasetState(result.dataset, result.savedDatasetId);
-        } else if (result.savedDatasetId) {
-          setActiveSavedDatasetId(result.savedDatasetId);
-        }
-        setGenerationMessage(result.message);
+      if (result.mode === "accepted" && result.dataset) {
+        syncDatasetState(result.dataset, result.savedDatasetId, { setAsAccepted: true });
+      } else if (result.savedDatasetId) {
+        setActiveSavedDatasetId(result.savedDatasetId);
       }
+
+      setRegenerationLifecycle(result.mode);
+      setGenerationMessage(result.message);
 
       if (token && projectId) {
         await refreshSavedDatasets(projectId, token);
       }
     } catch (refineError) {
-      if (!isAbortError(refineError)) {
+      if (isAbortError(refineError)) {
+        setRegenerationLifecycle("cancelled");
+        setAgentMessages((currentMessages) =>
+          currentMessages.filter((currentMessage) => currentMessage.id !== assistantMessageId)
+        );
+        setGenerationMessage("Regeneration cancelled.");
+      } else {
         const errorMessage =
           refineError instanceof Error
             ? refineError.message
-            : "Could not refine the generated dataset.";
+            : "Could not regenerate the dataset from feedback.";
 
-        setAgentMessages((currentMessages) => {
-          const hasStreamingAssistant = currentMessages.some(
-            (message) => message.id === assistantMessageId
-          );
-
-          if (hasStreamingAssistant) {
-            return currentMessages.map((message) =>
-              message.id === assistantMessageId
-                ? { ...message, content: errorMessage, status: "error" as const }
-                : message
-            );
-          }
-
-          return [
-            ...currentMessages,
-            {
-              id: createMessageId(),
-              role: "assistant" as const,
-              content: errorMessage,
-              status: "error" as const,
-              createdAt: new Date().toISOString()
-            }
-          ];
-        });
+        setRegenerationLifecycle("failed");
+        setAgentMessages((currentMessages) =>
+          currentMessages.map((entry) =>
+            entry.id === assistantMessageId
+              ? { ...entry, content: errorMessage, status: "error" as const }
+              : entry
+          )
+        );
         setGenerationMessage(errorMessage);
       }
     } finally {
@@ -1453,8 +1368,10 @@ mongoose.model('Product', ProductSchema);`;
 
       if (countsChanged) {
         setGeneratedDataset(null);
+        setLastAcceptedDataset(null);
         setGenerationValidationResults([]);
         setGenerationProgress([]);
+        setRegenerationLifecycle("idle");
         setActiveSavedDatasetId(null);
         setAgentMessages([]);
         setExportOpen(false);
@@ -1598,6 +1515,7 @@ mongoose.model('Product', ProductSchema);`;
           schema={parsedSchema}
           plan={generationPlan}
           planIsLoading={isPlanLoading}
+          regenerationLifecycle={regenerationLifecycle}
           dataset={generatedDataset}
           validationResults={generationValidationResults}
           progress={generationProgress}

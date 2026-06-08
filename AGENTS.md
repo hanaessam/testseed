@@ -70,8 +70,8 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For the active Spec Kit feature, read:
 
-- `specs/007-preview-editing/spec.md`
-- `specs/007-preview-editing/plan.md`
+- `specs/008-feedback-based-regeneration/spec.md`
+- `specs/008-feedback-based-regeneration/plan.md`
 
 **Shipped (reference only):** `specs/006-generation-workbench/`, `specs/005-ai-seed-generation/`
 
