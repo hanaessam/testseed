@@ -24,6 +24,22 @@ export type {
   SchemaFileInput
 } from "./schema";
 export type {
+  ChatRefinementMessage,
+  GeneratedDataset,
+  GeneratedRecord,
+  GenerateSeedDataRequest,
+  GenerateSeedDataResponse,
+  GenerationProviderRequest,
+  GenerationProviderResponse,
+  GenerationStatus,
+  GenerationValidationResult,
+  RefineGeneratedDatasetRequest,
+  RefineGeneratedDatasetResponse,
+  RefinementMode,
+  RefinementProviderRequest,
+  RefinementProviderResponse
+} from "./generation";
+export type {
   CreateProjectRequest,
   CreateProjectResponse,
   DeleteProjectRequest,

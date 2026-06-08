@@ -16,6 +16,7 @@ import { createPasswordResetEmailSender } from "./email/password-reset-email";
 import { createRegistrationOtpEmailSender } from "./email/registration-otp-email";
 import { requireAuth } from "./middleware/auth";
 import { authErrorHandler, createAuthRouter } from "./routes/auth";
+import { createGenerationRouter } from "./routes/generation";
 import { createHistoryRouter } from "./routes/history";
 import { completeRepositoryContextCallback, createProjectsRouter } from "./routes/projects";
 import { createRollbackRouter } from "./routes/rollback";
@@ -159,6 +160,14 @@ app.use(
     githubCallbackUrl,
     webAppUrl,
     jwtSecret,
+    openaiApiKey
+  })
+);
+app.use(
+  "/projects",
+  createGenerationRouter({
+    projectRepository,
+    projectHistoryRepository,
     openaiApiKey
   })
 );
