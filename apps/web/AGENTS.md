@@ -24,11 +24,22 @@ If UI needs behavior, call the API. If API needs behavior, call core.
 Read [`docs/ui-design.md`](../../docs/ui-design.md) before changing layouts or styling.
 
 - Use semantic tokens (`bg-surface`, `border-border`, `text-muted`, `bg-accent`) — not raw Tailwind palette colors.
-- **Cards:** wrap page sections in `Card` / `CardHeader` / `CardContent`; avoid double borders on nested forms.
+- **Page sections:** mono label + title + `border-b border-border` before major blocks (metrics, browse lists, settings).
+- **Filter groups:** labeled bordered panels (`rounded-lg border border-border bg-surface`) for toolbar controls.
+- **Lists:** outer `border` + `divide-y` for rows; cards get individual `border border-border bg-surface shadow-sm`.
+- **Cards:** wrap subsections in `Card` / `CardHeader` / `CardContent`; avoid double borders on nested forms.
 - **Feedback:** use `Alert` for success, warning, and error messages; use `Skeleton` for loading states.
 - **Buttons:** primary actions use `Button` variant `primary` (borderless green); destructive actions use `secondary` with `text-error`.
-- **Navigation:** section tabs use accent tint when active (`bg-accent/10 text-accent`), not boxed tab borders.
+- **Navigation:** section tabs use accent tint when active (`bg-accent/10 text-accent`); in-app routes use `Link` or `router.push`, not `<a href>`.
+- **Clickable rows:** row/card opens detail; action buttons must `stopPropagation`.
 - **App shell:** do not add Account to sidebar nav; account is linked from the user pane in `app-shell.tsx`.
+
+## Theme
+
+- Redux Toolkit store: `apps/web/src/store/` — use `useAppSelector` / `useAppDispatch` from `src/store/hooks.ts`.
+- Do not read `localStorage` for theme outside `src/store/theme/`; dispatch `setThemeMode` instead.
+- New UI colors must use CSS variables in `globals.css` (light `:root` + dark `.dark`), not hardcoded `bg-amber-500` etc.
+- `AppProviders` wraps the tree in `app/layout.tsx`; pages do not need their own provider.
 
 ## Auth and Session
 
@@ -41,8 +52,9 @@ Read [`docs/ui-design.md`](../../docs/ui-design.md) before changing layouts or s
 
 | Page | Pattern |
 | --- | --- |
-| Dashboard / Projects list | `p-6`, header divider, metric cards, project cards with search/filter/sort |
-| Generate (current) | Wizard `Stepper`, one step per card, Skip on optional steps |
+| Dashboard | `p-6`, header divider, metric cards, recent projects list |
+| Projects | `PageSection` ×2 (overview + list); `FilterGroup` toolbar; Cards/List/Compact views; `testseed:projects-view` in `localStorage` |
+| Generate (current) | Wizard `Stepper`, one step per card, Skip on optional steps; Finish via `router.push` |
 | Generate (planned) | Three-pane workbench — see `specs/006-generation-workbench/` |
 | Project details | Horizontal tabs; schema tab is master-detail |
 | Account | Summary card + left section nav (Profile / Security / Danger zone) |

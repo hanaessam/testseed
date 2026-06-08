@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, type InputHTMLAttributes, useEffect, useMemo, useState } from "react";
 import { SessionNotice } from "@/components/auth/session-notice";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import type { SessionLoginReason } from "@/src/lib/auth-session.shared";
 import { consumeSessionExpiredFlag } from "@/src/lib/session";
 
@@ -120,7 +121,10 @@ export function AuthCard({ mode, loginReason = null }: AuthCardProps) {
   }
 
   return (
-    <div className="terminal-grid flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="terminal-grid relative flex min-h-screen items-center justify-center bg-background px-4 py-8">
+      <div className="absolute right-4 top-4 w-36 sm:right-6 sm:top-6">
+        <ThemeToggle compact />
+      </div>
       <Card className="w-full max-w-md animate-fade-in">
         <CardContent className="space-y-5 p-5">
           <div className="space-y-3">

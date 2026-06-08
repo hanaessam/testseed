@@ -1,3 +1,5 @@
+import { AppProviders } from "@/components/providers/app-providers";
+import { themeInitScript } from "@/src/store/theme/theme";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
@@ -20,9 +22,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${geistSans.variable} ${geistMono.variable} bg-background font-sans text-foreground`}>
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} bg-background font-sans text-foreground antialiased`}
+      >
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

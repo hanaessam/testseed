@@ -6,14 +6,15 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node init && next dev --port 3000",
+    "build": "node init && next build",
+    "start": "node init && next start",
     "lint": "next lint",
     "test": "next lint"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
+    "@reduxjs/toolkit": "^2.12.0",
     "@testseed/types": "*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -22,6 +23,7 @@
     "next-auth": "^4.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-redux": "^9.3.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7"
   },

@@ -55,9 +55,12 @@ The web UI uses the dark terminal-precision system documented in [`docs/ui-desig
 Current product surfaces follow these conventions:
 
 - **Shell:** `w-60` sidebar; nav is Dashboard, New project, Projects; account via clickable user pane; session expiry banner when needed.
-- **Tokens:** soft `--border` via `color-mix`; primary buttons are borderless accent fills.
-- **Flows:** generate wizard today (project → GitHub → schema → review → generate → refine); **planned** Generation Workbench (`specs/006-generation-workbench`, `docs/generation-ux-roadmap.md`); project details with tabbed Overview / Schema / History / Project settings; account settings with Profile / Security / Danger zone sections.
+- **Tokens:** light (`:root`) and dark (`.dark`) CSS variables in `globals.css`; soft `--border` via `color-mix`; semantic info/warning/danger tokens for alerts and badges.
+- **Theme:** Redux Toolkit (`apps/web/src/store/theme/`) with `light` | `dark` | `system` modes, `localStorage` persistence, and sidebar/auth toggles.
+- **Page composition:** mono-tagged sections (`PageSection` pattern), labeled filter groups, multi-view lists with `localStorage` view preference where applicable. Reference: projects page in `docs/ui-design.md`.
+- **Flows:** generate wizard today (project → GitHub → schema → review → generate → refine); finish uses client-side navigation to project detail; **planned** Generation Workbench (`specs/006-generation-workbench`, `docs/generation-ux-roadmap.md`); project details with tabbed Overview / Schema / History / Project settings; account settings with Profile / Security / Danger zone sections.
+- **Projects list:** Cards / List / Compact views; filters for lifecycle, schema readiness, sort, and search; clickable rows with isolated action buttons.
 - **Primitives:** `Card`, `Alert`, `Skeleton`, `Stepper`; messages and loading states use these instead of one-off bordered blocks.
 - **Auth:** `auth-session.shared.ts` for pure helpers; `auth-session.ts` client-only; API 401 clears session and notifies the shell.
 
-Future screens should reuse the same tokens, shadcn-style primitives, Geist typography, app shell, and API-client-only data access rule.
+Future screens should reuse the same tokens, shadcn-style primitives, Geist typography, app shell, page-section/filter-group patterns, and API-client-only data access rule.

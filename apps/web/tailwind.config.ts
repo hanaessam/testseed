@@ -19,7 +19,16 @@ const config: Config = {
         accent: "var(--accent)",
         "accent-foreground": "var(--accent-foreground)",
         error: "var(--error)",
-        success: "var(--success)"
+        success: "var(--success)",
+        "info-subtle": "var(--info-subtle)",
+        "info-border": "var(--info-border)",
+        "info-text": "var(--info-text)",
+        "warning-subtle": "var(--warning-subtle)",
+        "warning-border": "var(--warning-border)",
+        "warning-text": "var(--warning-text)",
+        "danger-subtle": "var(--danger-subtle)",
+        "danger-border": "var(--danger-border)",
+        "danger-text": "var(--danger-text)"
       },
       fontFamily: {
         sans: ["var(--font-geist-sans)"],
@@ -36,7 +45,8 @@ const config: Config = {
         }
       },
       boxShadow: {
-        focus: "0 0 0 1px var(--accent), 0 0 24px rgb(74 222 128 / 0.08)"
+        focus: "0 0 0 1px var(--accent), 0 0 24px var(--focus-ring)",
+        panel: "0 1px 2px var(--shadow-color)"
       }
     }
   },

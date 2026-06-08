@@ -29,6 +29,7 @@ import {
   requireStoredSession
 } from "@/src/lib/auth-session";
 import type {
+  CollectionSchema,
   ParsedSchema,
   Project,
   ProjectEvent,
@@ -601,7 +602,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Button>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="space-y-4">
                       {snapshot ? (
                         <>
                           <p className="text-sm text-muted">
@@ -609,19 +610,28 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
                             {fieldCount} fields · saved {formatDate(snapshot.createdAt)}
                           </p>
                           {snapshot.schema.collections.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {snapshot.schema.collections.slice(0, 6).map((collection) => (
-                                <span
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              {snapshot.schema.collections.slice(0, 6).map((collection, index) => (
+                                <SchemaCollectionOverviewCard
                                   key={collection.name}
-                                  className="rounded-md bg-background/60 px-2 py-1 font-mono text-xs text-foreground"
-                                >
-                                  {collection.name}
-                                </span>
+                                  collection={collection}
+                                  onClick={() => {
+                                    setActiveCollectionIdx(index);
+                                    setView("schema");
+                                  }}
+                                />
                               ))}
                               {snapshot.schema.collections.length > 6 ? (
-                                <span className="px-2 py-1 text-xs text-muted">
-                                  +{snapshot.schema.collections.length - 6} more
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setView("schema")}
+                                  className="flex min-h-[5.5rem] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-background/40 px-3 py-4 text-center transition-colors hover:border-accent/30 hover:bg-background/60"
+                                >
+                                  <p className="font-mono text-sm font-semibold text-accent">
+                                    +{snapshot.schema.collections.length - 6} more
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted">View all collections</p>
+                                </button>
                               ) : null}
                             </div>
                           ) : null}
@@ -1198,6 +1208,54 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="font-mono text-lg font-semibold text-foreground">{value}</p>
       <p className="mt-1 text-xs text-muted">{label}</p>
     </div>
+  );
+}
+
+function SchemaCollectionOverviewCard({
+  collection,
+  onClick
+}: {
+  collection: CollectionSchema;
+  onClick(): void;
+}) {
+  const requiredCount = collection.fields.filter((field) => field.required).length;
+  const referenceCount = collection.fields.filter((field) => field.ref).length;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[5.5rem] flex-col rounded-lg border border-border bg-surface px-3 py-3 text-left shadow-sm shadow-black/10 transition-colors hover:border-accent/30 hover:bg-background/40"
+    >
+      <div className="flex items-start gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent/10">
+          <Database className="h-4 w-4 text-accent" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-sm font-semibold text-foreground">{collection.name}</p>
+          <p className="mt-1 text-xs text-muted">
+            {collection.fields.length} field{collection.fields.length === 1 ? "" : "s"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+        {requiredCount > 0 ? (
+          <span className="rounded-md bg-background/60 px-2 py-0.5 text-[10px] text-muted">
+            {requiredCount} required
+          </span>
+        ) : null}
+        {referenceCount > 0 ? (
+          <span className="rounded-md bg-accent/10 px-2 py-0.5 text-[10px] text-accent">
+            {referenceCount} ref{referenceCount === 1 ? "" : "s"}
+          </span>
+        ) : null}
+        {collection.warnings?.length ? (
+          <span className="rounded-md border border-warning-border bg-warning-subtle px-2 py-0.5 text-[10px] text-warning-text">
+            {collection.warnings.length} warning{collection.warnings.length === 1 ? "" : "s"}
+          </span>
+        ) : null}
+      </div>
+    </button>
   );
 }
 

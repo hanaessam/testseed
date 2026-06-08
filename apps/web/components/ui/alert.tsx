@@ -15,10 +15,10 @@ export function Alert({
 }) {
   const toneClass = {
     neutral: "border-border bg-background/40 text-muted",
-    info: "border-indigo-500/30 bg-indigo-500/10 text-indigo-200",
+    info: "border-info-border bg-info-subtle text-info-text",
     success: "border-accent/30 bg-accent/10 text-accent",
-    warning: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-    danger: "border-error/30 bg-error/10 text-red-100"
+    warning: "border-warning-border bg-warning-subtle text-warning-text",
+    danger: "border-danger-border bg-danger-subtle text-danger-text"
   }[tone];
 
   return (
@@ -28,4 +28,3 @@ export function Alert({
     </div>
   );
 }
-

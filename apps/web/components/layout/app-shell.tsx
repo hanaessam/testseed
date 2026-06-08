@@ -3,6 +3,7 @@
 import { LogoutButton } from "@/components/auth/logout-button";
 import { SessionNotice } from "@/components/auth/session-notice";
 import { Wordmark } from "@/components/brand/wordmark";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   SESSION_EXPIRED_EVENT,
@@ -106,9 +107,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="border-t border-border p-2">
+          <div className="mb-2">
+            <ThemeToggle />
+          </div>
+
           {sessionIssue ? (
-            <div className="mb-2 rounded-lg bg-amber-500/10 px-2 py-2">
-              <p className="text-xs font-medium text-amber-200">
+            <div className="mb-2 rounded-lg border border-warning-border bg-warning-subtle px-2 py-2">
+              <p className="text-xs font-medium text-warning-text">
                 {sessionIssue === "session_expired" ? "Session expired" : "Sign in required"}
               </p>
               <Button asChild className="mt-2 h-8 w-full">
@@ -139,7 +144,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </p>
               <p
                 className={`truncate text-xs ${
-                  sessionIssue ? "text-amber-300/80" : "text-muted"
+                  sessionIssue ? "text-warning-text" : "text-muted"
                 }`}
               >
                 {expiry}
@@ -171,7 +176,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main className="ml-60 min-h-screen animate-fade-in">
         {sessionIssue ? (
-          <div className="border-b border-amber-500/20 bg-amber-500/10 px-6 py-4">
+          <div className="border-b border-warning-border bg-warning-subtle px-6 py-4">
             <SessionNotice reason={sessionIssue} />
           </div>
         ) : null}
