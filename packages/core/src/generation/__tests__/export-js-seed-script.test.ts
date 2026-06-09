@@ -96,34 +96,38 @@ describe("exportJsSeedScript", () => {
     expect(second.script).toBe(first.script);
   });
 
-  it("inserts parent collections before child collections according to dataset.generationOrder", () => {
-    const result = exportJsSeedScript({ schema, dataset: validDataset() });
+  it("inserts parent collections before child collections according to schema dependency order", () => {
+    const result = exportJsSeedScript({
+      schema,
+      dataset: validDataset({
+        generationOrder: ["orders", "users"]
+      })
+    });
 
     expect(result.script.indexOf('await db.collection("users").insertMany(users);')).toBeLessThan(
       result.script.indexOf('await db.collection("orders").insertMany(orders);')
     );
   });
 
-  it("returns orderedCollections matching exported dataset.generationOrder", () => {
-    const result = exportJsSeedScript({ schema, dataset: validDataset() });
+  it("returns orderedCollections matching validated dependency order", () => {
+    const result = exportJsSeedScript({
+      schema,
+      dataset: validDataset({
+        generationOrder: ["orders", "users"]
+      })
+    });
 
     expect(result.orderedCollections).toEqual(["users", "orders"]);
   });
 
-  it("rejects non-empty collections missing from dataset.generationOrder", () => {
+  it("does not require dataset.generationOrder when schema can determine dependency order", () => {
     const dataset = validDataset({
-      generationOrder: ["users"]
+      generationOrder: []
     });
 
-    try {
-      exportJsSeedScript({ schema, dataset });
-    } catch (error) {
-      expect(error).toBeInstanceOf(ExportJsSeedScriptError);
-      expect((error as ExportJsSeedScriptError).code).toBe("SCRIPT_EXPORT_DEPENDENCY_ORDER_UNSAFE");
-      return;
-    }
+    const result = exportJsSeedScript({ schema, dataset });
 
-    throw new Error("Expected export to reject unsafe dependency order.");
+    expect(result.orderedCollections).toEqual(["users", "orders"]);
   });
 
   it("blocks datasets with unresolved references", () => {

@@ -32,6 +32,9 @@ import { Check, Loader2, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 interface GenerationWorkbenchProps {
+  projectId?: string | null;
+  token?: string | null;
+  schemaSnapshotId?: string | null;
   context?: ProjectContext | null;
   schema?: ParsedSchema | null;
   plan: GenerationPlanResponse | null;
@@ -87,6 +90,9 @@ interface GenerationWorkbenchProps {
 }
 
 export function GenerationWorkbench({
+  projectId,
+  token,
+  schemaSnapshotId,
   context,
   schema,
   plan,
@@ -177,7 +183,11 @@ export function GenerationWorkbench({
       {showExport && onExportOpenChange ? (
         <div className="shrink-0">
           <ExportDrawer
+            projectId={projectId}
+            token={token}
+            schemaSnapshotId={schemaSnapshotId}
             dataset={dataset}
+            collectionCounts={collectionCounts}
             validationResults={validationResults}
             isOpen={exportOpen}
             onOpenChange={onExportOpenChange}

@@ -2,6 +2,8 @@ import {
   applyCellEditToDataset,
   buildGenerationPlan,
   CellEditRejectedError,
+  ExportJsSeedScriptError,
+  exportJsSeedScript,
   generateSeedData,
   generateSeedDataProgressive,
   getSavedGeneratedDataset,
@@ -24,6 +26,7 @@ import type {
   GeneratedDataset,
   GeneratedRecord,
   GenerationValidationResult,
+  JavaScriptSeedScriptResult,
   ParsedSchema,
   RefineGeneratedDatasetResponse,
   SavedGeneratedDatasetSource,
@@ -113,6 +116,12 @@ const datasetCellEditRequestSchema = z.object({
 const validateDatasetRequestSchema = z.object({
   schemaSnapshotId: z.string().min(1),
   collectionCounts: z.record(z.number().int().min(0)),
+  dataset: generatedDatasetSchema
+});
+
+const exportJavaScriptSeedScriptRequestSchema = z.object({
+  schemaSnapshotId: z.string().min(1),
+  collectionCounts: z.record(z.number().int().min(0)).optional(),
   dataset: generatedDatasetSchema
 });
 
@@ -315,6 +324,64 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           validationResults: dataset.validationResults,
           warnings: dataset.warnings
         });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/datasets/javascript-seed-script",
+    validateBody(exportJavaScriptSeedScriptRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before exporting a seed script." });
+          return;
+        }
+
+        if (request.body.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        if (request.body.dataset.projectId !== params.projectId) {
+          response.status(409).json({ message: "The dataset does not match the requested project." });
+          return;
+        }
+
+        try {
+          const result: JavaScriptSeedScriptResult = exportJsSeedScript({
+            schema: context.schemaSnapshot.schema,
+            dataset: request.body.dataset,
+            collectionCounts: request.body.collectionCounts
+          });
+
+          response.status(200).json(result);
+        } catch (error) {
+          if (error instanceof ExportJsSeedScriptError) {
+            response.status(422).json({
+              code: error.code,
+              message: error.message,
+              validationResults: error.validationResults
+            });
+            return;
+          }
+          throw error;
+        }
       } catch (error) {
         next(error);
       }
