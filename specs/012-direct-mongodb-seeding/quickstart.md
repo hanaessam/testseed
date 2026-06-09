@@ -14,6 +14,7 @@ Verify the core direct seeding use cases can test a MongoDB connection, produce 
    - Fake client connects.
    - Fake database responds to ping.
    - Result is `ok: true`.
+   - Result includes a non-secret `connectionTestToken` and `connectionFingerprint`.
    - Client `close()` is called.
    - Result does not contain the connection string.
 6. Build confirmation:
@@ -22,6 +23,7 @@ Verify the core direct seeding use cases can test a MongoDB connection, produce 
    - Summary includes per-collection counts and total count.
    - Summary includes the irreversible-without-rollback warning.
 7. Execute confirmed seeding:
+   - Request includes a matching `connectionTestToken` from a successful connection test.
    - Dataset validation passes before insert.
    - One UUID v4 seedBatchId is generated.
    - Parent collection inserts before dependent collection.
@@ -41,13 +43,21 @@ Verify the core direct seeding use cases can test a MongoDB connection, produce 
 2. Missing confirmation:
    - Request seeding without explicit confirmation.
    - No client is created and no insert is attempted.
-3. Invalid dataset:
+3. Missing or mismatched connection test token:
+   - Request seeding without a successful connection test token or with a token for a different connection string.
+   - No client is created and no insert is attempted.
+4. Invalid dataset:
    - Provide unresolved references or other validation errors.
    - Seeding is rejected before any insert.
-4. Unsafe generation order:
+5. Unsafe generation order:
    - Omit a non-empty collection from `dataset.generationOrder`.
    - Seeding is rejected before any insert.
-5. Partial failure:
+6. Native-driver adapter:
+   - Mock the MongoDB native driver.
+   - Confirm adapter creates `MongoClient` with timeout options.
+   - Confirm adapter delegates ping through `db.command({ ping: 1 })`.
+   - Confirm adapter delegates inserts through `collection(name).insertMany(records)`.
+7. Partial failure:
    - Fake one collection insert succeeds and the next fails.
    - Report includes successful and failed collections.
    - Report includes inserted counts and sanitized error summary.

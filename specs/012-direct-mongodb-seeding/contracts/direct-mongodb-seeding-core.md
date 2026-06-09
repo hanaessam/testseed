@@ -20,6 +20,7 @@ Core may import:
 - `@testseed/types`
 - local core generation helpers
 - Node built-ins such as `crypto`
+- `mongodb` only inside the concrete native-driver adapter file
 
 Core must not import:
 
@@ -31,6 +32,18 @@ Core must not import:
 - Mongoose
 
 Production MongoDB native-driver objects should be adapted to the minimal interfaces below.
+
+## Concrete Native-Driver Adapter
+
+`packages/core/src/generation/direct-mongodb-native-driver.ts` must provide the production adapter from MongoDB native-driver `MongoClient` to the minimal core interfaces.
+
+Behavior:
+
+- Creates `MongoClient` with timeout options derived from the 5-10 second operation timeout.
+- Uses `client.db(databaseName).command({ ping: 1 })` for connection tests.
+- Uses `db.collection(name).insertMany(records)` for seeding.
+- Closes clients through the shared core orchestration `finally` paths.
+- Does not log, store, or return connection strings.
 
 ## Minimal Mongo Interfaces
 
@@ -70,6 +83,7 @@ Behavior:
 - Requires a non-empty connection string.
 - Creates a client with a 5-10 second timeout.
 - Connects, runs `{ ping: 1 }`, and returns `ok: true` with database name when successful.
+- Returns a non-secret `connectionTestToken` and `connectionFingerprint` when successful.
 - Returns `ok: false` with a sanitized error summary when connection or ping fails.
 - Always closes the client when it was created.
 - Never stores, logs, or returns the connection string.
@@ -102,6 +116,7 @@ seedMongoDataset(
 Behavior:
 
 - Requires explicit confirmation.
+- Requires a successful connection test token/fingerprint matching the active connection string.
 - Validates the dataset with `validateGeneratedDataset`.
 - Rejects empty or invalid datasets before connecting or inserting.
 - Generates one UUID v4 `seedBatchId` per operation.
@@ -118,6 +133,7 @@ Recommended direct seeding error codes:
 
 - `DIRECT_SEED_CONNECTION_STRING_REQUIRED`
 - `DIRECT_SEED_CONNECTION_FAILED`
+- `DIRECT_SEED_CONNECTION_TEST_REQUIRED`
 - `DIRECT_SEED_CONFIRMATION_REQUIRED`
 - `DIRECT_SEED_DATASET_EMPTY`
 - `DIRECT_SEED_VALIDATION_FAILED`
@@ -128,6 +144,7 @@ Recommended direct seeding error codes:
 Returned reports and errors may include:
 
 - seedBatchId
+- connectionTestToken only as a short-lived success proof for the active operation
 - targetDatabaseName
 - collection names
 - inserted counts

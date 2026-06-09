@@ -23,6 +23,8 @@ Fields:
 
 - `ok`: boolean success indicator.
 - `databaseName`: target database name when available.
+- `connectionTestToken`: non-secret token proving this exact active connection string passed the test, returned only on success.
+- `connectionFingerprint`: non-secret one-way fingerprint used to compare the tested connection string with the seeding request without storing the string.
 - `message`: safe developer-facing status.
 - `errorSummary`: sanitized failure summary when the test fails.
 
@@ -30,6 +32,7 @@ Validation rules:
 
 - Must not include the connection string.
 - Failure result keeps direct seeding unavailable.
+- Successful result provides a connection test token/fingerprint that expires or is scoped to the active operation.
 
 ## DirectSeedingConfirmationSummary
 
@@ -60,11 +63,13 @@ Fields:
 - `dataset`: generated dataset to insert.
 - `targetDatabaseName`: expected target database name or resolved connection database name.
 - `confirmed`: explicit confirmation flag/action.
+- `connectionTestToken`: token from a successful connection test for the same active connection string.
 - `timeoutMs`: optional connection timeout.
 
 Validation rules:
 
 - `confirmed` must be true before insertion begins.
+- `connectionTestToken` must be present and must match the active connection string fingerprint before insertion begins.
 - Dataset validation must succeed before insertion begins.
 - Dataset must include at least one record.
 - `dataset.generationOrder` must include every non-empty collection.
@@ -133,6 +138,7 @@ Error categories:
 
 - Missing or invalid connection string.
 - Connection test failed or timed out.
+- Missing or mismatched successful connection test token.
 - Confirmation missing.
 - Dataset empty.
 - Dataset validation failed.
