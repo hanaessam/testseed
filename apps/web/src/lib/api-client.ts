@@ -44,6 +44,8 @@ import type {
   FeedbackRegenerationRequest,
   FeedbackRegenerationResponse,
   GenerationPlanResponse,
+  JavaScriptSeedScriptRequest,
+  JavaScriptSeedScriptResult,
   RefineGeneratedDatasetRequest,
   RefineGeneratedDatasetResponse,
   ListSavedGeneratedDatasetsResponse,
@@ -499,6 +501,18 @@ export async function validateProjectDataset(
 ): Promise<ValidateDatasetResponse> {
   return postJson<ValidateDatasetRequest, ValidateDatasetResponse>(
     `/projects/${encodeURIComponent(projectId)}/datasets/validate`,
+    request,
+    token
+  );
+}
+
+export async function exportJavaScriptSeedScript(
+  projectId: string,
+  request: Omit<JavaScriptSeedScriptRequest, "schema"> & { schemaSnapshotId: string },
+  token: string
+): Promise<JavaScriptSeedScriptResult> {
+  return postJson<typeof request, JavaScriptSeedScriptResult>(
+    `/projects/${encodeURIComponent(projectId)}/datasets/javascript-seed-script`,
     request,
     token
   );

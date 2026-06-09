@@ -7,6 +7,7 @@ import type {
   ParsedSchema,
   SchemaField
 } from "@testseed/types";
+import { buildGenerationPlan } from "./build-generation-plan";
 import { validateGeneratedDataset } from "./validate-generated-dataset";
 
 export class ExportJsSeedScriptError extends Error implements JavaScriptSeedScriptErrorDetails {
@@ -26,9 +27,8 @@ export function exportJsSeedScript(
   input: JavaScriptSeedScriptRequest
 ): JavaScriptSeedScriptResult {
   const collectionCounts = input.collectionCounts ?? input.dataset.collectionCounts;
-  const orderedCollections = resolveOrderedCollections(input.dataset);
 
-  if (orderedCollections.length === 0) {
+  if (!hasRecords(input.dataset)) {
     throw new ExportJsSeedScriptError({
       code: "SCRIPT_EXPORT_DATASET_EMPTY",
       message: "Cannot export a JavaScript seed script because the dataset contains no records."
@@ -55,6 +55,8 @@ export function exportJsSeedScript(
     });
   }
 
+  const orderedCollections = resolveOrderedCollections(input.schema, input.dataset, collectionCounts);
+
   return {
     script: renderScript(input.schema, input.dataset.collections, orderedCollections),
     orderedCollections,
@@ -62,17 +64,20 @@ export function exportJsSeedScript(
   };
 }
 
-function resolveOrderedCollections(dataset: JavaScriptSeedScriptRequest["dataset"]): string[] {
+function hasRecords(dataset: JavaScriptSeedScriptRequest["dataset"]): boolean {
+  return Object.values(dataset.collections).some((records) => records.length > 0);
+}
+
+function resolveOrderedCollections(
+  schema: ParsedSchema,
+  dataset: JavaScriptSeedScriptRequest["dataset"],
+  collectionCounts: Record<string, number>
+): string[] {
   const nonEmptyCollectionNames = Object.keys(dataset.collections).filter(
     (collectionName) => (dataset.collections[collectionName] ?? []).length > 0
   );
-
-  if (nonEmptyCollectionNames.length === 0) {
-    return [];
-  }
-
-  const generationOrder = dataset.generationOrder ?? [];
-  const orderedCollections = generationOrder.filter(
+  const dependencyOrder = buildGenerationPlan(schema, collectionCounts).dependencyGraph.orderedCollections;
+  const orderedCollections = dependencyOrder.filter(
     (collectionName) => (dataset.collections[collectionName] ?? []).length > 0
   );
   const orderedSet = new Set(orderedCollections);
