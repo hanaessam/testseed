@@ -68,8 +68,11 @@ OPENAI_API_KEY=
 MONGODB_URI=
 JWT_SECRET=
 NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_GENERATION_WORKBENCH_EXPORT=true
 WEB_APP_URL=http://localhost:3000
 ```
+
+The web app reads `NEXT_PUBLIC_*` values from the project-root `.env` through its Next.js config, so local feature flags such as generation workbench export should live in the root `.env`, not under `apps/web/.env.local`.
 
 Required for email verification, password reset, and account email-change codes:
 
