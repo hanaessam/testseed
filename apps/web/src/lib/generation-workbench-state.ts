@@ -1,4 +1,5 @@
 import type {
+  CandidateReview,
   ChatRefinementMessage,
   GeneratedDataset,
   GenerationPlanResponse,
@@ -23,6 +24,16 @@ export interface CollectionProgress {
   status: CollectionProgressStatus;
   recordCount: number;
   rowsReceived: number;
+}
+
+export interface PendingRegenerationCandidate {
+  dataset: GeneratedDataset;
+  message: string;
+  savedDatasetId?: string;
+  validationResults: GenerationValidationResult[];
+  warnings: GenerationValidationResult[];
+  chatHistory: ChatRefinementMessage[];
+  candidateReview?: CandidateReview;
 }
 
 export interface ContextSourcesView {
@@ -70,6 +81,7 @@ export interface GenerationWorkbenchSession {
   plan: GenerationPlanView | null;
   planRiskAcknowledged: boolean;
   dataset: GeneratedDataset | null;
+  pendingCandidate: PendingRegenerationCandidate | null;
   validationResults: GenerationValidationResult[];
   chatHistory: AgentDockMessage[];
   refinementStatus: RefinementStatus;

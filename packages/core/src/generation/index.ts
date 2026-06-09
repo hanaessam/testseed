@@ -32,6 +32,13 @@ export {
   type ValidateGeneratedDatasetInput
 } from "./validate-generated-dataset";
 export {
+  buildCandidateChangeSummary,
+  canAcceptCandidate,
+  hasFixableRetryProblem,
+  resolveCandidateReviewState,
+  type BuildCandidateChangeSummaryInput
+} from "./review-feedback-candidate";
+export {
   applyCellEditToDataset,
   CellEditRejectedError,
   type ApplyCellEditToDatasetInput,
