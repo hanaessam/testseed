@@ -68,16 +68,7 @@ npx turbo build lint test
 ```
 
 <!-- SPECKIT START -->
-For the active Spec Kit feature, read:
-
-- `specs/011-export-js-seed-script/spec.md`
-- `specs/011-export-js-seed-script/plan.md`
-
-**Core-only:** implement JavaScript seed script export in `packages/core`; do not add web UI, direct seeding, rollback, JSON export, feedback regeneration, or preview editing scope.
-
-**Shipped (reference only):** `specs/005-ai-seed-generation/`, `specs/006-generation-workbench/`, `specs/007-preview-editing/`
-
-Roadmap: `docs/generation-ux-roadmap.md` · Requirements: `docs/requirements.md`
-
-AI tooling inventory (MCPs, skills, Spec Kit, Superpowers): `docs/ai-assisted-tooling.md` — update when tooling changes.
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+at specs/012-direct-mongodb-seeding/plan.md
 <!-- SPECKIT END -->
