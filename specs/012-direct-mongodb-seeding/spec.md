@@ -12,7 +12,7 @@
 
 ### Session 2026-06-09
 
-- Q: Which remaining direct seeding assumptions should be used before planning? -> A: Use MongoDB native driver ping with a 5-10 second timeout, generate confirmation data from dataset and generationOrder, require validation before seeding, assign a UUID v4 seedBatchId per operation while preserving existing fields, process collections sequentially, return structured partial-failure reports, preserve rollback metadata, close all clients, and keep connection strings out of storage, logs, analytics, and responses.
+- Q: Which remaining direct seeding assumptions should be used before planning? -> A: Use MongoDB native driver ping with a 5-10 second timeout, generate confirmation data from dataset and generationOrder, require validation before seeding, require a matching successful connection test token before seeding, assign a UUID v4 seedBatchId per operation while preserving existing fields, process collections sequentially, return structured partial-failure reports, preserve rollback metadata, close all clients, and keep connection strings out of storage, logs, analytics, and responses.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -28,7 +28,7 @@ As a developer preparing to insert generated records, I can test a MongoDB conne
 
 1. **Given** a developer provides a working MongoDB connection string, **When** they test the connection, **Then** the system reports success without storing the connection string.
 2. **Given** a developer provides an invalid or unreachable connection string, **When** they test the connection, **Then** the system reports failure and direct seeding remains disabled.
-3. **Given** a connection test has failed, **When** the developer provides a later working connection string and tests again, **Then** direct seeding becomes available for that working connection only.
+3. **Given** a connection test has failed, **When** the developer provides a later working connection string and tests again, **Then** direct seeding becomes available only for that working connection and its matching successful connection test token.
 4. **Given** a connection string is tested, **When** the test completes, **Then** the database client is closed and the connection string is absent from stored data, logs, analytics, and responses.
 
 ---
@@ -69,6 +69,7 @@ As a developer, I want every inserted record tagged with the same seedBatchId an
 
 - If a connection string is empty, malformed, unauthorized, points to an unavailable host, or times out, the system reports failure and does not enable direct seeding.
 - If a previously successful connection is replaced with a different connection string, direct seeding requires that new connection string to pass testing before insertion.
+- If a seeding request lacks a successful connection test token, or the token does not match the active connection string, direct seeding does not begin.
 - If connection testing exceeds the configured short timeout, the system reports failure and closes the database client.
 - If generated records are empty or a requested collection has zero records, the confirmation and report must represent the counts accurately.
 - If the dataset includes multiple collections, insertion order follows the dataset's generation order so dependent records are inserted after their dependencies.
@@ -86,7 +87,7 @@ As a developer, I want every inserted record tagged with the same seedBatchId an
 - **FR-002**: The system MUST test connectivity using a database ping and a short timeout between 5 and 10 seconds.
 - **FR-003**: The system MUST use a connection string only for the active connection test or direct seeding operation.
 - **FR-004**: The system MUST NOT store connection strings in database records, project history, saved runs, saved datasets, logs, analytics, or responses.
-- **FR-005**: Direct seeding MUST remain unavailable until the developer provides a connection string that passes connection testing.
+- **FR-005**: Direct seeding MUST remain unavailable until the developer provides a connection string that passes connection testing and supplies a matching successful connection test token for the active seeding request.
 - **FR-006**: Before insertion begins, the system MUST present a confirmation summary generated from the dataset and generationOrder that includes the target database name, target collections, per-collection record counts, total record count, and a warning that insertion is irreversible without rollback.
 - **FR-007**: The system MUST require explicit confirmation before insertion begins.
 - **FR-008**: If the developer cancels before explicit confirmation, the system MUST NOT insert any records.
@@ -101,12 +102,12 @@ As a developer, I want every inserted record tagged with the same seedBatchId an
 - **FR-017**: The system MUST close database client connections after connection tests and after direct seeding operations, including success, failure, and cancellation paths.
 - **FR-018**: This feature MUST be limited to the core seeding capability and MUST NOT add rollback implementation, JSON export changes, JavaScript export changes, feedback regeneration changes, project history persistence of connection strings, or UI redesign.
 - **FR-019**: Direct seeding MUST use the MongoDB native driver for connection tests and insert operations in this epic.
-- **FR-020**: Direct seeding status and confirmation behavior MUST be representable without storing connection strings.
+- **FR-020**: Direct seeding status, connection test proof, and confirmation behavior MUST be representable without storing connection strings.
 
 ### Key Entities
 
 - **Direct Seeding Request**: The developer's active operation containing a transient connection string, generated dataset, target database, and explicit confirmation state.
-- **Connection Test Result**: A success or failure result that determines whether direct seeding can proceed for the active connection string.
+- **Connection Test Result**: A success or failure result that determines whether direct seeding can proceed for the active connection string, including a non-secret success token/fingerprint when the test passes.
 - **Confirmation Summary**: The pre-insertion review generated from the dataset and generationOrder showing target database name, target collections, per-collection record counts, total record count, and the irreversible-without-rollback warning.
 - **Seed Batch**: One confirmed insertion operation identified by a single UUID v4 seedBatchId shared by all inserted records.
 - **Insertion Report**: The structured operation result containing seedBatchId, successful collections, failed collections, per-collection inserted counts, error summaries, and rollback-support metadata.
@@ -116,7 +117,7 @@ As a developer, I want every inserted record tagged with the same seedBatchId an
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% of direct seeding attempts are blocked until a successful connection test exists for the active connection string.
+- **SC-001**: 100% of direct seeding attempts are blocked until a successful connection test token exists and matches the active connection string.
 - **SC-002**: 100% of cancelled confirmation flows insert zero records.
 - **SC-003**: 100% of confirmed successful seeding operations tag every inserted record with one shared seedBatchId.
 - **SC-004**: 100% of insertion reports include seedBatchId and per-collection counts.
@@ -131,6 +132,7 @@ As a developer, I want every inserted record tagged with the same seedBatchId an
 
 - The developer already has a generated dataset ready for insertion.
 - The active connection string is supplied by the developer at operation time and is not reused unless supplied again.
+- Successful connection test tokens are non-secret, short-lived operation proofs and do not contain the connection string.
 - The target database name is derived from the active connection context and shown before insertion.
 - The generated dataset includes generationOrder that represents safe insertion order.
 - seedBatchId values are generated with UUID v4 semantics per confirmed seeding operation and are safe to include in inserted records and reports.
