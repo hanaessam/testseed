@@ -32,6 +32,10 @@ export {
   type ValidateGeneratedDatasetInput
 } from "./validate-generated-dataset";
 export {
+  exportJsSeedScript,
+  ExportJsSeedScriptError
+} from "./export-js-seed-script";
+export {
   buildCandidateChangeSummary,
   canAcceptCandidate,
   hasFixableRetryProblem,
