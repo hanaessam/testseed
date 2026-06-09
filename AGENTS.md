@@ -70,12 +70,12 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For the active Spec Kit feature, read:
 
-- `specs/010-export-json/spec.md`
-- `specs/010-export-json/plan.md`
+- `specs/011-export-js-seed-script/spec.md`
+- `specs/011-export-js-seed-script/plan.md`
 
-**Verification-only:** JSON export is already implemented; do not modify export behavior unless a real gap is found.
+**Core-only:** implement JavaScript seed script export in `packages/core`; do not add web UI, direct seeding, rollback, JSON export, feedback regeneration, or preview editing scope.
 
-**Shipped (reference only):** `specs/006-generation-workbench/`, `specs/007-preview-editing/`, `specs/009-review-regeneration/`
+**Shipped (reference only):** `specs/005-ai-seed-generation/`, `specs/006-generation-workbench/`, `specs/007-preview-editing/`
 
 Roadmap: `docs/generation-ux-roadmap.md` · Requirements: `docs/requirements.md`
 

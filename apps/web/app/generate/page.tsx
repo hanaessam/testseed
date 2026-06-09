@@ -1603,6 +1603,9 @@ mongoose.model('Product', ProductSchema);`;
 
         <GenerationWorkbench
           className="min-h-0 flex-1"
+          projectId={projectId}
+          token={token}
+          schemaSnapshotId={schemaSnapshot?.id ?? null}
           context={projectContext}
           schema={parsedSchema}
           plan={generationPlan}

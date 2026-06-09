@@ -31,6 +31,30 @@ export interface GeneratedDataset {
   createdAt: string;
 }
 
+export interface JavaScriptSeedScriptRequest {
+  schema: ParsedSchema;
+  dataset: GeneratedDataset;
+  collectionCounts?: Record<string, number>;
+}
+
+export type JavaScriptSeedScriptErrorCode =
+  | "SCRIPT_EXPORT_DATASET_EMPTY"
+  | "SCRIPT_EXPORT_VALIDATION_FAILED"
+  | "SCRIPT_EXPORT_UNRESOLVED_REFERENCE"
+  | "SCRIPT_EXPORT_DEPENDENCY_ORDER_UNSAFE";
+
+export interface JavaScriptSeedScriptErrorDetails {
+  code: JavaScriptSeedScriptErrorCode;
+  message: string;
+  validationResults?: GenerationValidationResult[];
+}
+
+export interface JavaScriptSeedScriptResult {
+  script: string;
+  orderedCollections: string[];
+  warnings: GenerationValidationResult[];
+}
+
 export interface GenerateSeedDataRequest {
   collectionCounts: Record<string, number>;
 }
