@@ -70,12 +70,12 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For the active Spec Kit feature, read:
 
-- `specs/009-review-regeneration/spec.md`
-- `specs/009-review-regeneration/plan.md`
+- `specs/010-export-json/spec.md`
+- `specs/010-export-json/plan.md`
 
-**Builds on:** `specs/008-feedback-based-regeneration/`
+**Verification-only:** JSON export is already implemented; do not modify export behavior unless a real gap is found.
 
-**Shipped (reference only):** `specs/006-generation-workbench/`, `specs/005-ai-seed-generation/`
+**Shipped (reference only):** `specs/006-generation-workbench/`, `specs/007-preview-editing/`, `specs/009-review-regeneration/`
 
 Roadmap: `docs/generation-ux-roadmap.md` · Requirements: `docs/requirements.md`
 
