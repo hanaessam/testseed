@@ -117,7 +117,8 @@ const validateDatasetRequestSchema = z.object({
 });
 
 const patchSavedGeneratedDatasetRequestSchema = z.object({
-  dataset: generatedDatasetSchema
+  dataset: generatedDatasetSchema,
+  chatHistory: z.array(chatMessageSchema).optional()
 });
 
 const saveManualEditDatasetRequestSchema = z.object({
@@ -335,7 +336,7 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
         }
 
         try {
-          const dataset = await updateSavedGeneratedDataset(
+          let dataset = await updateSavedGeneratedDataset(
             {
               projectId: params.projectId,
               datasetId: params.datasetId,
@@ -348,6 +349,22 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
               updateGeneratedDatasetRecord: deps.generatedDatasetRepository.updateGeneratedDatasetRecord
             }
           );
+
+          if (request.body.chatHistory?.length) {
+            dataset = await updateSavedGeneratedDatasetChatHistory(
+              {
+                projectId: params.projectId,
+                datasetId: params.datasetId,
+                ownerId: authenticatedRequest.auth.userId,
+                chatHistory: request.body.chatHistory
+              },
+              {
+                findProjectById: deps.projectRepository.findProjectById,
+                updateGeneratedDatasetChatHistory:
+                  deps.generatedDatasetRepository.updateGeneratedDatasetChatHistory
+              }
+            );
+          }
 
           response.status(200).json({ dataset });
         } catch (error) {
@@ -599,7 +616,7 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           kind: "chat_message",
           message:
             result.mode === "accepted"
-              ? "Feedback regeneration accepted a new dataset."
+              ? "Feedback regeneration produced a candidate for review."
               : "Feedback regeneration returned a non-accepted outcome.",
           payload: { mode: result.mode },
           createdAt: new Date()
@@ -942,15 +959,7 @@ async function persistFeedbackRegenerationOutcome(
   activeSavedDatasetId?: string
 ): Promise<string | undefined> {
   if (result.mode === "accepted" && result.dataset?.status === "valid") {
-    const savedDataset = await persistValidDataset(
-      deps,
-      projectId,
-      ownerId,
-      result.dataset,
-      "refinement",
-      result.chatHistory
-    );
-    return savedDataset.id;
+    return undefined;
   }
 
   if (activeSavedDatasetId && result.chatHistory.length > 0) {

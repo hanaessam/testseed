@@ -21,6 +21,11 @@ interface AgentDockProps {
   dataset: GeneratedDataset | null;
   messages: AgentDockMessage[];
   isSubmitting?: boolean;
+  disabledReason?: string;
+  candidateReviewSummary?: {
+    appliedFeedbackSummary?: string;
+    skippedFeedbackSummary?: string;
+  };
   placeholder?: string;
   quickPromptChips?: string[];
   onSubmit(message: string): void;
@@ -139,6 +144,8 @@ export function AgentDock({
   dataset,
   messages,
   isSubmitting = false,
+  disabledReason,
+  candidateReviewSummary,
   placeholder = "Describe how the accepted dataset should change...",
   quickPromptChips,
   onSubmit,
@@ -146,7 +153,7 @@ export function AgentDock({
 }: AgentDockProps) {
   const [draft, setDraft] = useState("");
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
-  const disabled = !dataset || isSubmitting;
+  const disabled = !dataset || isSubmitting || Boolean(disabledReason);
 
   useEffect(() => {
     scrollAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -178,6 +185,22 @@ export function AgentDock({
         {!dataset ? (
           <Alert tone="info" title="Dataset required" className="shrink-0">
             Generate a dataset before submitting regeneration feedback.
+          </Alert>
+        ) : null}
+
+        {dataset && disabledReason ? (
+          <Alert tone="info" title="Review pending" className="shrink-0">
+            <span className="block">{disabledReason}</span>
+            {candidateReviewSummary?.appliedFeedbackSummary ? (
+              <span className="mt-1 block">
+                Applied: {candidateReviewSummary.appliedFeedbackSummary}
+              </span>
+            ) : null}
+            {candidateReviewSummary?.skippedFeedbackSummary ? (
+              <span className="mt-1 block">
+                Skipped: {candidateReviewSummary.skippedFeedbackSummary}
+              </span>
+            ) : null}
           </Alert>
         ) : null}
 

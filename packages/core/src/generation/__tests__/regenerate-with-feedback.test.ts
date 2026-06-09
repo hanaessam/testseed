@@ -48,6 +48,8 @@ describe("regenerateWithFeedback", () => {
 
     expect(result.mode).toBe("accepted");
     expect(result.dataset?.collections.User[0].email).toBe("maya@university.edu");
+    expect(result.candidateReview?.state).toBe("pending_review");
+    expect(result.candidateReview?.changeSummary?.collectionsChanged).toEqual(["User"]);
   });
 
   it("maps guidance responses to partial outcomes", async () => {
@@ -127,6 +129,51 @@ describe("regenerateWithFeedback", () => {
     expect(result.validationResults).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "UNIQUE_VALUE_DUPLICATE" })])
     );
+    expect(result.candidateReview?.state).toBe("awaiting_revised_feedback");
+    expect(result.candidateReview?.retryAttempt).toBe(1);
+  });
+
+  it("retries once for duplicate unique values and returns the retried candidate", async () => {
+    const refineRecords = jest
+      .fn()
+      .mockResolvedValueOnce({
+        mode: "updated_dataset",
+        message: "First attempt duplicated email values.",
+        collections: {
+          User: [
+            { _id: "665f1a000000000000000001", email: "dup@example.com" },
+            { _id: "665f1a000000000000000002", email: "dup@example.com" }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({
+        mode: "updated_dataset",
+        message: "Retry fixed duplicate values.",
+        collections: {
+          User: [
+            { _id: "665f1a000000000000000001", email: "maya@university.edu" },
+            { _id: "665f1a000000000000000002", email: "hana@university.edu" }
+          ]
+        }
+      });
+
+    const result = await regenerateWithFeedback(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema,
+        acceptedDataset,
+        feedback: "Use university domains",
+        collectionCounts: { User: 2 }
+      },
+      { refineRecords }
+    );
+
+    expect(refineRecords).toHaveBeenCalledTimes(2);
+    expect(result.mode).toBe("accepted");
+    expect(result.dataset?.collections.User).toHaveLength(2);
+    expect(result.candidateReview?.retryAttempt).toBe(1);
   });
 
   it("returns plain-language partial summary for guidance outcomes", async () => {

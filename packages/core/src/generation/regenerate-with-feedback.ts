@@ -3,6 +3,7 @@ import type {
   FeedbackRegenerationMode,
   FeedbackRegenerationResponse,
   GeneratedDataset,
+  GenerationValidationResult,
   ParsedSchema,
   ProjectContext
 } from "@testseed/types";
@@ -10,6 +11,11 @@ import {
   refineGeneratedDataset,
   type RefineGeneratedDatasetDeps
 } from "./refine-generated-dataset";
+import {
+  buildCandidateChangeSummary,
+  hasFixableRetryProblem,
+  resolveCandidateReviewState
+} from "./review-feedback-candidate";
 
 export interface RegenerateWithFeedbackInput {
   projectId: string;
@@ -53,6 +59,10 @@ export async function regenerateWithFeedback(
   }
 
   try {
+    const currentDataset = {
+      ...input.acceptedDataset,
+      collectionCounts: input.collectionCounts ?? input.acceptedDataset.collectionCounts
+    };
     const refined = await refineGeneratedDataset(
       {
         projectId: input.projectId,
@@ -60,17 +70,35 @@ export async function regenerateWithFeedback(
         schemaSnapshotId: input.schemaSnapshotId,
         schema: input.schema,
         projectContext: resolvedProjectContext,
-        currentDataset: {
-          ...input.acceptedDataset,
-          collectionCounts: input.collectionCounts ?? input.acceptedDataset.collectionCounts
-        },
+        currentDataset,
         message: contextualFeedback,
-        chatHistory: input.chatHistory
+        chatHistory: input.chatHistory,
+        maxAttempts: 1
       },
       deps
     );
 
-    return mapLegacyRefinementResult(refined);
+    if (refined.mode === "rejected" && hasFixableRetryProblem(refined.validationResults)) {
+      const retryFeedback = appendValidationFeedback(contextualFeedback, refined.validationResults);
+      const retryRefined = await refineGeneratedDataset(
+        {
+          projectId: input.projectId,
+          actorId: input.actorId,
+          schemaSnapshotId: input.schemaSnapshotId,
+          schema: input.schema,
+          projectContext: resolvedProjectContext,
+          currentDataset,
+          message: retryFeedback,
+          chatHistory: input.chatHistory,
+          maxAttempts: 1
+        },
+        deps
+      );
+
+      return mapLegacyRefinementResult(retryRefined, input.acceptedDataset, 1);
+    }
+
+    return mapLegacyRefinementResult(refined, input.acceptedDataset, 0);
   } catch (error) {
     if (isAbortError(error) || input.signal?.aborted) {
       return cancelled(nextHistory);
@@ -93,18 +121,38 @@ export async function regenerateWithFeedback(
   }
 }
 
-function mapLegacyRefinementResult(result: Awaited<ReturnType<typeof refineGeneratedDataset>>): FeedbackRegenerationResponse {
+function mapLegacyRefinementResult(
+  result: Awaited<ReturnType<typeof refineGeneratedDataset>>,
+  acceptedDataset: GeneratedDataset,
+  retryAttempt: number
+): FeedbackRegenerationResponse {
   const mode: FeedbackRegenerationMode =
     result.mode === "updated_dataset"
       ? "accepted"
       : result.mode === "guidance"
         ? "partial"
         : "rejected";
+  const message = mapOutcomeSummary(mode, result.message, result.validationResults);
 
   return {
     mode,
-    message: mapOutcomeSummary(mode, result.message, result.validationResults),
+    message,
     dataset: result.mode === "updated_dataset" ? result.dataset : undefined,
+    candidateReview: {
+      state: resolveCandidateReviewState({
+        mode,
+        validationResults: result.validationResults,
+        retryAttempt
+      }),
+      retryAttempt,
+      changeSummary: buildCandidateChangeSummary({
+        acceptedDataset,
+        candidateDataset: result.mode === "updated_dataset" ? result.dataset : undefined,
+        mode,
+        message,
+        validationResults: result.validationResults
+      })
+    },
     validationResults: result.validationResults,
     warnings: result.warnings,
     chatHistory: result.chatHistory
@@ -133,6 +181,24 @@ function buildContextualFeedback(feedback: string, schemaContext?: string): stri
   }
 
   return `${feedback}\n\nSchema context: ${nextSchemaContext}`;
+}
+
+function appendValidationFeedback(
+  feedback: string,
+  validationResults: GenerationValidationResult[]
+): string {
+  const blockingIssues = validationResults
+    .filter((result) => result.severity === "error")
+    .map((result) => {
+      const location = [result.collectionName, result.recordId, result.fieldName].filter(Boolean).join(".");
+      return location ? `${result.code} at ${location}: ${result.message}` : `${result.code}: ${result.message}`;
+    });
+
+  if (blockingIssues.length === 0) {
+    return feedback;
+  }
+
+  return `${feedback}\n\nRetry this regeneration once. Fix these validation problems while preserving the user's feedback:\n${blockingIssues.join("\n")}`;
 }
 
 function buildProjectContext(
