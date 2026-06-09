@@ -33,7 +33,10 @@ import {
 } from "@/src/lib/api-client";
 import { redirectToLogin } from "@/src/lib/auth-session";
 import { streamWorkbenchRequest } from "@/src/lib/generation-stream";
-import type { CollectionProgress } from "@/src/lib/generation-workbench-state";
+import type {
+  CollectionProgress,
+  PendingRegenerationCandidate
+} from "@/src/lib/generation-workbench-state";
 import { getSessionStatus, getStoredSession } from "@/src/lib/session";
 import type {
   ChatRefinementMessage,
@@ -137,12 +140,16 @@ export default function GeneratePage() {
   const [isSavedDatasetsLoading, setIsSavedDatasetsLoading] = useState(false);
   const [activeSavedDatasetId, setActiveSavedDatasetId] = useState<string | null>(null);
   const [lastAcceptedDataset, setLastAcceptedDataset] = useState<GeneratedDataset | null>(null);
+  const [pendingCandidate, setPendingCandidate] = useState<PendingRegenerationCandidate | null>(
+    null
+  );
   const [regenerationLifecycle, setRegenerationLifecycle] =
     useState<RegenerationLifecycleState>("idle");
   const [datasetBaselineFingerprint, setDatasetBaselineFingerprint] = useState<string | null>(null);
   const [editedCellKeys, setEditedCellKeys] = useState<Set<string>>(() => new Set());
   const [isSavingDataset, setIsSavingDataset] = useState(false);
   const [isCommittingCellEdit, setIsCommittingCellEdit] = useState(false);
+  const [isAcceptingCandidate, setIsAcceptingCandidate] = useState(false);
 
   const hasUnsavedEdits = useMemo(() => {
     if (!generatedDataset) {
@@ -344,6 +351,7 @@ export default function GeneratePage() {
     );
     setGeneratedDataset(null);
     setLastAcceptedDataset(null);
+    setPendingCandidate(null);
     setGenerationValidationResults([]);
     setGenerationMessage(null);
     setRegenerationLifecycle("idle");
@@ -425,7 +433,8 @@ export default function GeneratePage() {
     isDiscoveringMongo ||
     isSavingSchema ||
     isGeneratingSeedData ||
-    isRefiningDataset;
+    isRefiningDataset ||
+    isAcceptingCandidate;
 
   const canGenerate = Boolean(projectId && parsedSchema && totalRequestedRecords > 0) && !isBusy;
   const canFinish = Boolean(projectId && generatedDataset) && !isGeneratingSeedData;
@@ -452,6 +461,7 @@ export default function GeneratePage() {
     setActiveCollectionTab(dataset.generationOrder[0] ?? Object.keys(dataset.collections)[0] ?? "");
     setDatasetBaselineFingerprint(computeDatasetFingerprint(dataset));
     setEditedCellKeys(new Set());
+    setPendingCandidate(null);
     if (options.setAsAccepted ?? true) {
       setLastAcceptedDataset(dataset);
     }
@@ -568,6 +578,66 @@ export default function GeneratePage() {
     } finally {
       setIsSavingDataset(false);
     }
+  };
+
+  const handleAcceptPendingCandidate = async () => {
+    if (!token || !projectId || !pendingCandidate) {
+      return;
+    }
+
+    const hasCandidateErrors = pendingCandidate.validationResults.some(
+      (result) => result.severity === "error"
+    );
+    if (pendingCandidate.dataset.status !== "valid" || hasCandidateErrors) {
+      setGenerationMessage("Resolve candidate validation errors before accepting it.");
+      return;
+    }
+
+    setIsAcceptingCandidate(true);
+
+    try {
+      if (activeSavedDatasetId) {
+        const response = await patchSavedGeneratedDataset(
+          projectId,
+          activeSavedDatasetId,
+          {
+            dataset: pendingCandidate.dataset,
+            chatHistory: pendingCandidate.chatHistory
+          },
+          token
+        );
+        syncDatasetState(response.dataset, response.dataset.id, { setAsAccepted: true });
+      } else {
+        const response = await saveManualEditDataset(
+          projectId,
+          {
+            dataset: pendingCandidate.dataset,
+            chatHistory: pendingCandidate.chatHistory
+          },
+          token
+        );
+        syncDatasetState(response.dataset, response.savedDatasetId, { setAsAccepted: true });
+      }
+
+      setAgentMessages(buildAgentMessagesFromChatHistory(pendingCandidate.chatHistory));
+      setRegenerationLifecycle("accepted");
+      setGenerationMessage("Accepted regenerated candidate and saved it as the active dataset.");
+      await refreshSavedDatasets(projectId, token);
+    } catch (acceptError) {
+      setGenerationMessage(
+        acceptError instanceof Error
+          ? acceptError.message
+          : "Could not accept the regenerated candidate."
+      );
+    } finally {
+      setIsAcceptingCandidate(false);
+    }
+  };
+
+  const handleRejectPendingCandidate = () => {
+    setPendingCandidate(null);
+    setRegenerationLifecycle("rejected");
+    setGenerationMessage("Rejected regenerated candidate. The last accepted dataset remains active.");
   };
 
   const handleNavigateToValidationIssue = (issue: GenerationValidationResult) => {
@@ -1025,6 +1095,7 @@ export default function GeneratePage() {
     setGenerationValidationResults([]);
     setGeneratedDataset(null);
     setLastAcceptedDataset(null);
+    setPendingCandidate(null);
     setRegenerationLifecycle("idle");
     setAgentMessages([]);
     setExportOpen(false);
@@ -1160,6 +1231,11 @@ export default function GeneratePage() {
       return;
     }
 
+    if (pendingCandidate) {
+      setGenerationMessage("Accept or reject the pending regenerated candidate before sending new feedback.");
+      return;
+    }
+
     const trimmedMessage = message.trim();
     if (!trimmedMessage) {
       setGenerationMessage("Feedback cannot be empty.");
@@ -1213,13 +1289,26 @@ export default function GeneratePage() {
         controller.signal
       );
 
-      setAgentMessages(buildAgentMessagesFromChatHistory(result.chatHistory));
-      setGenerationValidationResults([...result.validationResults, ...result.warnings]);
-
       if (result.mode === "accepted" && result.dataset) {
-        syncDatasetState(result.dataset, result.savedDatasetId, { setAsAccepted: true });
+        setPendingCandidate({
+          dataset: result.dataset,
+          message: result.message,
+          savedDatasetId: result.savedDatasetId,
+          validationResults: result.validationResults,
+          warnings: result.warnings,
+          chatHistory: result.chatHistory,
+          candidateReview: result.candidateReview
+        });
+        setAgentMessages(buildAgentMessagesFromChatHistory(result.chatHistory));
       } else if (result.savedDatasetId) {
+        setPendingCandidate(null);
+        setAgentMessages(buildAgentMessagesFromChatHistory(result.chatHistory));
+        setGenerationValidationResults([...result.validationResults, ...result.warnings]);
         setActiveSavedDatasetId(result.savedDatasetId);
+      } else {
+        setPendingCandidate(null);
+        setAgentMessages(buildAgentMessagesFromChatHistory(result.chatHistory));
+        setGenerationValidationResults([...result.validationResults, ...result.warnings]);
       }
 
       setRegenerationLifecycle(result.mode);
@@ -1342,10 +1431,12 @@ mongoose.model('Product', ProductSchema);`;
     }
 
     abortInFlightOperation();
+    setPendingCandidate(null);
     router.push(`/projects/${projectId}`);
   };
 
   const handleEditProjectSetup = () => {
+    setPendingCandidate(null);
     setWorkbenchActive(false);
     setWizardStep(schemaIsSaved ? "review" : "schema-choose");
     router.replace(
@@ -1369,6 +1460,7 @@ mongoose.model('Product', ProductSchema);`;
       if (countsChanged) {
         setGeneratedDataset(null);
         setLastAcceptedDataset(null);
+        setPendingCandidate(null);
         setGenerationValidationResults([]);
         setGenerationProgress([]);
         setRegenerationLifecycle("idle");
@@ -1524,6 +1616,10 @@ mongoose.model('Product', ProductSchema);`;
           agentMessages={agentMessages}
           onAgentSubmit={handleRefineGeneratedDataset}
           agentBusy={isRefiningDataset}
+          pendingCandidate={pendingCandidate}
+          onAcceptCandidate={handleAcceptPendingCandidate}
+          onRejectCandidate={handleRejectPendingCandidate}
+          isAcceptingCandidate={isAcceptingCandidate}
           quickPromptChips={QUICK_PROMPT_CHIPS}
           setupContent={workbenchSetupContent}
           activeCollection={activeCollectionTab}

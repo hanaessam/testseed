@@ -13,9 +13,13 @@ import { GenerationPlanPanel } from "@/components/generation/generation-plan-pan
 import { GenerationProgress } from "@/components/generation/generation-progress";
 import { SavedDatasetsPanel } from "@/components/generation/saved-datasets-panel";
 import { SetupRail } from "@/components/generation/setup-rail";
+import { Button } from "@/components/ui/button";
 import { ValidationSummary } from "@/components/generation/validation-summary";
 import { cn } from "@/src/lib/utils";
-import type { CollectionProgress } from "@/src/lib/generation-workbench-state";
+import type {
+  CollectionProgress,
+  PendingRegenerationCandidate
+} from "@/src/lib/generation-workbench-state";
 import type {
   GeneratedDataset,
   GenerationPlanResponse,
@@ -24,6 +28,7 @@ import type {
   ProjectContext,
   SavedGeneratedDatasetSummary
 } from "@testseed/types";
+import { Check, Loader2, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 interface GenerationWorkbenchProps {
@@ -48,6 +53,10 @@ interface GenerationWorkbenchProps {
   agentMessages: AgentDockMessage[];
   onAgentSubmit(message: string): void;
   agentBusy?: boolean;
+  pendingCandidate?: PendingRegenerationCandidate | null;
+  onAcceptCandidate?(): void;
+  onRejectCandidate?(): void;
+  isAcceptingCandidate?: boolean;
   quickPromptChips?: string[];
   setupContent: ReactNode;
   activeCollection?: string;
@@ -91,6 +100,10 @@ export function GenerationWorkbench({
   agentMessages,
   onAgentSubmit,
   agentBusy = false,
+  pendingCandidate = null,
+  onAcceptCandidate,
+  onRejectCandidate,
+  isAcceptingCandidate = false,
   quickPromptChips,
   setupContent,
   activeCollection,
@@ -120,6 +133,13 @@ export function GenerationWorkbench({
   className
 }: GenerationWorkbenchProps) {
   const errorCount = validationResults.filter((result) => result.severity === "error").length;
+  const candidateErrorCount =
+    pendingCandidate?.validationResults.filter((result) => result.severity === "error").length ?? 0;
+  const candidateSummary = pendingCandidate?.candidateReview?.changeSummary;
+  const candidateCanBeAccepted =
+    pendingCandidate !== null &&
+    pendingCandidate.dataset.status === "valid" &&
+    candidateErrorCount === 0;
   const datasetIsValid = Boolean(dataset && dataset.status === "valid" && errorCount === 0);
   const lifecycleLabel =
     regenerationLifecycle === "in_progress"
@@ -139,7 +159,9 @@ export function GenerationWorkbench({
                   : null;
   const lifecycleSummary =
     regenerationLifecycle === "accepted"
-      ? "Feedback was accepted and a schema-valid regenerated dataset replaced the preview."
+      ? pendingCandidate
+        ? "Feedback produced a schema-valid candidate. Review the changes before accepting it."
+        : "Feedback was accepted and saved as the active dataset."
       : regenerationLifecycle === "partial"
         ? "Feedback was partially applied. Some requested changes were skipped to preserve constraints."
         : regenerationLifecycle === "rejected"
@@ -237,6 +259,89 @@ export function GenerationWorkbench({
               </div>
             ) : null}
 
+            {pendingCandidate ? (
+              <section className="rounded-md border border-info-border bg-info-subtle px-3 py-3 text-sm text-info-text">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Regenerated candidate pending review
+                      </h2>
+                      <p className="mt-1 text-xs leading-5 text-info-text">
+                        The accepted dataset is still active. Accept this candidate to save it as the
+                        durable dataset, or reject it and revise feedback.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-md border border-info-border bg-background/50 px-2 py-1">
+                        {candidateSummary?.status ?? pendingCandidate.candidateReview?.state ?? "pending_review"}
+                      </span>
+                      <span className="rounded-md border border-info-border bg-background/50 px-2 py-1">
+                        {candidateSummary?.collectionsChanged.length ?? 0} collections changed
+                      </span>
+                      {candidateErrorCount > 0 ? (
+                        <span className="rounded-md border border-danger-border bg-danger-subtle px-2 py-1 text-danger-text">
+                          {candidateErrorCount} validation {candidateErrorCount === 1 ? "issue" : "issues"}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {candidateSummary ? (
+                      <div className="grid gap-2 text-xs md:grid-cols-2">
+                        <div>
+                          <p className="font-medium text-foreground">Changed collections</p>
+                          <p className="mt-1 leading-5">
+                            {candidateSummary.collectionsChanged.length > 0
+                              ? candidateSummary.collectionsChanged.join(", ")
+                              : "No collection-level changes."}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">Notable fields</p>
+                          <p className="mt-1 leading-5">
+                            {candidateSummary.notableFieldsChanged.length > 0
+                              ? candidateSummary.notableFieldsChanged
+                                  .slice(0, 6)
+                                  .map(
+                                    (field) =>
+                                      `${field.collectionName}.${field.fieldName} (${field.count})`
+                                  )
+                                  .join(", ")
+                              : "No notable field changes."}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      type="button"
+                      onClick={onAcceptCandidate}
+                      disabled={!candidateCanBeAccepted || isAcceptingCandidate}
+                    >
+                      {isAcceptingCandidate ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={onRejectCandidate}
+                      disabled={isAcceptingCandidate}
+                    >
+                      <X className="h-4 w-4" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             {onSaveDataset && onSaveDatasetAsNew ? (
               <DatasetSaveBar
                 hasUnsavedEdits={hasUnsavedEdits}
@@ -277,6 +382,19 @@ export function GenerationWorkbench({
             messages={agentMessages}
             isSubmitting={agentBusy}
             quickPromptChips={quickPromptChips}
+            disabledReason={
+              pendingCandidate
+                ? "Accept or reject the pending regenerated candidate before sending more feedback."
+                : undefined
+            }
+            candidateReviewSummary={
+              candidateSummary
+                ? {
+                    appliedFeedbackSummary: candidateSummary.appliedFeedbackSummary,
+                    skippedFeedbackSummary: candidateSummary.skippedFeedbackSummary
+                  }
+                : undefined
+            }
             onSubmit={onAgentSubmit}
           />
         </aside>

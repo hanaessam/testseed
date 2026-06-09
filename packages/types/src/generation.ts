@@ -73,6 +73,37 @@ export type RefinementMode = "updated_dataset" | "guidance" | "rejected";
 
 export type FeedbackRegenerationMode = "accepted" | "partial" | "rejected" | "cancelled";
 
+export type CandidateChangeSummaryStatus = "changed" | "unchanged" | "partial" | "invalid";
+
+export interface CandidateFieldChangeSummary {
+  collectionName: string;
+  fieldName: string;
+  count: number;
+}
+
+export interface CandidateChangeSummary {
+  status: CandidateChangeSummaryStatus;
+  collectionsChanged: string[];
+  notableFieldsChanged: CandidateFieldChangeSummary[];
+  preservedCollections: string[];
+  appliedFeedbackSummary: string;
+  skippedFeedbackSummary?: string;
+  noMeaningfulChanges: boolean;
+}
+
+export type CandidateReviewState =
+  | "pending_review"
+  | "accepted"
+  | "rejected"
+  | "invalid"
+  | "awaiting_revised_feedback";
+
+export interface CandidateReview {
+  state: CandidateReviewState;
+  retryAttempt: number;
+  changeSummary?: CandidateChangeSummary;
+}
+
 export interface FeedbackRegenerationRequest {
   acceptedDataset: GeneratedDataset;
   feedback: string;
@@ -88,6 +119,7 @@ export interface FeedbackRegenerationResponse {
   message: string;
   dataset?: GeneratedDataset;
   savedDatasetId?: string;
+  candidateReview?: CandidateReview;
   validationResults: GenerationValidationResult[];
   warnings: GenerationValidationResult[];
   chatHistory: ChatRefinementMessage[];
@@ -184,6 +216,7 @@ export interface ValidateDatasetResponse {
 
 export interface PatchSavedGeneratedDatasetRequest {
   dataset: GeneratedDataset;
+  chatHistory?: ChatRefinementMessage[];
 }
 
 export interface PatchSavedGeneratedDatasetResponse {
