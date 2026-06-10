@@ -80,15 +80,15 @@ function validateRecords(
 ): void {
   const ids = new Set<string>();
   for (const record of records) {
-    if (!isObjectId(record._id)) {
+    if (!isGeneratedRecordId(record._id)) {
       validationResults.push({
         severity: "error",
         collectionName,
         recordId: typeof record._id === "string" ? record._id : undefined,
         fieldName: "_id",
         code: "INVALID_OBJECT_ID",
-        message: `${collectionName}._id must be a valid 24-character ObjectId string.`,
-        suggestedAction: "Regenerate records with stable MongoDB ObjectId strings."
+        message: `${collectionName}._id must be a valid generated identifier string.`,
+        suggestedAction: "Regenerate records with unique identifier strings."
       });
     }
 
@@ -142,7 +142,7 @@ function validateField(
     return;
   }
 
-  if (!valueMatchesType(value, field)) {
+  if (!valueMatchesType(value, field, dataset, schemaCollectionNames)) {
     validationResults.push({
       severity: "error",
       collectionName,
@@ -252,7 +252,12 @@ function validateReference(
   }
 }
 
-function valueMatchesType(value: unknown, field: SchemaField): boolean {
+function valueMatchesType(
+  value: unknown,
+  field: SchemaField,
+  dataset: GeneratedDataset,
+  schemaCollectionNames: string[]
+): boolean {
   switch (field.type) {
     case "String":
       return typeof value === "string";
@@ -263,7 +268,7 @@ function valueMatchesType(value: unknown, field: SchemaField): boolean {
     case "Date":
       return typeof value === "string" && !Number.isNaN(Date.parse(value));
     case "ObjectId":
-      return typeof value === "string" && isObjectId(value);
+      return typeof value === "string" && (isObjectId(value) || isKnownReferenceValue(value, field, dataset, schemaCollectionNames));
     case "Array":
       return Array.isArray(value);
     case "Object":
@@ -275,6 +280,28 @@ function valueMatchesType(value: unknown, field: SchemaField): boolean {
   }
 }
 
+function isKnownReferenceValue(
+  value: string,
+  field: SchemaField,
+  dataset: GeneratedDataset,
+  schemaCollectionNames: string[]
+): boolean {
+  if (!field.ref) {
+    return false;
+  }
+
+  const parentName = resolveCollectionName(field.ref, schemaCollectionNames);
+  if (!parentName) {
+    return false;
+  }
+
+  return (dataset.collections[parentName] ?? []).some((record) => record._id === value);
+}
+
 function isObjectId(value: string): boolean {
   return /^[a-f0-9]{24}$/i.test(value);
+}
+
+function isGeneratedRecordId(value: string): boolean {
+  return isObjectId(value) || /^\d{6,}$/.test(value);
 }

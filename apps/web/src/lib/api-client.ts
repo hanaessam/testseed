@@ -34,6 +34,8 @@ import type {
   DeleteProjectRequest,
   DeleteProjectResponse,
   RestoreProjectResponse,
+  RollbackSeedBatchRequest,
+  RollbackSeedBatchResponse,
   UpdateProjectSchemaRequest,
   UpdateProjectSchemaResponse,
   DeleteProjectSchemaRequest,
@@ -46,6 +48,12 @@ import type {
   GenerationPlanResponse,
   JavaScriptSeedScriptRequest,
   JavaScriptSeedScriptResult,
+  DirectMongoConnectionTestRequest,
+  DirectMongoConnectionTestResult,
+  DirectSeedingConfirmationApiRequest,
+  DirectSeedingConfirmationSummary,
+  DirectSeedingExecuteApiRequest,
+  DirectSeedingExecuteApiResponse,
   RefineGeneratedDatasetRequest,
   RefineGeneratedDatasetResponse,
   ListSavedGeneratedDatasetsResponse,
@@ -338,6 +346,31 @@ export async function listProjectHistory(
   };
 }
 
+export async function rollbackSeedBatch(
+  projectId: string,
+  request: RollbackSeedBatchRequest,
+  token: string
+): Promise<RollbackSeedBatchResponse> {
+  const response = await postJson<RollbackSeedBatchRequest, RollbackSeedBatchResponse>(
+    `/projects/${encodeURIComponent(projectId)}/rollback`,
+    request,
+    token
+  );
+
+  return {
+    ...response,
+    batch: {
+      ...response.batch,
+      createdAt: new Date(response.batch.createdAt),
+      rolledBackAt: response.batch.rolledBackAt ? new Date(response.batch.rolledBackAt) : undefined
+    },
+    event: {
+      ...response.event,
+      createdAt: new Date(response.event.createdAt)
+    }
+  };
+}
+
 export async function updateProjectSchema(
   projectId: string,
   request: UpdateProjectSchemaRequest,
@@ -513,6 +546,42 @@ export async function exportJavaScriptSeedScript(
 ): Promise<JavaScriptSeedScriptResult> {
   return postJson<typeof request, JavaScriptSeedScriptResult>(
     `/projects/${encodeURIComponent(projectId)}/datasets/javascript-seed-script`,
+    request,
+    token
+  );
+}
+
+export async function testDirectSeedConnection(
+  projectId: string,
+  request: DirectMongoConnectionTestRequest,
+  token: string
+): Promise<DirectMongoConnectionTestResult> {
+  return postJson<DirectMongoConnectionTestRequest, DirectMongoConnectionTestResult>(
+    `/projects/${encodeURIComponent(projectId)}/direct-seeding/test-connection`,
+    request,
+    token
+  );
+}
+
+export async function buildDirectSeedConfirmation(
+  projectId: string,
+  request: DirectSeedingConfirmationApiRequest,
+  token: string
+): Promise<DirectSeedingConfirmationSummary> {
+  return postJson<DirectSeedingConfirmationApiRequest, DirectSeedingConfirmationSummary>(
+    `/projects/${encodeURIComponent(projectId)}/direct-seeding/confirmation`,
+    request,
+    token
+  );
+}
+
+export async function executeDirectSeed(
+  projectId: string,
+  request: DirectSeedingExecuteApiRequest,
+  token: string
+): Promise<DirectSeedingExecuteApiResponse> {
+  return postJson<DirectSeedingExecuteApiRequest, DirectSeedingExecuteApiResponse>(
+    `/projects/${encodeURIComponent(projectId)}/direct-seeding`,
     request,
     token
   );
