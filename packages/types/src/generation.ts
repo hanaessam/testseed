@@ -124,6 +124,7 @@ export interface DirectSeedingRollbackCollection {
 
 export interface DirectSeedingRollbackMetadata {
   seedBatchId: string;
+  collectionOrder: string[];
   collections: DirectSeedingRollbackCollection[];
 }
 

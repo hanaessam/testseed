@@ -626,6 +626,7 @@ describe("project history use cases", () => {
             seedBatchId: "batch-1",
             collectionCounts: { users: 2 },
             insertedDocumentIds: { users: ["user-1"] },
+            collectionOrder: ["users"],
             status: "inserted",
             createdAt: new Date("2026-06-02T00:05:00.000Z")
           }
@@ -649,6 +650,7 @@ describe("project history use cases", () => {
         seedBatchId: "batch-1",
         collectionCounts: { users: 2 },
         insertedDocumentIds: { users: ["user-1"] },
+        collectionOrder: ["users"],
         status: "inserted"
       },
       {
@@ -687,10 +689,11 @@ describe("project history use cases", () => {
           seedBatchId: "batch-1",
           collectionCounts: { users: 1 },
           insertedDocumentIds: { users: ["user-1"] },
+          collectionOrder: ["users"],
           status: "inserted",
           createdAt: new Date("2026-06-02T00:00:00.000Z")
         }),
-        deleteRecordsByIds: async () => ({ users: 1 }),
+        deleteRecordsBySeedBatchId: async () => ({ deletedCount: 1 }),
         markSeedBatchRolledBack: async () => ({
           id: "batch-row-1",
           projectId: "project-1",
@@ -698,15 +701,17 @@ describe("project history use cases", () => {
           seedBatchId: "batch-1",
           collectionCounts: { users: 1 },
           insertedDocumentIds: { users: ["user-1"] },
+          collectionOrder: ["users"],
           status: "rolled_back",
           createdAt: new Date("2026-06-02T00:00:00.000Z"),
-          rolledBackAt: new Date("2026-06-02T00:10:00.000Z")
+          rolledBackAt: new Date("2026-06-02T00:10:00.000Z"),
+          rollbackDeletedCounts: { users: 1 }
         }),
         appendProjectEvent: async (input) => ({ id: "event-2", ...input })
       }
     );
 
-    expect(result.deletedCounts).toEqual({ users: 1 });
+    expect(result.report.deletedCounts).toEqual({ users: 1 });
     expect(result.batch.status).toBe("rolled_back");
   });
 });

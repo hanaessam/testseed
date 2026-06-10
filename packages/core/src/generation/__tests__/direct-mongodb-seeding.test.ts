@@ -365,6 +365,7 @@ describe("seedMongoDataset", () => {
     expect(report.totalInsertedCount).toBe(2);
     expect(report.rollback).toEqual({
       seedBatchId,
+      collectionOrder: ["users", "orders"],
       collections: [
         { collectionName: "users", insertedCount: 1 },
         { collectionName: "orders", insertedCount: 1 }
@@ -420,6 +421,7 @@ describe("seedMongoDataset", () => {
       }
     ]);
     expect(report.insertedRecordCounts).toEqual({ users: 1 });
+    expect(report.rollback.collectionOrder).toEqual(["users"]);
     expect(report.rollback.collections).toEqual([{ collectionName: "users", insertedCount: 1 }]);
     expect(client.closeCalls).toBe(1);
     expectNoConnectionString(report);

@@ -70,5 +70,5 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/012-direct-mongodb-seeding/plan.md
+at specs/013-rollback-seed-batch/plan.md
 <!-- SPECKIT END -->

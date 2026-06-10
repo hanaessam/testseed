@@ -100,9 +100,42 @@ export interface SeedBatch {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
+  collectionOrder: string[];
   status: "pending" | "inserted" | "partially_inserted" | "rolled_back";
   createdAt: Date;
   rolledBackAt?: Date;
+  rollbackDeletedCounts?: Record<string, number>;
+}
+
+export type RollbackSeedBatchErrorCode =
+  | "ROLLBACK_SEED_BATCH_ID_REQUIRED"
+  | "ROLLBACK_SEED_BATCH_ID_INVALID"
+  | "ROLLBACK_BATCH_NOT_FOUND"
+  | "ROLLBACK_BATCH_ALREADY_ROLLED_BACK"
+  | "ROLLBACK_BATCH_HAS_NO_RECORDS";
+
+export interface RollbackSeedBatchErrorDetails {
+  code: RollbackSeedBatchErrorCode;
+  message: string;
+}
+
+export type RollbackCollectionStatus = "deleted" | "failed";
+
+export interface RollbackCollectionResult {
+  collectionName: string;
+  status: RollbackCollectionStatus;
+  deletedCount?: number;
+  error?: string;
+}
+
+export interface RollbackSeedBatchReport {
+  seedBatchId: string;
+  status: "rolled_back" | "partial_failure";
+  deletedCounts: Record<string, number>;
+  completedCollections: RollbackCollectionResult[];
+  processedOrder: string[];
+  rolledBackAt?: Date;
+  failedCollection?: RollbackCollectionResult;
 }
 
 export interface ListProjectsResponse {

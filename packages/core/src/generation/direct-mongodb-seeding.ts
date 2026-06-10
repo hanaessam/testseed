@@ -193,6 +193,7 @@ export async function seedMongoDataset(
     totalInsertedCount: Object.values(insertedRecordCounts).reduce((sum, count) => sum + count, 0),
     rollback: {
       seedBatchId,
+      collectionOrder: successfulCollections.map((collection) => collection.collectionName),
       collections: successfulCollections.map((collection) => ({
         collectionName: collection.collectionName,
         insertedCount: collection.insertedCount
