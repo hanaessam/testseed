@@ -1,10 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm ci",
-  "buildCommand": "npx turbo run build --filter=@testseed/api...",
-  "functions": {
-    "src/index.ts": {
-      "maxDuration": 60
-    }
-  }
+  "installCommand": "node ../../scripts/vercel-monorepo-install.mjs",
+  "buildCommand": "node ../../scripts/vercel-monorepo-build.mjs @testseed/api..."
 }

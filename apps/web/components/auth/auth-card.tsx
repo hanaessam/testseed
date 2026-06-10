@@ -127,8 +127,8 @@ export function AuthCard({ mode, loginReason = null }: AuthCardProps) {
       </div>
       <Card className="w-full max-w-md animate-fade-in">
         <CardContent className="space-y-5 p-5">
-          <div className="space-y-3">
-            <Wordmark />
+          <div className="space-y-4">
+            <Wordmark size="lg" showMarkBackground className="justify-center sm:justify-start" />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">
                 {isRegister ? "Create your workspace" : "Welcome back"}

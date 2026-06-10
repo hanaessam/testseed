@@ -1,12 +1,24 @@
-# TestSeed
+<div align="center">
+  <table>
+    <tr>
+      <td align="right" valign="middle">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/logo-dark.svg">
+          <img src="apps/web/public/logo-light.svg" alt="" width="32" height="64" />
+        </picture>
+      </td>
+      <td align="left" valign="middle">
+        <h1 style="margin: 0; padding-left: 12px; font-size: 2.25rem; font-weight: 600; letter-spacing: -0.02em; border: none;">
+          Test<span style="color: #16a34a;">Seed</span>
+        </h1>
+      </td>
+    </tr>
+  </table>
+</div>
 
 **Generate realistic, schema-aware MongoDB seed data with AI — preview it, refine it, export it, or insert it with rollback support.**
 
 TestSeed helps backend and full-stack developers, QA engineers, and student teams skip hand-written seed scripts. Paste a Mongoose schema or discover structure from a live database, generate relational records in dependency order, chat with AI to refine results, then export JSON or a runnable seed script — or insert directly into MongoDB with batch rollback.
-
-<p align="center">
-  <img src="apps/web/public/logo-light.svg" alt="TestSeed logo" width="48" />
-</p>
 
 ## Table of Contents
 
