@@ -15,6 +15,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const dispatch = useAppDispatch();
   const mode = useAppSelector((state) => state.theme.mode);
   const resolved = useAppSelector((state) => state.theme.resolved);
+  const hydrated = useAppSelector((state) => state.theme.hydrated);
 
   return (
     <div
@@ -24,7 +25,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
     >
       {!compact ? (
         <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-          Appearance · {resolved}
+          Appearance{hydrated ? ` · ${resolved}` : ""}
         </p>
       ) : null}
       <div className="flex gap-1">

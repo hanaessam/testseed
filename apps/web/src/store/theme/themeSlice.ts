@@ -15,13 +15,10 @@ export interface ThemeState {
 }
 
 function createInitialThemeState(): ThemeState {
-  const storedMode = readStoredThemeMode() ?? "dark";
-  const resolved = resolveTheme(storedMode);
-
   return {
-    mode: storedMode,
-    resolved,
-    hydrated: typeof window !== "undefined"
+    mode: "dark",
+    resolved: "dark",
+    hydrated: false
   };
 }
 

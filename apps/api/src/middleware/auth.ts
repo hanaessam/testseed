@@ -10,6 +10,7 @@ export interface AuthenticatedRequest extends Request {
 }
 
 const publicAuthPaths = new Set([
+  "/health",
   "/auth/register/request-otp",
   "/auth/register/verify-otp",
   "/auth/login",
