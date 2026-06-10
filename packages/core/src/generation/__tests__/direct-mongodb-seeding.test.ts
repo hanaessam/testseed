@@ -1,6 +1,7 @@
 import type { GeneratedDataset, ParsedSchema } from "@testseed/types";
 import {
   DIRECT_SEEDING_CONFIRMATION_WARNING,
+  DirectMongoInsertManyError,
   DirectMongoSeedingError,
   type DirectMongoClient,
   type DirectMongoClientFactory,
@@ -74,12 +75,12 @@ class FakeCollection implements DirectMongoCollection {
   inserted: Record<string, unknown>[][] = [];
   constructor(private readonly failWith?: Error) {}
 
-  async insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number }> {
+  async insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number; insertedIds?: string[] }> {
     if (this.failWith) {
       throw this.failWith;
     }
     this.inserted.push(records);
-    return { insertedCount: records.length };
+    return { insertedCount: records.length, insertedIds: records.map((record) => String(record._id)) };
   }
 }
 
@@ -296,6 +297,27 @@ describe("seedMongoDataset", () => {
     expect(createCalls).toEqual([]);
   });
 
+  it("treats a cancelled confirmation as zero inserted records", async () => {
+    const database = new FakeDatabase("app");
+    const client = new FakeClient(database);
+    const { deps, createCalls } = fakeDeps(client);
+
+    await expect(
+      seedMongoDataset({
+        connectionString,
+        connectionTestToken: await successfulConnectionToken(),
+        schema,
+        dataset: validDataset(),
+        targetDatabaseName: "app",
+        confirmed: false
+      }, deps)
+    ).rejects.toMatchObject({ code: "DIRECT_SEED_CONFIRMATION_REQUIRED" });
+
+    expect(createCalls).toEqual([]);
+    expect(database.collections.size).toBe(0);
+    expect(client.closeCalls).toBe(0);
+  });
+
   it("rejects missing or mismatched connection test tokens before creating a client", async () => {
     const client = new FakeClient();
     const { deps, createCalls } = fakeDeps(client);
@@ -362,6 +384,7 @@ describe("seedMongoDataset", () => {
     expect(orderInsert[0]).toMatchObject({ _id: orderId, userId, seedBatchId });
     expect(report.successfulCollections.map((collection) => collection.collectionName)).toEqual(["users", "orders"]);
     expect(report.insertedRecordCounts).toEqual({ users: 1, orders: 1 });
+    expect(report.insertedDocumentIds).toEqual({ users: [userId], orders: [orderId] });
     expect(report.totalInsertedCount).toBe(2);
     expect(report.rollback).toEqual({
       seedBatchId,
@@ -374,6 +397,26 @@ describe("seedMongoDataset", () => {
     expect(client.dbNames).toContain("app");
     expect(client.closeCalls).toBe(1);
     expectNoConnectionString(report);
+  });
+
+  it("inserts records only after explicit confirmation", async () => {
+    const database = new FakeDatabase("app");
+    const client = new FakeClient(database);
+    const { deps } = fakeDeps(client);
+
+    const report = await seedMongoDataset({
+      connectionString,
+      connectionTestToken: await successfulConnectionToken(),
+      schema,
+      dataset: validDataset(),
+      targetDatabaseName: "app",
+      confirmed: true
+    }, deps);
+
+    expect(report.seedBatchId).toBe(seedBatchId);
+    expect(report.insertedRecordCounts).toEqual({ users: 1, orders: 1 });
+    expect(database.collections.get("users")?.inserted[0]).toHaveLength(1);
+    expect(database.collections.get("orders")?.inserted[0]).toHaveLength(1);
   });
 
   it("does not mutate the input dataset while tagging copied records", async () => {
@@ -421,9 +464,63 @@ describe("seedMongoDataset", () => {
       }
     ]);
     expect(report.insertedRecordCounts).toEqual({ users: 1 });
+    expect(report.insertedDocumentIds).toEqual({ users: [userId] });
     expect(report.rollback.collectionOrder).toEqual(["users"]);
     expect(report.rollback.collections).toEqual([{ collectionName: "users", insertedCount: 1 }]);
     expect(client.closeCalls).toBe(1);
+    expectNoConnectionString(report);
+  });
+
+  it("reports duplicate key bulk-write failures with partial inserted counts and rollback metadata", async () => {
+    const newUserId = "64f000000000000000000003";
+    const dataset = validDataset({
+      collectionCounts: { users: 2, orders: 0 },
+      generationOrder: ["users"],
+      collections: {
+        users: [
+          { _id: userId, email: "existing@example.com", role: "member" },
+          { _id: newUserId, email: "new@example.com", role: "admin" }
+        ],
+        orders: []
+      }
+    });
+    const database = new FakeDatabase("app");
+    database.collections.set(
+      "users",
+      new FakeCollection(
+        new DirectMongoInsertManyError({
+          message: "E11000 duplicate key error collection: app.users index: _id_ dup key",
+          insertedCount: 1,
+          insertedIds: [newUserId]
+        })
+      )
+    );
+    const client = new FakeClient(database);
+    const { deps } = fakeDeps(client);
+
+    const report = await seedMongoDataset({
+      connectionString,
+      connectionTestToken: await successfulConnectionToken(),
+      schema,
+      dataset,
+      targetDatabaseName: "app",
+      confirmed: true
+    }, deps);
+
+    expect(report.successfulCollections).toEqual([]);
+    expect(report.failedCollections).toEqual([
+      {
+        collectionName: "users",
+        requestedCount: 2,
+        insertedCount: 1,
+        status: "failed",
+        errorSummary: "E11000 duplicate key error collection: app.users index: _id_ dup key"
+      }
+    ]);
+    expect(report.insertedRecordCounts).toEqual({ users: 1 });
+    expect(report.insertedDocumentIds).toEqual({ users: [newUserId] });
+    expect(report.totalInsertedCount).toBe(1);
+    expect(report.rollback.collections).toEqual([{ collectionName: "users", insertedCount: 1 }]);
     expectNoConnectionString(report);
   });
 });

@@ -231,6 +231,17 @@ export interface ProjectHistoryResponse {
   seedBatches: SeedBatch[];
 }
 
+export interface RollbackSeedBatchRequest {
+  seedBatchId: string;
+  mongoUri: string;
+}
+
+export interface RollbackSeedBatchResponse {
+  batch: SeedBatch;
+  deletedCounts: Record<string, number>;
+  event: ProjectEvent;
+}
+
 export interface ProjectDetailResponse {
   project: Project | null;
   activeSchemaSnapshot?: ProjectSchemaSnapshot;

@@ -13,7 +13,13 @@ import {
   buildRefinementUserPromptContent,
   regenerateWithFeedback,
   refineGeneratedDataset,
+  recordSeedBatch,
   saveGeneratedDataset,
+  buildDirectSeedingConfirmation,
+  createMongoNativeDriverClientFactory,
+  DirectMongoSeedingError,
+  seedMongoDataset,
+  testDirectMongoConnection,
   updateSavedGeneratedDataset,
   updateSavedGeneratedDatasetChatHistory,
   validateGeneratedDataset,
@@ -22,6 +28,9 @@ import {
 } from "@testseed/core";
 import type {
   ChatRefinementMessage,
+  DirectMongoConnectionTestResult,
+  DirectSeedingConfirmationSummary,
+  DirectSeedingExecuteApiResponse,
   FeedbackRegenerationResponse,
   GeneratedDataset,
   GeneratedRecord,
@@ -123,6 +132,28 @@ const exportJavaScriptSeedScriptRequestSchema = z.object({
   schemaSnapshotId: z.string().min(1),
   collectionCounts: z.record(z.number().int().min(0)).optional(),
   dataset: generatedDatasetSchema
+});
+
+const directSeedConnectionTestRequestSchema = z.object({
+  connectionString: z.string().min(1),
+  timeoutMs: z.number().int().min(1).optional()
+});
+
+const directSeedConfirmationRequestSchema = z.object({
+  schemaSnapshotId: z.string().min(1),
+  connectionTestToken: z.string().min(1),
+  targetDatabaseName: z.string().min(1),
+  dataset: generatedDatasetSchema
+});
+
+const directSeedExecuteRequestSchema = z.object({
+  schemaSnapshotId: z.string().min(1),
+  connectionString: z.string().min(1),
+  connectionTestToken: z.string().min(1),
+  targetDatabaseName: z.string().min(1),
+  dataset: generatedDatasetSchema,
+  confirmed: z.boolean(),
+  timeoutMs: z.number().int().min(1).optional()
 });
 
 const patchSavedGeneratedDatasetRequestSchema = z.object({
@@ -383,6 +414,186 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           throw error;
         }
       } catch (error) {
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/direct-seeding/test-connection",
+    validateBody(directSeedConnectionTestRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        const result: DirectMongoConnectionTestResult = await testDirectMongoConnection(
+          request.body,
+          { clientFactory: createMongoNativeDriverClientFactory() }
+        );
+
+        response.status(result.ok ? 200 : 400).json(result);
+      } catch (error) {
+        if (error instanceof DirectMongoSeedingError) {
+          response.status(400).json({
+            code: error.code,
+            message: error.message,
+            validationResults: error.validationResults
+          });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/direct-seeding/confirmation",
+    validateBody(directSeedConfirmationRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before direct seeding." });
+          return;
+        }
+
+        if (request.body.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        if (request.body.dataset.projectId !== params.projectId) {
+          response.status(409).json({ message: "The dataset does not match the requested project." });
+          return;
+        }
+
+        const summary: DirectSeedingConfirmationSummary = buildDirectSeedingConfirmation({
+          targetDatabaseName: request.body.targetDatabaseName,
+          dataset: request.body.dataset
+        });
+
+        response.status(200).json(summary);
+      } catch (error) {
+        if (error instanceof DirectMongoSeedingError) {
+          response.status(422).json({
+            code: error.code,
+            message: error.message,
+            validationResults: error.validationResults
+          });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/direct-seeding",
+    validateBody(directSeedExecuteRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before direct seeding." });
+          return;
+        }
+
+        if (request.body.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        if (request.body.dataset.projectId !== params.projectId) {
+          response.status(409).json({ message: "The dataset does not match the requested project." });
+          return;
+        }
+
+        const report = await seedMongoDataset(
+          {
+            connectionString: request.body.connectionString,
+            connectionTestToken: request.body.connectionTestToken,
+            schema: context.schemaSnapshot.schema,
+            dataset: request.body.dataset,
+            targetDatabaseName: request.body.targetDatabaseName,
+            confirmed: request.body.confirmed,
+            timeoutMs: request.body.timeoutMs
+          },
+          { clientFactory: createMongoNativeDriverClientFactory() }
+        );
+
+        const insertedDocumentIds =
+          report.insertedDocumentIds ??
+          buildInsertedDocumentIds(request.body.dataset, [...report.successfulCollections, ...report.failedCollections]);
+        const status = report.failedCollections.length > 0 ? "partially_inserted" : "inserted";
+        const body: DirectSeedingExecuteApiResponse = { report };
+
+        try {
+          const { batch } = await recordSeedBatch(
+            {
+              projectId: context.project.id,
+              actorId: authenticatedRequest.auth.userId,
+              seedBatchId: report.seedBatchId,
+              collectionCounts: report.insertedRecordCounts,
+              insertedDocumentIds,
+              collectionOrder: report.rollback.collectionOrder,
+              status
+            },
+            {
+              recordSeedBatchRecord: deps.projectHistoryRepository.recordSeedBatch,
+              appendProjectEvent: deps.projectHistoryRepository.appendProjectEvent
+            }
+          );
+          body.seedBatch = batch;
+        } catch {
+          body.historyWarning =
+            "Direct seeding completed, but TestSeed could not save the seed batch history entry.";
+        }
+
+        response.status(report.failedCollections.length > 0 ? 207 : 200).json(body);
+      } catch (error) {
+        if (error instanceof DirectMongoSeedingError) {
+          response.status(422).json({
+            code: error.code,
+            message: error.message,
+            validationResults: error.validationResults
+          });
+          return;
+        }
         next(error);
       }
     }
@@ -1063,7 +1274,7 @@ function createOpenAIGenerationProvider(deps: GenerationRouterDeps): SeedGenerat
         {
           role: "system",
           content:
-            "Generate realistic MongoDB seed records as strict JSON. Return only an object with a collections property grouped by collection name. Preserve field types, required fields, enum values, uniqueness, and ObjectId references. Use supplied ObjectId candidates for references. Do not include secrets or explanations."
+            "Generate realistic MongoDB seed records as strict JSON. Return only an object with a collections property grouped by collection name. Preserve field types, required fields, enum values, uniqueness, and references. Use random-looking decimal string _id values for user records instead of hex ObjectIds or sequential semantic ids. Do not include secrets or explanations."
         },
         {
           role: "user",
@@ -1243,6 +1454,20 @@ function statusForFeedbackMode(mode: FeedbackRegenerationResponse["mode"]): numb
     return 200;
   }
   return 422;
+}
+
+function buildInsertedDocumentIds(
+  dataset: GeneratedDataset,
+  successfulCollections: Array<{ collectionName: string; insertedCount: number }>
+): Record<string, string[]> {
+  return Object.fromEntries(
+    successfulCollections.map((collection) => [
+      collection.collectionName,
+      (dataset.collections[collection.collectionName] ?? [])
+        .slice(0, collection.insertedCount)
+        .map((record) => record._id)
+    ])
+  );
 }
 
 void createGenerationRouter;

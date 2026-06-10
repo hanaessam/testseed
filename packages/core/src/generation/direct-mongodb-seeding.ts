@@ -40,7 +40,7 @@ export interface DirectMongoDatabase {
 }
 
 export interface DirectMongoCollection {
-  insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number }>;
+  insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number; insertedIds?: string[] }>;
 }
 
 export interface DirectMongoSeedingDeps {
@@ -59,6 +59,18 @@ export class DirectMongoSeedingError extends Error implements DirectMongoSeeding
     this.name = "DirectMongoSeedingError";
     this.code = details.code;
     this.validationResults = details.validationResults;
+  }
+}
+
+export class DirectMongoInsertManyError extends Error {
+  insertedCount: number;
+  insertedIds: string[];
+
+  constructor(details: { message: string; insertedCount?: number; insertedIds?: string[] }) {
+    super(details.message);
+    this.name = "DirectMongoInsertManyError";
+    this.insertedCount = details.insertedCount ?? 0;
+    this.insertedIds = details.insertedIds ?? [];
   }
 }
 
@@ -146,6 +158,7 @@ export async function seedMongoDataset(
   const successfulCollections: InsertedCollectionResult[] = [];
   const failedCollections: InsertedCollectionResult[] = [];
   const insertedRecordCounts: Record<string, number> = {};
+  const insertedDocumentIds: Record<string, string[]> = {};
   let client: DirectMongoClient | undefined;
 
   try {
@@ -161,6 +174,7 @@ export async function seedMongoDataset(
         const result = await db.collection(collectionName).insertMany(records);
         const insertedCount = result.insertedCount;
         insertedRecordCounts[collectionName] = insertedCount;
+        insertedDocumentIds[collectionName] = resolveInsertedIds(sourceRecords, result.insertedIds, insertedCount);
         successfulCollections.push({
           collectionName,
           requestedCount: records.length,
@@ -168,10 +182,15 @@ export async function seedMongoDataset(
           status: "succeeded"
         });
       } catch (error) {
+        const partialInsert = getPartialInsertDetails(sourceRecords, error);
+        if (partialInsert.insertedCount > 0) {
+          insertedRecordCounts[collectionName] = partialInsert.insertedCount;
+          insertedDocumentIds[collectionName] = partialInsert.insertedIds;
+        }
         failedCollections.push({
           collectionName,
           requestedCount: records.length,
-          insertedCount: 0,
+          insertedCount: partialInsert.insertedCount,
           status: "failed",
           errorSummary: sanitizeErrorSummary(error, connectionString)
         });
@@ -191,13 +210,16 @@ export async function seedMongoDataset(
     failedCollections,
     insertedRecordCounts,
     totalInsertedCount: Object.values(insertedRecordCounts).reduce((sum, count) => sum + count, 0),
+    insertedDocumentIds,
     rollback: {
       seedBatchId,
       collectionOrder: successfulCollections.map((collection) => collection.collectionName),
-      collections: successfulCollections.map((collection) => ({
-        collectionName: collection.collectionName,
-        insertedCount: collection.insertedCount
-      }))
+      collections: [...successfulCollections, ...failedCollections]
+        .filter((collection) => collection.insertedCount > 0)
+        .map((collection) => ({
+          collectionName: collection.collectionName,
+          insertedCount: collection.insertedCount
+        }))
     }
   };
 }
@@ -286,6 +308,32 @@ function tagRecord(record: GeneratedRecord, seedBatchId: string): Record<string,
     ...record,
     seedBatchId
   };
+}
+
+function getPartialInsertDetails(
+  sourceRecords: GeneratedRecord[],
+  error: unknown
+): { insertedCount: number; insertedIds: string[] } {
+  if (error instanceof DirectMongoInsertManyError) {
+    return {
+      insertedCount: error.insertedCount,
+      insertedIds: resolveInsertedIds(sourceRecords, error.insertedIds, error.insertedCount)
+    };
+  }
+
+  return { insertedCount: 0, insertedIds: [] };
+}
+
+function resolveInsertedIds(
+  sourceRecords: GeneratedRecord[],
+  insertedIds: string[] | undefined,
+  insertedCount: number
+): string[] {
+  if (insertedIds?.length) {
+    return insertedIds.slice(0, insertedCount);
+  }
+
+  return sourceRecords.slice(0, insertedCount).map((record) => record._id);
 }
 
 function sanitizeErrorSummary(error: unknown, connectionString: string): string {
