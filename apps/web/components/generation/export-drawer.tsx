@@ -24,6 +24,30 @@ import type {
 import { CheckCircle2, Copy, Database, Download, FileCode2, FileJson, Loader2, X } from "lucide-react";
 import { useState } from "react";
 
+interface ExportDrawerTriggerProps {
+  isOpen: boolean;
+  onOpenChange(isOpen: boolean): void;
+  className?: string;
+}
+
+export function ExportDrawerTrigger({
+  isOpen,
+  onOpenChange,
+  className
+}: ExportDrawerTriggerProps) {
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      className={className}
+      onClick={() => onOpenChange(!isOpen)}
+    >
+      <FileJson className="h-4 w-4" />
+      {isOpen ? "Hide export" : "Export"}
+    </Button>
+  );
+}
+
 interface ExportDrawerProps {
   projectId?: string | null;
   token?: string | null;
@@ -33,6 +57,7 @@ interface ExportDrawerProps {
   validationResults?: GenerationValidationResult[];
   isOpen: boolean;
   onOpenChange(isOpen: boolean): void;
+  showTrigger?: boolean;
   className?: string;
 }
 
@@ -45,6 +70,7 @@ export function ExportDrawer({
   validationResults = [],
   isOpen,
   onOpenChange,
+  showTrigger = true,
   className
 }: ExportDrawerProps) {
   const [scriptPreview, setScriptPreview] = useState("");
@@ -315,15 +341,14 @@ export function ExportDrawer({
 
   return (
     <div className={cn("w-full", className)}>
-      <div className="flex items-center justify-end">
-        <Button type="button" variant="secondary" onClick={() => onOpenChange(!isOpen)}>
-          <FileJson className="h-4 w-4" />
-          {isOpen ? "Hide export" : "Export"}
-        </Button>
-      </div>
+      {showTrigger ? (
+        <div className="flex items-center justify-end">
+          <ExportDrawerTrigger isOpen={isOpen} onOpenChange={onOpenChange} />
+        </div>
+      ) : null}
 
       {isOpen ? (
-        <Card className="mt-3 overflow-hidden">
+        <Card className={cn("overflow-hidden", showTrigger && "mt-3")}>
           <CardHeader className="space-y-1">
             <h2 className="text-sm font-semibold text-foreground">Export dataset</h2>
             <p className="text-xs leading-5 text-muted">

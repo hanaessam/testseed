@@ -70,7 +70,7 @@ const deleteModeSchema = z.object({
   mode: z.enum(["archive", "hard"])
 });
 
-const schemaFieldSchema: z.ZodType<SchemaField> = z.lazy(() =>
+const schemaFieldSchema: z.ZodSchema<SchemaField> = z.lazy(() =>
   z.object({
     name: z.string().min(1),
     type: z.string().min(1),
@@ -86,7 +86,7 @@ const schemaFieldSchema: z.ZodType<SchemaField> = z.lazy(() =>
     children: z.array(schemaFieldSchema).optional(),
     itemType: z.string().optional()
   })
-);
+) as z.ZodSchema<SchemaField>;
 
 const parsedSchemaSchema = z.object({
   collections: z.array(
