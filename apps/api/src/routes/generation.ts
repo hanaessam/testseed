@@ -85,7 +85,7 @@ const generatedRecordSchema = z
   })
   .passthrough();
 
-const generatedDatasetSchema = z.object({
+const generatedDatasetSchema: z.ZodSchema<GeneratedDataset> = z.object({
   projectId: z.string().min(1),
   schemaSnapshotId: z.string().min(1),
   status: z.enum(["valid", "invalid", "failed"]),
@@ -95,7 +95,7 @@ const generatedDatasetSchema = z.object({
   validationResults: z.array(z.custom<GenerationValidationResult>()),
   warnings: z.array(z.custom<GenerationValidationResult>()),
   createdAt: z.string()
-}) satisfies z.ZodType<GeneratedDataset>;
+}) as z.ZodSchema<GeneratedDataset>;
 
 const refineGeneratedDatasetRequestSchema = z.object({
   currentDataset: generatedDatasetSchema,
