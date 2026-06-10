@@ -17,7 +17,20 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: "TestSeed",
-  description: "AI-assisted MongoDB seed data generation"
+  description: "AI-assisted MongoDB seed data generation",
+  icons: {
+    icon: [
+      {
+        url: "/logo-light.svg",
+        media: "(prefers-color-scheme: light)"
+      },
+      {
+        url: "/logo-dark.svg",
+        media: "(prefers-color-scheme: dark)"
+      }
+    ],
+    apple: "/logo-light.svg"
+  }
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

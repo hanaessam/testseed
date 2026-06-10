@@ -132,6 +132,10 @@ const authRouterConfig = {
 
 export const app = express();
 
+app.get("/health", (_request, response) => {
+  response.json({ status: "ok" });
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(requireAuth(jwtSecret));
@@ -214,7 +218,9 @@ app.use(
   }
 );
 
-if (process.env.NODE_ENV !== "test") {
+export default app;
+
+if (!process.env.VERCEL && process.env.NODE_ENV !== "test") {
   startServer().catch((error: unknown) => {
     console.error("Failed to start TestSeed API", error);
     process.exit(1);
