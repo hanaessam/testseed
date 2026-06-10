@@ -136,11 +136,20 @@ SMTP_FROM="TestSeed <no-reply@testseed.local>"
 
 **GitHub OAuth (optional)**
 
+Register one OAuth app named **TestSeed** (not “TestSeed Local”) at [GitHub Developer Settings](https://github.com/settings/developers).
+
+| Environment | Homepage URL | Authorization callback URL |
+| --- | --- | --- |
+| Local | `http://localhost:3000` | `http://localhost:3001/auth/github/callback` |
+| Production | `https://testseed-web.vercel.app` | `https://testseed-api.vercel.app/auth/github/callback` |
+
 ```env
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 GITHUB_CALLBACK_URL=http://localhost:3001/auth/github/callback
 ```
+
+The OAuth app **name and callback URLs** are configured in GitHub — not in this repo. Production `GITHUB_CALLBACK_URL` and `WEB_APP_URL` must match on the **API** Vercel project; `NEXT_PUBLIC_API_URL` must match on **Web**.
 
 The web app reads `NEXT_PUBLIC_*` values from the root `.env` through `apps/web/next.config.js`.
 
@@ -187,9 +196,17 @@ To sync local secrets to Vercel:
 
 ```sh
 # Optional: set production URLs before syncing
-export VERCEL_WEB_URL=https://your-web-project.vercel.app
-export VERCEL_API_URL=https://your-api-project.vercel.app
+export VERCEL_WEB_URL=https://testseed-web.vercel.app
+export VERCEL_API_URL=https://testseed-api.vercel.app
 node scripts/sync-vercel-env.mjs
+node scripts/fix-vercel-production-urls.mjs
+node scripts/audit-vercel-env.mjs
+```
+
+Remove secrets that were copied to the wrong project:
+
+```sh
+node scripts/sync-vercel-env.mjs --prune-misplaced
 ```
 
 **GitHub repository secrets** (Settings → Secrets and variables → Actions):

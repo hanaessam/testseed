@@ -62,6 +62,9 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
 
+      - name: Fix Vercel API project.json for monorepo CI build
+        run: node scripts/vercel-fix-project-json.mjs apps/api
+
       - name: Build API
         run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
         env:
@@ -90,6 +93,9 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+
+      - name: Fix Vercel Web project.json for monorepo CI build
+        run: node scripts/vercel-fix-project-json.mjs apps/web
 
       - name: Build Web
         run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
@@ -178,6 +184,9 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
 
+      - name: Fix Vercel API project.json for monorepo CI build
+        run: node scripts/vercel-fix-project-json.mjs apps/api
+
       - name: Build API
         run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
         env:
@@ -206,6 +215,9 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+
+      - name: Fix Vercel Web project.json for monorepo CI build
+        run: node scripts/vercel-fix-project-json.mjs apps/web
 
       - name: Build Web
         run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
