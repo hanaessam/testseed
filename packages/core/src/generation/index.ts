@@ -36,6 +36,20 @@ export {
   ExportJsSeedScriptError
 } from "./export-js-seed-script";
 export {
+  DIRECT_SEEDING_CONFIRMATION_WARNING,
+  DirectMongoSeedingError,
+  buildDirectSeedingConfirmation,
+  createDirectMongoConnectionFingerprint,
+  seedMongoDataset,
+  testDirectMongoConnection,
+  type DirectMongoClient,
+  type DirectMongoClientFactory,
+  type DirectMongoCollection,
+  type DirectMongoDatabase,
+  type DirectMongoSeedingDeps
+} from "./direct-mongodb-seeding";
+export { createMongoNativeDriverClientFactory } from "./direct-mongodb-native-driver";
+export {
   buildCandidateChangeSummary,
   canAcceptCandidate,
   hasFixableRetryProblem,
