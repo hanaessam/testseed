@@ -1,3 +1,4 @@
+import { randomInt } from "crypto";
 import type {
   GeneratedDataset,
   GeneratedRecord,
@@ -33,6 +34,7 @@ export interface GenerateSeedDataDeps {
   generateRecords: SeedGenerationProvider;
   now?: () => Date;
   safeGenerationLimit?: number;
+  generateRecordId?: (input: { collectionName: string; collectionIndex: number; recordIndex: number }) => string;
 }
 
 export async function generateSeedData(
@@ -87,7 +89,7 @@ export async function generateSeedData(
     const dataset = createDataset(
       input,
       plan.dependencyGraph.orderedCollections,
-      normalizeGeneratedCollections(providerResponse.collections, input.schema, input.collectionCounts),
+      normalizeGeneratedCollections(providerResponse.collections, input.schema, input.collectionCounts, deps),
       [],
       plan.warnings,
       now
@@ -136,6 +138,10 @@ export function createStableObjectId(collectionIndex: number, recordIndex: numbe
   return `${prefix}${body}${suffix}`.slice(0, 24);
 }
 
+export function createRandomDecimalId(): string {
+  return `${randomInt(100000, 1000000)}${randomInt(100000, 1000000)}`;
+}
+
 function createDataset(
   input: GenerateSeedDataInput,
   generationOrder: string[],
@@ -165,7 +171,8 @@ function createDataset(
 function normalizeGeneratedCollections(
   collections: Record<string, GeneratedRecord[]> | undefined,
   schema: ParsedSchema,
-  counts: Record<string, number>
+  counts: Record<string, number>,
+  deps: Pick<GenerateSeedDataDeps, "generateRecordId"> = {}
 ): Record<string, GeneratedRecord[]> {
   const normalized: Record<string, GeneratedRecord[]> = {};
   const providerCollections = collections ?? {};
@@ -182,7 +189,7 @@ function normalizeGeneratedCollections(
     const expectedCount = counts[collection.name] ?? 0;
     normalized[collection.name] = Array.from({ length: expectedCount }, (_, recordIndex) => {
       const record = records[recordIndex] ?? {};
-      return normalizeRecord(record, collection.fields, collection.name, collectionIndex, recordIndex);
+      return normalizeRecord(record, collection.fields, collection.name, collectionIndex, recordIndex, deps);
     });
   });
 
@@ -240,14 +247,12 @@ function normalizeRecord(
   fields: SchemaField[],
   collectionName: string,
   collectionIndex: number,
-  recordIndex: number
+  recordIndex: number,
+  deps: Pick<GenerateSeedDataDeps, "generateRecordId"> = {}
 ): GeneratedRecord {
   const normalized: GeneratedRecord = {
     ...record,
-    _id:
-      typeof record._id === "string" && /^[a-f0-9]{24}$/i.test(record._id)
-        ? record._id
-        : createStableObjectId(collectionIndex, recordIndex)
+    _id: createRecordId(record, collectionName, collectionIndex, recordIndex, deps)
   };
 
   for (const field of fields) {
@@ -269,6 +274,22 @@ function normalizeRecord(
   }
 
   return normalized;
+}
+
+function createRecordId(
+  record: Record<string, unknown>,
+  collectionName: string,
+  collectionIndex: number,
+  recordIndex: number,
+  deps: Pick<GenerateSeedDataDeps, "generateRecordId">
+): string {
+  if (isUserCollection(collectionName)) {
+    return deps.generateRecordId?.({ collectionName, collectionIndex, recordIndex }) ?? createRandomDecimalId();
+  }
+
+  return typeof record._id === "string" && /^[a-f0-9]{24}$/i.test(record._id)
+    ? record._id
+    : createStableObjectId(collectionIndex, recordIndex);
 }
 
 function createFallbackValue(
@@ -327,6 +348,10 @@ function generatedValueMatchesType(value: unknown, field: SchemaField): boolean 
 
 function canonicalProviderKey(name: string): string {
   return name.trim().toLowerCase().replace(/s$/, "");
+}
+
+function isUserCollection(collectionName: string): boolean {
+  return canonicalProviderKey(collectionName) === "user";
 }
 
 function genericContextWarnings(input: GenerateSeedDataInput): GenerationValidationResult[] {

@@ -5,6 +5,7 @@ import type {
   DirectMongoCollection,
   DirectMongoDatabase
 } from "./direct-mongodb-seeding";
+import { DirectMongoInsertManyError } from "./direct-mongodb-seeding";
 
 export function createMongoNativeDriverClientFactory(): DirectMongoClientFactory {
   return {
@@ -53,10 +54,60 @@ class MongoNativeDriverDatabase implements DirectMongoDatabase {
 class MongoNativeDriverCollection implements DirectMongoCollection {
   constructor(private readonly collectionRef: Collection) {}
 
-  async insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number }> {
-    const result = await this.collectionRef.insertMany(records);
-    return {
-      insertedCount: result.insertedCount
-    };
+  async insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number; insertedIds?: string[] }> {
+    try {
+      const result = await this.collectionRef.insertMany(records, { ordered: false });
+      return {
+        insertedCount: result.insertedCount,
+        insertedIds: normalizeInsertedIds(result.insertedIds)
+      };
+    } catch (error) {
+      throw new DirectMongoInsertManyError({
+        message: error instanceof Error ? error.message : String(error),
+        insertedCount: extractInsertedCount(error),
+        insertedIds: extractInsertedIds(error)
+      });
+    }
   }
+}
+
+function normalizeInsertedIds(insertedIds: unknown): string[] {
+  if (!insertedIds || typeof insertedIds !== "object") {
+    return [];
+  }
+
+  return Object.entries(insertedIds)
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([, id]) => String(id));
+}
+
+function extractInsertedCount(error: unknown): number {
+  const result = extractBulkResult(error);
+  const insertedCount = result?.insertedCount ?? result?.result?.nInserted;
+  return typeof insertedCount === "number" ? insertedCount : 0;
+}
+
+function extractInsertedIds(error: unknown): string[] {
+  const result = extractBulkResult(error);
+  return normalizeInsertedIds(result?.insertedIds);
+}
+
+function extractBulkResult(error: unknown): {
+  insertedCount?: number;
+  insertedIds?: unknown;
+  result?: { nInserted?: number };
+} | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const maybeError = error as {
+    result?: {
+      insertedCount?: number;
+      insertedIds?: unknown;
+      result?: { nInserted?: number };
+    };
+  };
+
+  return maybeError.result ?? null;
 }

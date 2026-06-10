@@ -107,6 +107,29 @@ export interface DirectSeedingRequest {
   timeoutMs?: number;
 }
 
+export interface DirectSeedingConfirmationApiRequest {
+  schemaSnapshotId: string;
+  connectionTestToken: string;
+  targetDatabaseName: string;
+  dataset: GeneratedDataset;
+}
+
+export interface DirectSeedingExecuteApiRequest {
+  schemaSnapshotId: string;
+  connectionString?: string;
+  connectionTestToken?: string;
+  dataset: GeneratedDataset;
+  targetDatabaseName: string;
+  confirmed: boolean;
+  timeoutMs?: number;
+}
+
+export interface DirectSeedingExecuteApiResponse {
+  report: DirectSeedingReport;
+  seedBatch?: import("./projects").SeedBatch;
+  historyWarning?: string;
+}
+
 export type InsertedCollectionStatus = "succeeded" | "failed";
 
 export interface InsertedCollectionResult {
@@ -134,6 +157,7 @@ export interface DirectSeedingReport {
   failedCollections: InsertedCollectionResult[];
   insertedRecordCounts: Record<string, number>;
   totalInsertedCount: number;
+  insertedDocumentIds?: Record<string, string[]>;
   rollback: DirectSeedingRollbackMetadata;
 }
 
