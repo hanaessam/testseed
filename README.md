@@ -192,24 +192,38 @@ cd apps/web && npx vercel link
 cd ../api && npx vercel link
 ```
 
-To sync local secrets to Vercel:
+Keep **local** URLs in `.env` (`localhost:3000` / `localhost:3001`). Use a separate **production** file for deploy sync:
 
 ```sh
-# Optional: set production URLs before syncing
-export VERCEL_WEB_URL=https://testseed-web.vercel.app
-export VERCEL_API_URL=https://testseed-api.vercel.app
-node scripts/sync-vercel-env.mjs
-node scripts/fix-vercel-production-urls.mjs
+# 1. Link Vercel projects (once)
+cd apps/web && npx vercel link
+cd ../api && npx vercel link
+
+# 2. Build .env.production from .env + production URLs + linked project IDs
+npm run env:production:init
+
+# 3. Add your Vercel token to .env.production
+#    VERCEL_TOKEN=...   (from https://vercel.com/account/tokens)
+
+# 4. Push app secrets to Vercel and deploy secrets to GitHub Actions
+npm run env:production:sync
+
+# Optional: also sync preview/development on Vercel
+node scripts/sync-production-env.mjs --all-environments
+
+# Audit Vercel env var names (no values printed)
 node scripts/audit-vercel-env.mjs
 ```
 
-Remove secrets that were copied to the wrong project:
+Copy `.env.production.example` to `.env.production` if you prefer to fill production values manually instead of `env:production:init`.
+
+Remove secrets that were copied to the wrong Vercel project:
 
 ```sh
-node scripts/sync-vercel-env.mjs --prune-misplaced
+node scripts/sync-vercel-env.mjs --env-file=.env.production --prune-misplaced
 ```
 
-**GitHub repository secrets** (Settings → Secrets and variables → Actions):
+**GitHub repository secrets** (set automatically by `env:production:sync` when `gh` is authenticated):
 
 | Secret | Description |
 | --- | --- |
@@ -217,6 +231,8 @@ node scripts/sync-vercel-env.mjs --prune-misplaced
 | `VERCEL_ORG_ID` | Team or user ID from `apps/web/.vercel/project.json` (`orgId`) |
 | `VERCEL_WEB_PROJECT_ID` | Web project ID from `apps/web/.vercel/project.json` (`projectId`) |
 | `VERCEL_API_PROJECT_ID` | API project ID from `apps/api/.vercel/project.json` (`projectId`) |
+
+App secrets (`MONGODB_URI`, `JWT_SECRET`, `GITHUB_*`, etc.) go to **Vercel** only — not GitHub Actions.
 
 ## Documentation
 
