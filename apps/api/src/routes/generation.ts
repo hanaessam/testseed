@@ -79,17 +79,23 @@ const chatMessageSchema = z.object({
   content: z.string().min(1).max(2000)
 });
 
-const generatedDatasetSchema: z.ZodType<GeneratedDataset> = z.object({
+const generatedRecordSchema = z
+  .object({
+    _id: z.string()
+  })
+  .passthrough();
+
+const generatedDatasetSchema = z.object({
   projectId: z.string().min(1),
   schemaSnapshotId: z.string().min(1),
   status: z.enum(["valid", "invalid", "failed"]),
   generationOrder: z.array(z.string()),
   collectionCounts: z.record(z.number().int().min(0)),
-  collections: z.record(z.array(z.record(z.unknown()).and(z.object({ _id: z.string() })))),
+  collections: z.record(z.array(generatedRecordSchema)),
   validationResults: z.array(z.custom<GenerationValidationResult>()),
   warnings: z.array(z.custom<GenerationValidationResult>()),
   createdAt: z.string()
-});
+}) satisfies z.ZodType<GeneratedDataset>;
 
 const refineGeneratedDatasetRequestSchema = z.object({
   currentDataset: generatedDatasetSchema,
