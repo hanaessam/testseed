@@ -41,8 +41,11 @@ jobs:
       - name: Build, lint, and test
         run: npx turbo build lint test
 
-      - name: Expose Node/npm on PATH for Vercel CLI
-        run: echo "$(dirname "$(which npm)")" >> "$GITHUB_PATH"
+      - name: Link Node toolchain for Vercel CLI
+        run: |
+          sudo ln -sf "$(command -v node)" /usr/bin/node
+          sudo ln -sf "$(command -v npm)" /usr/bin/npm
+          sudo ln -sf "$(command -v npx)" /usr/bin/npx
 
       - name: Link Vercel API project
         run: |
@@ -58,14 +61,13 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
 
       - name: Build API
         run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
+          CI: true
 
       - name: Deploy API preview
         id: deploy-api
@@ -73,7 +75,6 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
 
       - name: Link Vercel Web project
         run: |
@@ -89,7 +90,6 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
 
       - name: Build Web
         run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
@@ -97,7 +97,7 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
           NEXT_PUBLIC_API_URL: ${{ steps.deploy-api.outputs.url }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
+          CI: true
 
       - name: Deploy Web preview
         id: deploy-web
@@ -105,7 +105,6 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
 
       - name: Comment preview URLs
         uses: actions/github-script@v7
@@ -155,8 +154,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Expose Node/npm on PATH for Vercel CLI
-        run: echo "$(dirname "$(which npm)")" >> "$GITHUB_PATH"
+      - name: Build packages
+        run: npx turbo build
+
+      - name: Link Node toolchain for Vercel CLI
+        run: |
+          sudo ln -sf "$(command -v node)" /usr/bin/node
+          sudo ln -sf "$(command -v npm)" /usr/bin/npm
+          sudo ln -sf "$(command -v npx)" /usr/bin/npx
 
       - name: Link Vercel API project
         run: |
@@ -172,14 +177,13 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
 
       - name: Build API
         run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
+          CI: true
 
       - name: Deploy API production
         id: deploy-api
@@ -187,7 +191,6 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
 
       - name: Link Vercel Web project
         run: |
@@ -203,18 +206,16 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
 
       - name: Build Web
         run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
+          CI: true
 
       - name: Deploy Web production
         run: npx vercel@54.11.0 deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
-          PATH: /usr/local/bin:/usr/bin:/bin:${{ env.PATH }}
