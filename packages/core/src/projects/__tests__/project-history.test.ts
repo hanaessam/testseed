@@ -623,9 +623,10 @@ describe("project history use cases", () => {
             id: "batch-row-1",
             projectId: "project-1",
             actorId: "user-1",
-            seedBatchId: "batch-1",
+            seedBatchId: "11111111-1111-4111-8111-111111111111",
             collectionCounts: { users: 2 },
             insertedDocumentIds: { users: ["user-1"] },
+            collectionOrder: ["users"],
             status: "inserted",
             createdAt: new Date("2026-06-02T00:05:00.000Z")
           }
@@ -646,9 +647,10 @@ describe("project history use cases", () => {
       {
         projectId: "project-1",
         actorId: "user-1",
-        seedBatchId: "batch-1",
+        seedBatchId: "11111111-1111-4111-8111-111111111111",
         collectionCounts: { users: 2 },
         insertedDocumentIds: { users: ["user-1"] },
+        collectionOrder: ["users"],
         status: "inserted"
       },
       {
@@ -665,7 +667,7 @@ describe("project history use cases", () => {
     );
 
     expect(recordedInput).not.toBeNull();
-    expect(recordedInput!.seedBatchId).toBe("batch-1");
+    expect(recordedInput!.seedBatchId).toBe("11111111-1111-4111-8111-111111111111");
     expect(batch.batch.status).toBe("inserted");
     expect(eventInput).not.toBeNull();
     expect(eventInput!.kind).toBe("seed_batch_recorded");
@@ -676,7 +678,7 @@ describe("project history use cases", () => {
       {
         projectId: "project-1",
         actorId: "user-1",
-        seedBatchId: "batch-1"
+        seedBatchId: "11111111-1111-4111-8111-111111111111"
       },
       {
         now: () => new Date("2026-06-02T00:10:00.000Z"),
@@ -684,29 +686,32 @@ describe("project history use cases", () => {
           id: "batch-row-1",
           projectId: "project-1",
           actorId: "user-1",
-          seedBatchId: "batch-1",
+          seedBatchId: "11111111-1111-4111-8111-111111111111",
           collectionCounts: { users: 1 },
           insertedDocumentIds: { users: ["user-1"] },
+          collectionOrder: ["users"],
           status: "inserted",
           createdAt: new Date("2026-06-02T00:00:00.000Z")
         }),
-        deleteRecordsByIds: async () => ({ users: 1 }),
+        deleteRecordsBySeedBatchId: async () => ({ deletedCount: 1 }),
         markSeedBatchRolledBack: async () => ({
           id: "batch-row-1",
           projectId: "project-1",
           actorId: "user-1",
-          seedBatchId: "batch-1",
+          seedBatchId: "11111111-1111-4111-8111-111111111111",
           collectionCounts: { users: 1 },
           insertedDocumentIds: { users: ["user-1"] },
+          collectionOrder: ["users"],
           status: "rolled_back",
           createdAt: new Date("2026-06-02T00:00:00.000Z"),
-          rolledBackAt: new Date("2026-06-02T00:10:00.000Z")
+          rolledBackAt: new Date("2026-06-02T00:10:00.000Z"),
+          rollbackDeletedCounts: { users: 1 }
         }),
         appendProjectEvent: async (input) => ({ id: "event-2", ...input })
       }
     );
 
-    expect(result.deletedCounts).toEqual({ users: 1 });
+    expect(result.report.deletedCounts).toEqual({ users: 1 });
     expect(result.batch.status).toBe("rolled_back");
   });
 });

@@ -20,6 +20,7 @@ const recordSeedBatchSchema = z.object({
   seedBatchId: z.string().min(1),
   collectionCounts: z.record(z.number().int().nonnegative()),
   insertedDocumentIds: z.record(z.array(z.string().min(1))),
+  collectionOrder: z.array(z.string().min(1)),
   status: z.enum(["pending", "inserted", "partially_inserted", "rolled_back"])
 });
 
@@ -77,6 +78,7 @@ export function createHistoryRouter(deps: HistoryRouterDeps): Router {
             seedBatchId: request.body.seedBatchId,
             collectionCounts: request.body.collectionCounts,
             insertedDocumentIds: request.body.insertedDocumentIds,
+            collectionOrder: request.body.collectionOrder,
             status: request.body.status
           },
           {

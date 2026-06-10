@@ -49,6 +49,7 @@ const seedBatch: SeedBatch = {
   seedBatchId: "batch-1",
   collectionCounts: { users: 2, orders: 4 },
   insertedDocumentIds: { users: ["user-doc-1"], orders: ["order-doc-1", "order-doc-2"] },
+  collectionOrder: ["users", "orders"],
   status: "pending",
   createdAt: new Date("2026-06-02T00:00:00.000Z")
 };

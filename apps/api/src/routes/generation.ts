@@ -570,6 +570,7 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
               seedBatchId: report.seedBatchId,
               collectionCounts: report.insertedRecordCounts,
               insertedDocumentIds,
+              collectionOrder: report.rollback.collectionOrder,
               status
             },
             {

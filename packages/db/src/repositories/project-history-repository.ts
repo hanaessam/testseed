@@ -24,9 +24,11 @@ export interface RecordSeedBatchInput {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
+  collectionOrder: string[];
   status: SeedBatch["status"];
   createdAt: Date;
   rolledBackAt?: Date;
+  rollbackDeletedCounts?: Record<string, number>;
 }
 
 export function createProjectHistoryRepository(connection: Connection) {
@@ -62,14 +64,19 @@ export function createProjectHistoryRepository(connection: Connection) {
       return document ? toSeedBatch(document) : null;
     },
 
-    async markSeedBatchRolledBack(
-      projectId: string,
-      seedBatchId: string,
-      rolledBackAt: Date
-    ): Promise<SeedBatch | null> {
+    async markSeedBatchRolledBack(input: {
+      projectId: string;
+      seedBatchId: string;
+      rolledBackAt: Date;
+      rollbackDeletedCounts: Record<string, number>;
+    }): Promise<SeedBatch | null> {
       const document = await SeedBatchModel.findOneAndUpdate(
-        { projectId, seedBatchId },
-        { status: "rolled_back", rolledBackAt },
+        { projectId: input.projectId, seedBatchId: input.seedBatchId },
+        {
+          status: "rolled_back",
+          rolledBackAt: input.rolledBackAt,
+          rollbackDeletedCounts: input.rollbackDeletedCounts
+        },
         { new: true }
       ).exec();
 
@@ -114,9 +121,11 @@ function toSeedBatch(document: {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
+  collectionOrder?: string[];
   status: SeedBatch["status"];
   createdAt: Date;
   rolledBackAt?: Date;
+  rollbackDeletedCounts?: Record<string, number>;
 }): SeedBatch {
   return {
     id: String(document._id),
@@ -125,8 +134,10 @@ function toSeedBatch(document: {
     seedBatchId: document.seedBatchId,
     collectionCounts: document.collectionCounts,
     insertedDocumentIds: document.insertedDocumentIds,
+    collectionOrder: document.collectionOrder ?? Object.keys(document.insertedDocumentIds),
     status: document.status,
     createdAt: document.createdAt,
-    rolledBackAt: document.rolledBackAt
+    rolledBackAt: document.rolledBackAt,
+    rollbackDeletedCounts: document.rollbackDeletedCounts
   };
 }

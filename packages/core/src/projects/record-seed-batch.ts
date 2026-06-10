@@ -6,6 +6,7 @@ export interface RecordSeedBatchRequest {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
+  collectionOrder: string[];
   status: SeedBatch["status"];
 }
 
@@ -15,9 +16,11 @@ export interface RecordSeedBatchRecordInput {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
+  collectionOrder: string[];
   status: SeedBatch["status"];
   createdAt: Date;
   rolledBackAt?: Date;
+  rollbackDeletedCounts?: Record<string, number>;
 }
 
 export interface RecordSeedBatchDeps {
@@ -44,6 +47,7 @@ export async function recordSeedBatch(
     seedBatchId: request.seedBatchId,
     collectionCounts: request.collectionCounts,
     insertedDocumentIds: request.insertedDocumentIds,
+    collectionOrder: request.collectionOrder,
     status: request.status,
     createdAt: now
   });

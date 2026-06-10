@@ -213,6 +213,7 @@ export async function seedMongoDataset(
     insertedDocumentIds,
     rollback: {
       seedBatchId,
+      collectionOrder: successfulCollections.map((collection) => collection.collectionName),
       collections: [...successfulCollections, ...failedCollections]
         .filter((collection) => collection.insertedCount > 0)
         .map((collection) => ({
