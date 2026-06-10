@@ -2,6 +2,7 @@
 
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentDockMessage } from "@/components/generation/agent-dock";
+import { ExportDrawer, ExportDrawerTrigger } from "@/components/generation/export-drawer";
 import { GenerationWorkbench } from "@/components/generation/generation-workbench";
 import {
   isWizardStep,
@@ -1569,6 +1570,9 @@ mongoose.model('Product', ProductSchema);`;
             </div>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            {EXPORT_ENABLED ? (
+              <ExportDrawerTrigger isOpen={exportOpen} onOpenChange={setExportOpen} />
+            ) : null}
             <Button type="button" variant="secondary" onClick={handleEditProjectSetup}>
               Setup wizard
             </Button>
@@ -1586,6 +1590,20 @@ mongoose.model('Product', ProductSchema);`;
             </Button>
           </div>
         </div>
+        {EXPORT_ENABLED ? (
+          <ExportDrawer
+            showTrigger={false}
+            projectId={projectId}
+            token={token}
+            schemaSnapshotId={schemaSnapshot?.id ?? null}
+            dataset={generatedDataset}
+            collectionCounts={collectionCounts}
+            validationResults={generationValidationResults}
+            isOpen={exportOpen}
+            onOpenChange={setExportOpen}
+            className="mt-4"
+          />
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 py-3 lg:px-6 lg:py-4">
@@ -1603,9 +1621,6 @@ mongoose.model('Product', ProductSchema);`;
 
         <GenerationWorkbench
           className="min-h-0 flex-1"
-          projectId={projectId}
-          token={token}
-          schemaSnapshotId={schemaSnapshot?.id ?? null}
           context={projectContext}
           schema={parsedSchema}
           plan={generationPlan}
@@ -1627,9 +1642,6 @@ mongoose.model('Product', ProductSchema);`;
           setupContent={workbenchSetupContent}
           activeCollection={activeCollectionTab}
           onActiveCollectionChange={setActiveCollectionTab}
-          showExport={EXPORT_ENABLED}
-          exportOpen={exportOpen}
-          onExportOpenChange={setExportOpen}
           savedDatasets={savedDatasets}
           savedDatasetsLoading={isSavedDatasetsLoading}
           activeSavedDatasetId={activeSavedDatasetId}
