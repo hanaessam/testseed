@@ -49,24 +49,24 @@ jobs:
 
       - name: Link Vercel API project
         run: |
-          mkdir -p apps/api/.vercel
+          mkdir -p .vercel
           printf '%s\n' \
             '{' \
             '  "orgId": "'"${{ secrets.VERCEL_ORG_ID }}"'",' \
             '  "projectId": "'"${{ secrets.VERCEL_API_PROJECT_ID }}"'"' \
-            '}' > apps/api/.vercel/project.json
+            '}' > .vercel/project.json
 
       - name: Pull Vercel API environment
-        run: npx vercel@54.11.0 pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
+        run: npx vercel@54.11.0 pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
 
       - name: Fix pulled Vercel API settings for monorepo CI build
-        run: node scripts/vercel-fix-project-json.mjs apps/api
+        run: node scripts/vercel-fix-project-json.mjs . apps/api
 
       - name: Build API
-        run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
+        run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
@@ -74,31 +74,31 @@ jobs:
 
       - name: Deploy API preview
         id: deploy-api
-        run: echo "url=$(npx vercel@54.11.0 deploy --prebuilt --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api)" >> "$GITHUB_OUTPUT"
+        run: echo "url=$(npx vercel@54.11.0 deploy --prebuilt --yes --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
 
       - name: Link Vercel Web project
         run: |
-          mkdir -p apps/web/.vercel
+          mkdir -p .vercel
           printf '%s\n' \
             '{' \
             '  "orgId": "'"${{ secrets.VERCEL_ORG_ID }}"'",' \
             '  "projectId": "'"${{ secrets.VERCEL_WEB_PROJECT_ID }}"'"' \
-            '}' > apps/web/.vercel/project.json
+            '}' > .vercel/project.json
 
       - name: Pull Vercel Web environment
-        run: npx vercel@54.11.0 pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
+        run: npx vercel@54.11.0 pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
 
       - name: Fix pulled Vercel Web settings for monorepo CI build
-        run: node scripts/vercel-fix-project-json.mjs apps/web
+        run: node scripts/vercel-fix-project-json.mjs . apps/web
 
       - name: Build Web
-        run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
+        run: npx vercel@54.11.0 build --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
@@ -107,7 +107,7 @@ jobs:
 
       - name: Deploy Web preview
         id: deploy-web
-        run: echo "url=$(npx vercel@54.11.0 deploy --prebuilt --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web)" >> "$GITHUB_OUTPUT"
+        run: echo "url=$(npx vercel@54.11.0 deploy --prebuilt --yes --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
@@ -171,24 +171,24 @@ jobs:
 
       - name: Link Vercel API project
         run: |
-          mkdir -p apps/api/.vercel
+          mkdir -p .vercel
           printf '%s\n' \
             '{' \
             '  "orgId": "'"${{ secrets.VERCEL_ORG_ID }}"'",' \
             '  "projectId": "'"${{ secrets.VERCEL_API_PROJECT_ID }}"'"' \
-            '}' > apps/api/.vercel/project.json
+            '}' > .vercel/project.json
 
       - name: Pull Vercel API environment
-        run: npx vercel@54.11.0 pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
+        run: npx vercel@54.11.0 pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
 
       - name: Fix pulled Vercel API settings for monorepo CI build
-        run: node scripts/vercel-fix-project-json.mjs apps/api
+        run: node scripts/vercel-fix-project-json.mjs . apps/api
 
       - name: Build API
-        run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api
+        run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
@@ -196,38 +196,38 @@ jobs:
 
       - name: Deploy API production
         id: deploy-api
-        run: echo "url=$(npx vercel@54.11.0 deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/api)" >> "$GITHUB_OUTPUT"
+        run: echo "url=$(npx vercel@54.11.0 deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
 
       - name: Link Vercel Web project
         run: |
-          mkdir -p apps/web/.vercel
+          mkdir -p .vercel
           printf '%s\n' \
             '{' \
             '  "orgId": "'"${{ secrets.VERCEL_ORG_ID }}"'",' \
             '  "projectId": "'"${{ secrets.VERCEL_WEB_PROJECT_ID }}"'"' \
-            '}' > apps/web/.vercel/project.json
+            '}' > .vercel/project.json
 
       - name: Pull Vercel Web environment
-        run: npx vercel@54.11.0 pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
+        run: npx vercel@54.11.0 pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
 
       - name: Fix pulled Vercel Web settings for monorepo CI build
-        run: node scripts/vercel-fix-project-json.mjs apps/web
+        run: node scripts/vercel-fix-project-json.mjs . apps/web
 
       - name: Build Web
-        run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
+        run: npx vercel@54.11.0 build --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
           CI: true
 
       - name: Deploy Web production
-        run: npx vercel@54.11.0 deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --cwd=apps/web
+        run: npx vercel@54.11.0 deploy --prebuilt --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}

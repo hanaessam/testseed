@@ -2,15 +2,19 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const appDir = process.argv[2];
+const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+const projectDir = process.argv[2];
+const vercelConfigDir = process.argv[3] ?? projectDir;
 
-if (!appDir) {
-  console.error("Usage: node scripts/vercel-fix-project-json.mjs <app-dir>");
+if (!projectDir) {
+  console.error(
+    "Usage: node scripts/vercel-fix-project-json.mjs <project-dir> [vercel-config-dir]"
+  );
   process.exit(1);
 }
 
-const projectFile = join(appDir, ".vercel", "project.json");
-const vercelConfigFile = join(appDir, "vercel.json");
+const projectFile = join(rootDir, projectDir, ".vercel", "project.json");
+const vercelConfigFile = join(rootDir, vercelConfigDir, "vercel.json");
 
 if (!existsSync(projectFile)) {
   console.log(`No ${projectFile} — skipping Vercel project.json fix.`);
@@ -27,16 +31,6 @@ if (!project.settings) {
 }
 
 const changes = [];
-
-if (project.rootDirectory) {
-  delete project.rootDirectory;
-  changes.push("removed top-level rootDirectory");
-}
-
-if (project.settings.rootDirectory) {
-  delete project.settings.rootDirectory;
-  changes.push("removed settings.rootDirectory");
-}
 
 if (vercelConfig.installCommand) {
   project.settings.installCommand = vercelConfig.installCommand;
