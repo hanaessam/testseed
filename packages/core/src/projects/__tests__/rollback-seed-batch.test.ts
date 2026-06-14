@@ -222,6 +222,57 @@ describe("rollbackSeedBatch", () => {
     expect(deleteCalls).toEqual([]);
   });
 
+  it("rolls back using collectionCounts when insertedDocumentIds are missing", async () => {
+    const { deps, deleteCalls } = depsFor(
+      seedBatch({
+        collectionCounts: {
+          subcategories: 3,
+          users: 5,
+          brands: 3,
+          categories: 3,
+          orders: 10,
+          products: 5
+        },
+        insertedDocumentIds: {},
+        collectionOrder: ["subcategories", "users", "brands", "categories", "orders", "products"]
+      })
+    );
+
+    const result = await rollbackSeedBatch(request(), deps);
+
+    expect(deleteCalls.map((call) => call.collectionName)).toEqual([
+      "products",
+      "orders",
+      "categories",
+      "brands",
+      "users",
+      "subcategories"
+    ]);
+    expect(result.report.processedOrder).toEqual([
+      "products",
+      "orders",
+      "categories",
+      "brands",
+      "users",
+      "subcategories"
+    ]);
+  });
+
+  it("deletes tagged records from discovered collections not listed on the batch", async () => {
+    const batch = seedBatch({
+      collectionOrder: ["users", "orders"],
+      collectionCounts: { users: 1, orders: 1 },
+      insertedDocumentIds: { users: ["user-1"], orders: ["order-1"] }
+    });
+    const { deps, deleteCalls } = depsFor(batch);
+    deps.listTargetCollectionNames = async () => ["users", "orders", "audit_logs"];
+
+    const result = await rollbackSeedBatch(request(), deps);
+
+    expect(deleteCalls.map((call) => call.collectionName)).toEqual(["orders", "users", "audit_logs"]);
+    expect(result.report.status).toBe("rolled_back");
+  });
+
   it("rejects pending or no-record seed batches before deletion", async () => {
     const pending = depsFor(seedBatch({ status: "pending" }));
     await rollbackSeedBatch(request(), pending.deps).catch((error) =>

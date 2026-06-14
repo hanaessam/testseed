@@ -15,6 +15,7 @@ export interface RollbackSeedBatchRequest {
 export interface RollbackSeedBatchDeps {
   now?(): Date;
   findSeedBatchBySeedBatchId(projectId: string, seedBatchId: string): Promise<SeedBatch | null>;
+  listTargetCollectionNames?(): Promise<string[]>;
   deleteRecordsBySeedBatchId(input: {
     collectionName: string;
     seedBatchId: string;
@@ -70,7 +71,10 @@ export async function rollbackSeedBatch(
 
   assertEligibleBatch(batch, seedBatchId);
 
-  const rollbackOrder = resolveRollbackOrder(batch);
+  const discoveredCollectionNames = deps.listTargetCollectionNames
+    ? await deps.listTargetCollectionNames()
+    : undefined;
+  const rollbackOrder = resolveRollbackOrder(batch, discoveredCollectionNames);
   const completedCollections: Array<{ collectionName: string; status: "deleted"; deletedCount: number }> = [];
   const deletedCounts: Record<string, number> = {};
 
@@ -190,16 +194,36 @@ function assertEligibleBatch(batch: SeedBatch | null, seedBatchId: string): asse
 }
 
 function hasRecordedInsertedRecords(batch: SeedBatch): boolean {
-  return Object.values(batch.insertedDocumentIds).some((ids) => ids.length > 0);
+  const insertedFromIds = Object.values(batch.insertedDocumentIds ?? {}).some((ids) => ids.length > 0);
+  const insertedFromCounts = Object.values(batch.collectionCounts ?? {}).some((count) => count > 0);
+  return insertedFromIds || insertedFromCounts;
 }
 
-function resolveRollbackOrder(batch: SeedBatch): string[] {
+function resolveRollbackOrder(batch: SeedBatch, discoveredCollectionNames?: string[]): string[] {
   const collectionsWithRecords = new Set(
-    Object.entries(batch.insertedDocumentIds)
+    Object.entries(batch.insertedDocumentIds ?? {})
       .filter(([, ids]) => ids.length > 0)
       .map(([collectionName]) => collectionName)
   );
-  const ordered = batch.collectionOrder.filter((collectionName) => collectionsWithRecords.has(collectionName));
+
+  if (collectionsWithRecords.size === 0) {
+    for (const [collectionName, count] of Object.entries(batch.collectionCounts ?? {})) {
+      if (count > 0) {
+        collectionsWithRecords.add(collectionName);
+      }
+    }
+  }
+
+  const collectionOrder = batch.collectionOrder ?? [];
+  const ordered = collectionOrder.filter((collectionName) => collectionsWithRecords.has(collectionName));
   const missing = [...collectionsWithRecords].filter((collectionName) => !ordered.includes(collectionName));
-  return [...ordered, ...missing].reverse();
+  const preferredOrder = [...ordered, ...missing].reverse();
+
+  if (!discoveredCollectionNames?.length) {
+    return preferredOrder;
+  }
+
+  const known = new Set(preferredOrder);
+  const extras = discoveredCollectionNames.filter((collectionName) => !known.has(collectionName));
+  return [...preferredOrder, ...extras];
 }

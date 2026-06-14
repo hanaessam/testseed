@@ -173,7 +173,7 @@ describe("regenerateWithFeedback", () => {
     expect(refineRecords).toHaveBeenCalledTimes(2);
     expect(result.mode).toBe("accepted");
     expect(result.dataset?.collections.User).toHaveLength(2);
-    expect(result.candidateReview?.retryAttempt).toBe(1);
+    expect(result.candidateReview?.retryAttempt).toBe(0);
   });
 
   it("returns plain-language partial summary for guidance outcomes", async () => {

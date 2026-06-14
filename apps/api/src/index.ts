@@ -190,7 +190,9 @@ app.use(
 app.use(
   "/projects",
   createRollbackRouter({
-    projectHistoryRepository
+    projectHistoryRepository,
+    projectRepository,
+    generatedDatasetRepository
   })
 );
 app.use(authErrorHandler);

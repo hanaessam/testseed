@@ -4,14 +4,18 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SeedBatchesPanel } from "@/components/projects/seed-batches-panel";
 import {
   buildDirectSeedConfirmation,
   executeDirectSeed,
   exportJavaScriptSeedScript,
-  rollbackSeedBatch,
+  listProjectHistory,
   testDirectSeedConnection
 } from "@/src/lib/api-client";
 import { cn } from "@/src/lib/utils";
+import { findActiveSeedBatch } from "@/src/lib/seed-batch-versions";
+
+const DIRECT_SEED_STORAGE_PREFIX = "testseed:direct-seed:";
 import type {
   DirectMongoConnectionTestResult,
   DirectSeedingConfirmationSummary,
@@ -19,10 +23,10 @@ import type {
   DirectSeedingReport,
   GeneratedDataset,
   GenerationValidationResult,
-  RollbackSeedBatchResponse
+  SeedBatch
 } from "@testseed/types";
 import { CheckCircle2, Copy, Database, Download, FileCode2, FileJson, Loader2, X } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface ExportDrawerTriggerProps {
   isOpen: boolean;
@@ -54,6 +58,7 @@ interface ExportDrawerProps {
   schemaSnapshotId?: string | null;
   dataset: GeneratedDataset | null;
   collectionCounts?: Record<string, number>;
+  savedDatasetId?: string | null;
   validationResults?: GenerationValidationResult[];
   isOpen: boolean;
   onOpenChange(isOpen: boolean): void;
@@ -67,6 +72,7 @@ export function ExportDrawer({
   schemaSnapshotId,
   dataset,
   collectionCounts,
+  savedDatasetId,
   validationResults = [],
   isOpen,
   onOpenChange,
@@ -82,12 +88,12 @@ export function ExportDrawer({
   const [directSeedReport, setDirectSeedReport] = useState<DirectSeedingReport | null>(null);
   const [directSeedError, setDirectSeedError] = useState<string | null>(null);
   const [directSeedHistoryWarning, setDirectSeedHistoryWarning] = useState<string | null>(null);
-  const [rollbackResult, setRollbackResult] = useState<RollbackSeedBatchResponse | null>(null);
-  const [rollbackError, setRollbackError] = useState<string | null>(null);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isPreparingDirectSeed, setIsPreparingDirectSeed] = useState(false);
   const [isSeedingDirectly, setIsSeedingDirectly] = useState(false);
-  const [isRollingBack, setIsRollingBack] = useState(false);
+  const [seedBatches, setSeedBatches] = useState<SeedBatch[]>([]);
+  const [isLoadingSeedBatches, setIsLoadingSeedBatches] = useState(false);
+  const activeSeedBatch = useMemo(() => findActiveSeedBatch(seedBatches), [seedBatches]);
   const isInvalid =
     !dataset ||
     dataset.status !== "valid" ||
@@ -98,6 +104,42 @@ export function ExportDrawer({
     !directSeedUnavailable &&
     Boolean(dataset && connectionTest?.ok && connectionTest.connectionTestToken && connectionTest.databaseName);
   const jsonPayload = dataset ? JSON.stringify(dataset.collections, null, 2) : "";
+
+  const refreshSeedBatches = useCallback(async () => {
+    if (!projectId || !token) {
+      setSeedBatches([]);
+      return;
+    }
+
+    setIsLoadingSeedBatches(true);
+    try {
+      const history = await listProjectHistory(projectId, token);
+      setSeedBatches(history.seedBatches);
+    } catch {
+      setSeedBatches([]);
+    } finally {
+      setIsLoadingSeedBatches(false);
+    }
+  }, [projectId, token]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    void refreshSeedBatches();
+  }, [isOpen, directSeedReport?.seedBatchId, refreshSeedBatches]);
+
+  useEffect(() => {
+    if (!isOpen || !projectId) {
+      return;
+    }
+
+    const storedConnection = localStorage.getItem(`${DIRECT_SEED_STORAGE_PREFIX}${projectId}`);
+    if (storedConnection && !directSeedConnection) {
+      setDirectSeedConnection(storedConnection);
+    }
+  }, [isOpen, projectId, directSeedConnection]);
 
   const downloadTextFile = (content: string, filename: string, type: string) => {
     const blob = new Blob([content], { type });
@@ -180,8 +222,6 @@ export function ExportDrawer({
     setDirectSeedReport(null);
     setDirectSeedError(null);
     setDirectSeedHistoryWarning(null);
-    setRollbackResult(null);
-    setRollbackError(null);
   };
 
   const handleDirectSeedConnectionTest = async () => {
@@ -195,9 +235,6 @@ export function ExportDrawer({
     setDirectSeedReport(null);
     setDirectSeedError(null);
     setDirectSeedHistoryWarning(null);
-    setRollbackResult(null);
-    setRollbackError(null);
-
     try {
       const result = await testDirectSeedConnection(
         projectId,
@@ -205,6 +242,12 @@ export function ExportDrawer({
         token
       );
       setConnectionTest(result);
+      if (result.ok && projectId && directSeedConnection.trim()) {
+        localStorage.setItem(
+          `${DIRECT_SEED_STORAGE_PREFIX}${projectId}`,
+          directSeedConnection.trim()
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Connection test failed.";
       setConnectionTest({ ok: false, message });
@@ -230,9 +273,6 @@ export function ExportDrawer({
     setDirectSeedError(null);
     setDirectSeedReport(null);
     setDirectSeedHistoryWarning(null);
-    setRollbackResult(null);
-    setRollbackError(null);
-
     try {
       const summary = await buildDirectSeedConfirmation(
         projectId,
@@ -258,7 +298,6 @@ export function ExportDrawer({
     setConfirmation(null);
     setDirectSeedError(null);
     setDirectSeedHistoryWarning(null);
-    setRollbackError(null);
   };
 
   const handleConfirmDirectSeed = async () => {
@@ -277,9 +316,6 @@ export function ExportDrawer({
     setDirectSeedError(null);
     setDirectSeedReport(null);
     setDirectSeedHistoryWarning(null);
-    setRollbackResult(null);
-    setRollbackError(null);
-
     try {
       const result = await executeDirectSeed(
         projectId,
@@ -289,7 +325,8 @@ export function ExportDrawer({
           connectionTestToken: connectionTest.connectionTestToken,
           targetDatabaseName: confirmation.targetDatabaseName,
           dataset,
-          confirmed: true
+          confirmed: true,
+          savedDatasetId: savedDatasetId ?? undefined
         },
         token
       );
@@ -300,42 +337,11 @@ export function ExportDrawer({
       setConfirmation(null);
       setDirectSeedReport(report);
       setDirectSeedHistoryWarning(result.historyWarning ?? null);
+      await refreshSeedBatches();
     } catch (error) {
       setDirectSeedError(error instanceof Error ? error.message : "Direct seeding failed.");
     } finally {
       setIsSeedingDirectly(false);
-    }
-  };
-
-  const handleRollbackDirectSeed = async () => {
-    if (!projectId || !token || !directSeedReport || !directSeedConnection.trim()) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Roll back seed batch ${directSeedReport.seedBatchId}? This deletes inserted records tagged with this batch.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    setIsRollingBack(true);
-    setRollbackError(null);
-
-    try {
-      const result = await rollbackSeedBatch(
-        projectId,
-        {
-          seedBatchId: directSeedReport.seedBatchId,
-          mongoUri: directSeedConnection
-        },
-        token
-      );
-      setRollbackResult(result);
-    } catch (error) {
-      setRollbackError(error instanceof Error ? error.message : "Rollback failed.");
-    } finally {
-      setIsRollingBack(false);
     }
   };
 
@@ -486,6 +492,12 @@ export function ExportDrawer({
                       <div>
                         <p className="text-sm font-semibold text-foreground">Confirm direct seed</p>
                         <p className="mt-1 text-xs leading-5">{confirmation.warning}</p>
+                        {seedBatches.length > 0 ? (
+                          <p className="mt-2 text-xs leading-5">
+                            This creates a new seed run. You can switch MongoDB to any previous run
+                            below after seeding.
+                          </p>
+                        ) : null}
                       </div>
                       <div className="grid gap-2 text-xs sm:grid-cols-2">
                         <div>
@@ -591,45 +603,49 @@ export function ExportDrawer({
                                 {collection.errorSummary}
                               </p>
                             ) : null}
+                            {collection.errorSummary?.includes("E11000") ? (
+                              <p className="mt-2 text-xs leading-5">
+                                A record with the same unique value already exists in this database.
+                                Regenerate the dataset, clear the target collection, or fix the conflicting
+                                field before trying again.
+                              </p>
+                            ) : null}
                           </div>
                         ))}
                       </div>
                     ) : null}
-                    {directSeedReport.rollback.collections.length > 0 ? (
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p>
-                          Rollback is available for {directSeedReport.rollback.collections.length}{" "}
-                          inserted {directSeedReport.rollback.collections.length === 1 ? "collection" : "collections"}.
-                        </p>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={isRollingBack || Boolean(rollbackResult)}
-                          onClick={handleRollbackDirectSeed}
-                        >
-                          {isRollingBack ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                          Rollback
-                        </Button>
-                      </div>
+                    {directSeedReport.totalInsertedCount > 0 ? (
+                      <p className="text-xs leading-5 text-muted">
+                        Use Seed runs below to switch MongoDB to this run or any previous one.
+                        {activeSeedBatch ? ` Current active run: ${activeSeedBatch.seedBatchId}.` : ""}
+                      </p>
                     ) : (
-                      <p>No rollback is available because this operation inserted zero records.</p>
+                      <p>No records were inserted in this run.</p>
                     )}
-                    {rollbackError ? <p className="text-danger-text">{rollbackError}</p> : null}
-                    {rollbackResult ? (
-                      <div className="rounded-md border border-accent/30 bg-background/50 px-2 py-2">
-                        <p className="font-medium text-foreground">Rollback completed</p>
-                        <p className="mt-1">
-                          {Object.entries(rollbackResult.deletedCounts)
-                            .map(([collectionName, count]) => `${collectionName}: ${count}`)
-                            .join(", ")}
-                        </p>
-                      </div>
-                    ) : null}
                     {directSeedHistoryWarning ? (
                       <p className="text-warning-text">{directSeedHistoryWarning}</p>
                     ) : null}
                   </div>
                 </Alert>
+              ) : null}
+
+              {projectId && token ? (
+                <div className="mt-4 rounded-md border border-border bg-background/40 p-3">
+                  {isLoadingSeedBatches ? (
+                    <p className="text-xs text-muted">Loading seed runs...</p>
+                  ) : (
+                    <SeedBatchesPanel
+                      projectId={projectId}
+                      token={token}
+                      batches={seedBatches}
+                      mongoUri={directSeedConnection}
+                      onMongoUriChange={handleDirectSeedConnectionChange}
+                      onBatchRolledBack={refreshSeedBatches}
+                      title="Seed runs"
+                      description="Switch MongoDB to any previous direct seed run. Reuse the MongoDB connection string above."
+                    />
+                  )}
+                </div>
               ) : null}
             </div>
 

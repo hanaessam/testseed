@@ -25,6 +25,8 @@ export interface CreateGeneratedDatasetRecordInput {
   warnings: GenerationValidationResult[];
   chatHistory: ChatRefinementMessage[];
   createdAt: Date;
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export function createGeneratedDatasetRepository(connection: Connection) {
@@ -51,7 +53,9 @@ export function createGeneratedDatasetRepository(connection: Connection) {
           collectionCounts: 1,
           collections: 1,
           chatHistory: 1,
-          createdAt: 1
+          createdAt: 1,
+          parentDatasetId: 1,
+          versionLabel: 1
         })
         .exec();
 
@@ -130,6 +134,8 @@ function toSavedGeneratedDatasetSummary(
     | "collections"
     | "chatHistory"
     | "createdAt"
+    | "parentDatasetId"
+    | "versionLabel"
   > & { _id: unknown }
 ): SavedGeneratedDatasetSummary {
   return {
@@ -141,7 +147,9 @@ function toSavedGeneratedDatasetSummary(
     collectionCounts: document.collectionCounts,
     totalRecords: countTotalRecords(document.collections),
     chatMessageCount: document.chatHistory?.length ?? 0,
-    createdAt: document.createdAt.toISOString()
+    createdAt: document.createdAt.toISOString(),
+    parentDatasetId: document.parentDatasetId,
+    versionLabel: document.versionLabel
   };
 }
 
@@ -160,7 +168,9 @@ function toSavedGeneratedDataset(
     validationResults: document.validationResults as unknown as GenerationValidationResult[],
     warnings: document.warnings as unknown as GenerationValidationResult[],
     chatHistory: (document.chatHistory ?? []) as ChatRefinementMessage[],
-    createdAt: document.createdAt.toISOString()
+    createdAt: document.createdAt.toISOString(),
+    parentDatasetId: document.parentDatasetId,
+    versionLabel: document.versionLabel
   };
 }
 

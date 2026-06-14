@@ -13,6 +13,8 @@ export interface SaveGeneratedDatasetRequest {
   dataset: GeneratedDataset;
   source: SavedGeneratedDatasetSource;
   chatHistory?: ChatRefinementMessage[];
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export interface SaveGeneratedDatasetDeps {
@@ -31,6 +33,8 @@ export interface SaveGeneratedDatasetDeps {
     warnings: GeneratedDataset["warnings"];
     chatHistory: ChatRefinementMessage[];
     createdAt: Date;
+    parentDatasetId?: string;
+    versionLabel?: string;
   }): Promise<SavedGeneratedDataset>;
   appendProjectEvent(input: {
     projectId: string;
@@ -68,7 +72,9 @@ export async function saveGeneratedDataset(
     validationResults: request.dataset.validationResults,
     warnings: request.dataset.warnings,
     chatHistory: sanitizePersistedChatHistory(request.chatHistory ?? []),
-    createdAt: now
+    createdAt: now,
+    parentDatasetId: request.parentDatasetId,
+    versionLabel: request.versionLabel
   });
 
   await deps.appendProjectEvent({
@@ -81,6 +87,8 @@ export async function saveGeneratedDataset(
         : "Saved generated dataset snapshot.",
     payload: {
       savedDatasetId: savedDataset.id,
+      parentDatasetId: request.parentDatasetId,
+      versionLabel: request.versionLabel,
       collectionCounts: savedDataset.collectionCounts,
       generationOrder: savedDataset.generationOrder,
       source: request.source,

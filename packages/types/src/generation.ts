@@ -105,6 +105,8 @@ export interface DirectSeedingRequest {
   targetDatabaseName: string;
   confirmed: boolean;
   timeoutMs?: number;
+  seedBatchId?: string;
+  insertMode?: "insert" | "upsert";
 }
 
 export interface DirectSeedingConfirmationApiRequest {
@@ -122,6 +124,7 @@ export interface DirectSeedingExecuteApiRequest {
   targetDatabaseName: string;
   confirmed: boolean;
   timeoutMs?: number;
+  savedDatasetId?: string;
 }
 
 export interface DirectSeedingExecuteApiResponse {
@@ -164,6 +167,7 @@ export interface DirectSeedingReport {
 
 export interface GenerateSeedDataRequest {
   collectionCounts: Record<string, number>;
+  projectContext?: string;
 }
 
 export interface GenerateSeedDataResponse {
@@ -348,15 +352,20 @@ export interface ValidateDatasetResponse {
 export interface PatchSavedGeneratedDatasetRequest {
   dataset: GeneratedDataset;
   chatHistory?: ChatRefinementMessage[];
+  versionLabel?: string;
+  source?: Extract<SavedGeneratedDatasetSource, "manual_edit" | "refinement">;
 }
 
 export interface PatchSavedGeneratedDatasetResponse {
   dataset: SavedGeneratedDataset;
+  savedDatasetId: string;
 }
 
 export interface SaveManualEditDatasetRequest {
   dataset: GeneratedDataset;
   chatHistory?: ChatRefinementMessage[];
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export interface SavedGeneratedDatasetSummary {
@@ -369,12 +378,16 @@ export interface SavedGeneratedDatasetSummary {
   totalRecords: number;
   chatMessageCount: number;
   createdAt: string;
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export interface SavedGeneratedDataset extends GeneratedDataset {
   id: string;
   source: SavedGeneratedDatasetSource;
   chatHistory: ChatRefinementMessage[];
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export interface ListSavedGeneratedDatasetsResponse {

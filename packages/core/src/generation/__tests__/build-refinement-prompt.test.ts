@@ -47,8 +47,8 @@ describe("build-refinement-prompt", () => {
 
     expect(payload.task).toBe("refine_seed_dataset");
     expect(payload.instruction).toBe("Make users Canadian");
-    expect(payload.projectContext).toBe("Canadian marketplace app");
-    expect(payload.repositoryContext).toBe("E-commerce monorepo");
+    expect(payload.domainContext).toContain("Canadian marketplace app");
+    expect(payload.domainContext).toContain("E-commerce monorepo");
     expect(payload.constraints.preserveRecordIds).toBe(true);
     expect(payload.constraints.collectionCounts).toEqual({ User: 2 });
     expect(payload.currentDataset.collections.User).toHaveLength(2);
@@ -63,15 +63,14 @@ describe("build-refinement-prompt", () => {
       })
     );
 
-    expect(payload.projectContext).toBeUndefined();
-    expect(payload.repositoryContext).toBeUndefined();
+    expect(payload.domainContext).toBeUndefined();
     expect(payload.validationFeedback).toBeUndefined();
   });
 
   it("documents mutation and guidance modes in the system prompt", () => {
     expect(REFINEMENT_SYSTEM_PROMPT).toContain('mode: "updated_dataset"');
     expect(REFINEMENT_SYSTEM_PROMPT).toContain('mode: "guidance"');
-    expect(REFINEMENT_SYSTEM_PROMPT).toContain("Minimal edits");
+    expect(REFINEMENT_SYSTEM_PROMPT).toContain("Partial updates are allowed");
     expect(REFINEMENT_SYSTEM_PROMPT).toContain("Preserve record identity");
   });
 });

@@ -28,6 +28,17 @@ export {
   type BuildRefinementUserPromptInput
 } from "./build-refinement-prompt";
 export {
+  GENERATION_SYSTEM_PROMPT,
+  buildGenerationUserPromptContent,
+  type BuildGenerationUserPromptInput
+} from "./build-generation-prompt";
+export {
+  formatDomainContextBlock,
+  hasDomainContext,
+  type DomainContextInput
+} from "./format-domain-context";
+export { resolveGenerationProjectContext } from "./resolve-project-context";
+export {
   validateGeneratedDataset,
   type ValidateGeneratedDatasetInput
 } from "./validate-generated-dataset";
@@ -50,6 +61,17 @@ export {
 } from "./direct-mongodb-seeding";
 export { createMongoNativeDriverClientFactory } from "./direct-mongodb-native-driver";
 export {
+  purgeSeedBatchFromMongo,
+  snapshotSeedBatchFromMongo,
+  type PurgeSeedBatchFromMongoInput,
+  type SnapshotSeedBatchFromMongoInput
+} from "./seed-batch-mongo-snapshot";
+export {
+  datasetUsesMongoObjectIds,
+  isMongoObjectIdString,
+  prepareDatasetIdsForInsertion
+} from "./prepare-dataset-ids-for-insertion";
+export {
   buildCandidateChangeSummary,
   canAcceptCandidate,
   hasFixableRetryProblem,
@@ -67,6 +89,11 @@ export {
   isFieldEditable,
   type FieldInputKind
 } from "./field-editability";
+export {
+  forkSavedGeneratedDataset,
+  type ForkSavedGeneratedDatasetDeps,
+  type ForkSavedGeneratedDatasetRequest
+} from "./fork-saved-generated-dataset";
 export {
   updateSavedGeneratedDataset,
   type UpdateSavedGeneratedDatasetDeps,

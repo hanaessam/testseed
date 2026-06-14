@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node init && tsc",
     "lint": "tsc --noEmit",
     "test": "jest --runInBand"
   },

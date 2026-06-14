@@ -64,6 +64,8 @@ interface GenerationWorkbenchProps {
   savedDatasetsLoading?: boolean;
   activeSavedDatasetId?: string | null;
   onSavedDatasetSelect?(datasetId: string): void;
+  onReseedSavedDataset?(datasetId: string, summary: SavedGeneratedDatasetSummary): void;
+  reseedingSavedDatasetId?: string | null;
   onGenerate?(): void;
   generateDisabled?: boolean;
   isGenerating?: boolean;
@@ -108,6 +110,8 @@ export function GenerationWorkbench({
   savedDatasetsLoading = false,
   activeSavedDatasetId = null,
   onSavedDatasetSelect,
+  onReseedSavedDataset,
+  reseedingSavedDatasetId = null,
   onGenerate,
   generateDisabled = false,
   isGenerating = false,
@@ -200,7 +204,9 @@ export function GenerationWorkbench({
                 datasets={savedDatasets}
                 activeDatasetId={activeSavedDatasetId}
                 isLoading={savedDatasetsLoading}
+                reseedingDatasetId={reseedingSavedDatasetId}
                 onSelect={onSavedDatasetSelect}
+                onReseed={onReseedSavedDataset}
               />
             ) : null}
           </div>

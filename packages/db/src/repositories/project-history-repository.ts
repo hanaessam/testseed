@@ -29,6 +29,8 @@ export interface RecordSeedBatchInput {
   createdAt: Date;
   rolledBackAt?: Date;
   rollbackDeletedCounts?: Record<string, number>;
+  savedDatasetId?: string;
+  targetDatabaseName?: string;
 }
 
 export function createProjectHistoryRepository(connection: Connection) {
@@ -83,6 +85,64 @@ export function createProjectHistoryRepository(connection: Connection) {
       return document ? toSeedBatch(document) : null;
     },
 
+    async markSeedBatchSuperseded(input: {
+      projectId: string;
+      seedBatchId: string;
+      supersededBySeedBatchId: string;
+    }): Promise<SeedBatch | null> {
+      const document = await SeedBatchModel.findOneAndUpdate(
+        { projectId: input.projectId, seedBatchId: input.seedBatchId },
+        {
+          status: "superseded",
+          supersededBySeedBatchId: input.supersededBySeedBatchId
+        },
+        { new: true }
+      ).exec();
+
+      return document ? toSeedBatch(document) : null;
+    },
+
+    async findSeedBatchSupersededBy(
+      projectId: string,
+      supersededBySeedBatchId: string
+    ): Promise<SeedBatch | null> {
+      const document = await SeedBatchModel.findOne({
+        projectId,
+        supersededBySeedBatchId
+      })
+        .sort({ createdAt: -1 })
+        .exec();
+
+      return document ? toSeedBatch(document) : null;
+    },
+
+    async reactivateSeedBatch(projectId: string, seedBatchId: string): Promise<SeedBatch | null> {
+      const document = await SeedBatchModel.findOneAndUpdate(
+        { projectId, seedBatchId },
+        {
+          status: "inserted",
+          $unset: { supersededBySeedBatchId: "", rolledBackAt: "", rollbackDeletedCounts: "" }
+        },
+        { new: true }
+      ).exec();
+
+      return document ? toSeedBatch(document) : null;
+    },
+
+    async updateSeedBatchSavedDatasetId(input: {
+      projectId: string;
+      seedBatchId: string;
+      savedDatasetId: string;
+    }): Promise<SeedBatch | null> {
+      const document = await SeedBatchModel.findOneAndUpdate(
+        { projectId: input.projectId, seedBatchId: input.seedBatchId },
+        { savedDatasetId: input.savedDatasetId },
+        { new: true }
+      ).exec();
+
+      return document ? toSeedBatch(document) : null;
+    },
+
     async hardDeleteProjectHistory(projectId: string): Promise<number> {
       const [eventsResult, seedBatchesResult] = await Promise.all([
         ProjectEventModel.deleteMany({ projectId }).exec(),
@@ -126,18 +186,26 @@ function toSeedBatch(document: {
   createdAt: Date;
   rolledBackAt?: Date;
   rollbackDeletedCounts?: Record<string, number>;
+  savedDatasetId?: string;
+  supersededBySeedBatchId?: string;
+  targetDatabaseName?: string;
 }): SeedBatch {
   return {
     id: String(document._id),
     projectId: document.projectId,
     actorId: document.actorId,
     seedBatchId: document.seedBatchId,
-    collectionCounts: document.collectionCounts,
-    insertedDocumentIds: document.insertedDocumentIds,
-    collectionOrder: document.collectionOrder ?? Object.keys(document.insertedDocumentIds),
+    collectionCounts: document.collectionCounts ?? {},
+    insertedDocumentIds: document.insertedDocumentIds ?? {},
+    collectionOrder:
+      document.collectionOrder ??
+      Object.keys(document.insertedDocumentIds ?? document.collectionCounts ?? {}),
     status: document.status,
     createdAt: document.createdAt,
     rolledBackAt: document.rolledBackAt,
-    rollbackDeletedCounts: document.rollbackDeletedCounts
+    rollbackDeletedCounts: document.rollbackDeletedCounts,
+    savedDatasetId: document.savedDatasetId,
+    supersededBySeedBatchId: document.supersededBySeedBatchId,
+    targetDatabaseName: document.targetDatabaseName
   };
 }
