@@ -21,7 +21,7 @@ const recordSeedBatchSchema = z.object({
   collectionCounts: z.record(z.number().int().nonnegative()),
   insertedDocumentIds: z.record(z.array(z.string().min(1))),
   collectionOrder: z.array(z.string().min(1)),
-  status: z.enum(["pending", "inserted", "partially_inserted", "rolled_back"])
+  status: z.enum(["pending", "inserted", "partially_inserted", "rolled_back", "superseded"])
 });
 
 export function createHistoryRouter(deps: HistoryRouterDeps): Router {

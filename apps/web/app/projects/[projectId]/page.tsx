@@ -8,6 +8,7 @@ import {
 } from "@/components/project-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -24,6 +25,7 @@ import {
   updateProjectContext,
   updateProjectSchema
 } from "@/src/lib/api-client";
+import { SeedBatchesPanel } from "@/components/projects/seed-batches-panel";
 import {
   isAuthenticationError,
   redirectToLogin,
@@ -36,8 +38,7 @@ import type {
   ProjectEvent,
   ProjectHistoryResponse,
   ProjectSchemaSnapshot,
-  SavedGeneratedDatasetSummary,
-  SeedBatch
+  SavedGeneratedDatasetSummary
 } from "@testseed/types";
 import {
   ArrowLeft,
@@ -90,6 +91,13 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
   const [isLifecycleBusy, setIsLifecycleBusy] = useState(false);
   const [activeCollectionIdx, setActiveCollectionIdx] = useState(0);
   const [savedDatasets, setSavedDatasets] = useState<SavedGeneratedDatasetSummary[]>([]);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
+
+  const refreshProjectHistory = async (token: string) => {
+    const historyResponse = await listProjectHistory(params.projectId, token);
+    setHistory(historyResponse);
+  };
 
   useEffect(() => {
     const session = requireStoredSession(router);
@@ -99,6 +107,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
 
     let isMounted = true;
     const token = session.token;
+    setAuthToken(token);
 
     async function loadProject() {
       try {
@@ -328,10 +337,19 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       mode === "archive"
-        ? "Archive the active schema snapshot? You can restore it later from this tab."
-        : "Permanently delete the active schema snapshot? This cannot be undone."
+        ? {
+            title: "Archive active schema?",
+            description: "You can restore it later from this tab.",
+            confirmLabel: "Archive schema"
+          }
+        : {
+            title: "Permanently delete schema?",
+            description: "This cannot be undone.",
+            confirmLabel: "Delete permanently",
+            variant: "destructive"
+          }
     );
     if (!confirmed) {
       return;
@@ -364,10 +382,19 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       mode === "archive"
-        ? "Archive this project? You can keep its history for future reference."
-        : "Hard delete this project and its saved schema/history? This cannot be undone."
+        ? {
+            title: "Archive this project?",
+            description: "You can keep its history for future reference.",
+            confirmLabel: "Archive project"
+          }
+        : {
+            title: "Hard delete this project?",
+            description: "This removes the project and its saved schema/history. This cannot be undone.",
+            confirmLabel: "Delete permanently",
+            variant: "destructive"
+          }
     );
     if (!confirmed) {
       return;
@@ -452,6 +479,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
 
   return (
     <AppShell>
+      <ConfirmDialog />
       <section className="space-y-5 p-6">
         <div className="border-b border-border pb-5">
           <Button asChild variant="secondary">
@@ -1076,23 +1104,20 @@ export default function ProjectDetailPage({ params }: ProjectDetailPageProps) {
                 <Card>
                   <CardHeader>
                     <p className="font-mono text-xs text-accent">seed.batches</p>
-                    <h2 className="mt-1 text-lg font-semibold">Seed batches</h2>
+                    <h2 className="mt-1 text-lg font-semibold">Seed runs</h2>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    {history?.seedBatches.length ? (
-                      history.seedBatches.map((batch) => <SeedBatchRow key={batch.id} batch={batch} />)
+                  <CardContent>
+                    {project && authToken ? (
+                      <SeedBatchesPanel
+                        projectId={project.id}
+                        token={authToken}
+                        batches={history?.seedBatches ?? []}
+                        onBatchRolledBack={() => refreshProjectHistory(authToken)}
+                        emptyMessage="No seed runs yet. Direct seed a generated dataset from the workbench to create version history."
+                      />
                     ) : (
                       <div className="border border-border bg-background p-4">
-                        <p className="text-sm font-medium">No seed batches recorded yet</p>
-                        <p className="mt-2 text-xs leading-5 text-muted">
-                          Generate records to create a seed batch history entry.
-                        </p>
-                        <Button asChild className="mt-3" variant="secondary">
-                          <Link href={`/generate?projectId=${project.id}&mode=generate`}>
-                            <Play className="h-4 w-4" />
-                            Generate now
-                          </Link>
-                        </Button>
+                        <p className="text-sm font-medium">Loading seed runs...</p>
                       </div>
                     )}
                   </CardContent>
@@ -1325,22 +1350,6 @@ function EventRow({ event }: { event: ProjectEvent }) {
           {event.kind} - {formatDate(event.createdAt)}
         </p>
       </div>
-    </div>
-  );
-}
-
-function SeedBatchRow({ batch }: { batch: SeedBatch }) {
-  return (
-    <div className="border border-border bg-background p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-xs text-foreground">{batch.seedBatchId}</p>
-        <span className="text-xs text-accent">{batch.status}</span>
-      </div>
-      <p className="mt-2 text-xs text-muted">
-        {Object.entries(batch.collectionCounts)
-          .map(([collection, count]) => `${collection}: ${count}`)
-          .join(", ")}
-      </p>
     </div>
   );
 }

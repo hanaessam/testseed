@@ -15,3 +15,5 @@ export * from "./list-project-history";
 export * from "./list-user-projects";
 export * from "./record-seed-batch";
 export * from "./rollback-seed-batch";
+export * from "./apply-seed-batch-version";
+export * from "./restore-seed-batch";

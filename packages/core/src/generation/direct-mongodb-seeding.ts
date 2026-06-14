@@ -14,9 +14,10 @@ import type {
   InsertedCollectionResult
 } from "@testseed/types";
 import { validateGeneratedDataset } from "./validate-generated-dataset";
+import { prepareDatasetIdsForInsertion } from "./prepare-dataset-ids-for-insertion";
 
 export const DIRECT_SEEDING_CONFIRMATION_WARNING =
-  "Records will be inserted into the target database. Insertion is irreversible without rollback.";
+  "Each direct seed creates a new run. You can switch MongoDB back to any previous run from Seed runs.";
 
 const defaultTimeoutMs = 7000;
 const minTimeoutMs = 5000;
@@ -36,16 +37,22 @@ export interface DirectMongoClient {
 export interface DirectMongoDatabase {
   databaseName: string;
   command(command: { ping: 1 }): Promise<unknown>;
+  listCollectionNames(): Promise<string[]>;
   collection(name: string): DirectMongoCollection;
 }
 
 export interface DirectMongoCollection {
   insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number; insertedIds?: string[] }>;
+  upsertMany(records: Record<string, unknown>[]): Promise<{ upsertedCount: number; modifiedCount: number }>;
+  deleteMany(filter: Record<string, unknown>): Promise<{ deletedCount: number }>;
+  findByIds(ids: string[]): Promise<Record<string, unknown>[]>;
+  findBySeedBatchId(seedBatchId: string): Promise<Record<string, unknown>[]>;
 }
 
 export interface DirectMongoSeedingDeps {
   clientFactory: DirectMongoClientFactory;
   generateSeedBatchId?: () => string;
+  generateInsertionObjectId?: () => string;
   createConnectionFingerprint?: (connectionString: string) => string;
   defaultTimeoutMs?: number;
 }
@@ -138,7 +145,6 @@ export async function seedMongoDataset(
   assertConfirmed(request.confirmed);
   assertConnectionTestToken(connectionString, request.connectionTestToken, deps);
 
-  const orderedCollections = resolveOrderedCollections(request.dataset);
   const validation = validateGeneratedDataset({
     schema: request.schema,
     dataset: request.dataset,
@@ -154,7 +160,12 @@ export async function seedMongoDataset(
   }
 
   const timeoutMs = normalizeTimeoutMs(request.timeoutMs ?? deps.defaultTimeoutMs);
-  const seedBatchId = (deps.generateSeedBatchId ?? randomUUID)();
+  const seedBatchId = request.seedBatchId ?? (deps.generateSeedBatchId ?? randomUUID)();
+  const insertMode = request.insertMode ?? "insert";
+  const insertionDataset = prepareDatasetIdsForInsertion(request.dataset, request.schema, {
+    generateId: deps.generateInsertionObjectId
+  });
+  const orderedCollections = resolveOrderedCollections(insertionDataset);
   const successfulCollections: InsertedCollectionResult[] = [];
   const failedCollections: InsertedCollectionResult[] = [];
   const insertedRecordCounts: Record<string, number> = {};
@@ -167,10 +178,24 @@ export async function seedMongoDataset(
     const db = client.db(request.targetDatabaseName);
 
     for (const collectionName of orderedCollections) {
-      const sourceRecords = request.dataset.collections[collectionName] ?? [];
+      const sourceRecords = insertionDataset.collections[collectionName] ?? [];
       const records = sourceRecords.map((record) => tagRecord(record, seedBatchId));
 
       try {
+        if (insertMode === "upsert") {
+          const result = await db.collection(collectionName).upsertMany(records);
+          const affectedCount = result.upsertedCount + result.modifiedCount;
+          insertedRecordCounts[collectionName] = affectedCount;
+          insertedDocumentIds[collectionName] = sourceRecords.map((record) => record._id);
+          successfulCollections.push({
+            collectionName,
+            requestedCount: records.length,
+            insertedCount: affectedCount,
+            status: "succeeded"
+          });
+          continue;
+        }
+
         const result = await db.collection(collectionName).insertMany(records);
         const insertedCount = result.insertedCount;
         insertedRecordCounts[collectionName] = insertedCount;
