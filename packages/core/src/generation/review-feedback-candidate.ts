@@ -106,7 +106,11 @@ export function resolveCandidateReviewState(input: {
 
 export function hasFixableRetryProblem(validationResults: GenerationValidationResult[]): boolean {
   return validationResults.some(
-    (result) => result.code === "UNIQUE_VALUE_DUPLICATE" || result.code === "REFERENCE_NOT_FOUND"
+    (result) =>
+      result.code === "UNIQUE_VALUE_DUPLICATE" ||
+      result.code === "REFERENCE_NOT_FOUND" ||
+      result.code === "COUNT_MISMATCH" ||
+      result.code === "REFINEMENT_EMPTY_RESPONSE"
   );
 }
 

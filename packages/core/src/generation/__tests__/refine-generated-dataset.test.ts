@@ -28,6 +28,140 @@ const currentDataset: GeneratedDataset = {
 };
 
 describe("refineGeneratedDataset", () => {
+  it("retries when the provider returns empty collections", async () => {
+    const refineRecords = jest
+      .fn()
+      .mockResolvedValueOnce({
+        mode: "updated_dataset",
+        message: "Updated emails.",
+        collections: {}
+      })
+      .mockResolvedValueOnce({
+        mode: "updated_dataset",
+        message: "Updated emails.",
+        collections: {
+          User: [
+            {
+              _id: "665f1a000000000000000001",
+              email: "maya@university.edu",
+              role: "member"
+            }
+          ]
+        }
+      });
+
+    const result = await refineGeneratedDataset(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema,
+        currentDataset,
+        message: "Use university email domains"
+      },
+      { refineRecords }
+    );
+
+    expect(refineRecords).toHaveBeenCalledTimes(2);
+    expect(result.mode).toBe("updated_dataset");
+    expect(result.dataset?.collections.User[0].email).toBe("maya@university.edu");
+  });
+
+  it("preserves omitted collections when the provider returns a partial dataset", async () => {
+    const multiCollectionSchema: ParsedSchema = {
+      collections: [
+        {
+          name: "Category",
+          fields: [{ name: "name", type: "String", required: true, unique: false }]
+        },
+        {
+          name: "Product",
+          fields: [
+            { name: "title", type: "String", required: true, unique: false },
+            { name: "categoryId", type: "ObjectId", required: true, unique: false, ref: "Category" }
+          ]
+        }
+      ]
+    };
+    const multiCollectionDataset: GeneratedDataset = {
+      ...currentDataset,
+      generationOrder: ["Category", "Product"],
+      collectionCounts: { Category: 1, Product: 1 },
+      collections: {
+        Category: [{ _id: "665f1a000000000000000010", name: "Books" }],
+        Product: [{ _id: "665f1a000000000000000011", title: "Novel", categoryId: "665f1a000000000000000010" }]
+      }
+    };
+
+    const result = await refineGeneratedDataset(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema: multiCollectionSchema,
+        currentDataset: multiCollectionDataset,
+        message: "Rename the product"
+      },
+      {
+        refineRecords: async () => ({
+          mode: "updated_dataset",
+          message: "Renamed product.",
+          collections: {
+            Product: [
+              {
+                _id: "665f1a000000000000000011",
+                title: "Classic Novel",
+                categoryId: "665f1a000000000000000010"
+              }
+            ]
+          }
+        })
+      }
+    );
+
+    expect(result.mode).toBe("updated_dataset");
+    expect(result.dataset?.collections.Category).toEqual(multiCollectionDataset.collections.Category);
+    expect(result.dataset?.collections.Product[0].title).toBe("Classic Novel");
+  });
+
+  it("enforces collection count when the provider returns extra records", async () => {
+    const result = await refineGeneratedDataset(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema,
+        currentDataset,
+        message: "Add another user",
+        maxAttempts: 1
+      },
+      {
+        refineRecords: async () => ({
+          mode: "updated_dataset",
+          message: "Added users.",
+          collections: {
+            User: [
+              {
+                _id: "665f1a000000000000000001",
+                email: "maya@university.edu",
+                role: "member"
+              },
+              {
+                _id: "665f1a000000000000000099",
+                email: "extra@example.com",
+                role: "member"
+              }
+            ]
+          }
+        })
+      }
+    );
+
+    expect(result.mode).toBe("updated_dataset");
+    expect(result.dataset?.collections.User).toHaveLength(1);
+    expect(result.dataset?.collections.User[0].email).toBe("maya@university.edu");
+  });
+
   it("accepts only validated updated datasets", async () => {
     const result = await refineGeneratedDataset(
       {

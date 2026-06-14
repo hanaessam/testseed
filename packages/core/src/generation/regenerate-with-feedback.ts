@@ -16,6 +16,7 @@ import {
   hasFixableRetryProblem,
   resolveCandidateReviewState
 } from "./review-feedback-candidate";
+import { resolveGenerationProjectContext } from "./resolve-project-context";
 
 export interface RegenerateWithFeedbackInput {
   projectId: string;
@@ -46,7 +47,10 @@ export async function regenerateWithFeedback(
   const chatHistory = input.chatHistory ?? [];
   const nextHistory: ChatRefinementMessage[] = [...chatHistory, { role: "user", content: feedback }];
   const contextualFeedback = buildContextualFeedback(feedback, input.schemaContext);
-  const resolvedProjectContext = buildProjectContext(input.projectContext, input.projectContextText);
+  const resolvedProjectContext = resolveGenerationProjectContext(
+    input.projectContext,
+    input.projectContextText
+  );
 
   if (!feedback) {
     return {
@@ -73,7 +77,7 @@ export async function regenerateWithFeedback(
         currentDataset,
         message: contextualFeedback,
         chatHistory: input.chatHistory,
-        maxAttempts: 1
+        maxAttempts: 2
       },
       deps
     );
@@ -90,7 +94,7 @@ export async function regenerateWithFeedback(
           currentDataset,
           message: retryFeedback,
           chatHistory: input.chatHistory,
-          maxAttempts: 1
+          maxAttempts: 2
         },
         deps
       );
@@ -199,33 +203,6 @@ function appendValidationFeedback(
   }
 
   return `${feedback}\n\nRetry this regeneration once. Fix these validation problems while preserving the user's feedback:\n${blockingIssues.join("\n")}`;
-}
-
-function buildProjectContext(
-  projectContext: ProjectContext | undefined,
-  projectContextText?: string
-): ProjectContext | undefined {
-  const description = projectContextText?.trim();
-  if (projectContext && description) {
-    return {
-      ...projectContext,
-      description
-    };
-  }
-
-  if (projectContext) {
-    return projectContext;
-  }
-
-  if (!description) {
-    return undefined;
-  }
-
-  return {
-    description,
-    warnings: [],
-    updatedAt: new Date()
-  };
 }
 
 function mapOutcomeSummary(

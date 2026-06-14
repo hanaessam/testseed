@@ -78,6 +78,8 @@ export type ProjectEventKind =
   | "generation_requested"
   | "generation_completed"
   | "seed_batch_recorded"
+  | "seed_batch_restored"
+  | "seed_batch_applied"
   | "rollback_requested"
   | "rollback_completed"
   | "repository_context_connected"
@@ -101,10 +103,13 @@ export interface SeedBatch {
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
   collectionOrder: string[];
-  status: "pending" | "inserted" | "partially_inserted" | "rolled_back";
+  status: "pending" | "inserted" | "partially_inserted" | "rolled_back" | "superseded";
   createdAt: Date;
   rolledBackAt?: Date;
   rollbackDeletedCounts?: Record<string, number>;
+  savedDatasetId?: string;
+  supersededBySeedBatchId?: string;
+  targetDatabaseName?: string;
 }
 
 export type RollbackSeedBatchErrorCode =
@@ -239,8 +244,26 @@ export interface RollbackSeedBatchRequest {
 export interface RollbackSeedBatchResponse {
   batch: SeedBatch;
   deletedCounts: Record<string, number>;
+  event?: ProjectEvent;
+  report?: RollbackSeedBatchReport;
+  restoredSeedBatch?: SeedBatch;
+  restoreMessage?: string;
+}
+
+export interface RestoreSeedBatchRequest {
+  seedBatchId: string;
+  mongoUri: string;
+}
+
+export interface RestoreSeedBatchResponse {
+  batch: SeedBatch;
+  message: string;
+  supersededBatchIds: string[];
   event: ProjectEvent;
 }
+
+export type ApplySeedBatchRequest = RestoreSeedBatchRequest;
+export type ApplySeedBatchResponse = RestoreSeedBatchResponse;
 
 export interface ProjectDetailResponse {
   project: Project | null;

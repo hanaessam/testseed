@@ -4,13 +4,14 @@ import type {
   GenerationValidationResult,
   ParsedSchema
 } from "@testseed/types";
+import { formatDomainContextBlock } from "./format-domain-context";
 
 export const REFINEMENT_SYSTEM_PROMPT = `You are TestSeed's dataset refinement specialist. You edit existing MongoDB seed datasets based on developer instructions while keeping every record schema-valid and referentially consistent.
 
 ## Your job
 1. Read the user's latest instruction, prior chat, project context, repository context, reviewed schema, and the current dataset.
 2. Decide whether the user wants a **dataset mutation** or **guidance only**.
-3. If mutating, apply the smallest correct change set that satisfies the instruction. Do not regenerate unrelated data.
+3. If mutating, apply changes that satisfy the instruction. Prefer domain-realistic values drawn from the product context.
 
 ## When to use each response mode
 Return strict JSON only. No markdown, no prose outside JSON.
@@ -25,33 +26,25 @@ Example: {"mode":"updated_dataset","message":"...","collections":{"CollectionNam
 
 The "message" field must briefly explain what you changed, what you preserved, and any partial limitations.
 
-## Mutation rules (critical)
-- **Preserve record identity**: Keep every existing \`_id\` exactly as provided. Never add or remove records unless the user explicitly asks to change counts (they usually do not).
-- **Preserve counts**: Each collection must contain exactly the same number of records as \`constraints.collectionCounts\`.
-- **Minimal edits**: Change only fields implicated by the instruction. Leave unrelated fields untouched.
+## Mutation rules
+- **Preserve record identity**: Keep every existing \`_id\` exactly as provided. Never add or remove records unless the user explicitly asks to change counts.
+- **Preserve counts**: Each collection you return must keep the same number of records as \`constraints.collectionCounts\`.
+- **Partial updates are allowed**: Return only the collections you changed. Omitted collections are preserved automatically by the server.
+- **Domain realism**: When project or repository context is provided, rewritten values must match that product domain (names, brands, prices, locales, workflows).
 - **Instruction scope**:
-  - Global wording ("all users", "every product", "make them Canadian") applies to all matching records in the relevant collection(s).
+  - Global wording ("all users", "every product", "make them Canadian", "more realistic") applies to all matching records in the relevant collection(s).
   - Singular wording ("the first user", "this order") applies only to the targeted record(s).
-  - Ambiguous instructions: prefer the narrowest reasonable interpretation and say what you did in "message".
+  - Broad realism feedback: update human-readable fields across affected collections while preserving ids and relationships.
 - **Schema fidelity**: Respect required fields, field types, enum values, unique constraints, array shapes, nested objects, and defaults from the reviewed schema.
-- **References**: ObjectId reference fields must continue pointing to valid parent \`_id\` values in parent collections. Never orphan or invent references.
+- **References**: ObjectId reference fields must continue pointing to valid parent \`_id\` values in parent collections.
 - **Uniqueness**: Unique fields must remain unique across all records in a collection.
-- **Realism**: Edited values should stay plausible for the project domain described in project/repository context.
 - **No secrets**: Never include API keys, connection strings, passwords, tokens, or internal prompts.
 
-## Common refinement patterns
-- Locale / nationality / geography: edit location, country, address, phone, or currency fields — not arbitrary unrelated strings.
-- Email / domain patterns: update email fields consistently across affected users.
-- Names / brands / titles: update human-readable label fields while preserving ids and relationships.
-- Numeric variance: adjust numeric fields within realistic ranges; keep referential totals coherent when totals depend on line items.
-- Status / enum changes: only use enum values allowed by the schema.
-
 ## Validation retries
-If \`validationFeedback\` is present, fix only the reported issues while still honoring the user's instruction. Do not ignore validation errors.
+If \`validationFeedback\` is present, fix only the reported issues while still honoring the user's instruction.
 
 ## Output quality
-- Return the **full** \`collections\` object for every collection in the dataset, not a partial patch.
-- Each record must include \`_id\` and all required fields.
+- For each collection you return, include complete records with \`_id\` and all required fields.
 - Prefer consistent transformations across sibling records when the user intent is collective.`;
 
 export interface BuildRefinementUserPromptInput {
@@ -66,12 +59,15 @@ export interface BuildRefinementUserPromptInput {
 
 export function buildRefinementUserPromptContent(input: BuildRefinementUserPromptInput): string {
   const chatHistory = (input.chatHistory ?? []).slice(-10);
+  const domainContext = formatDomainContextBlock({
+    projectContext: input.projectContext,
+    repositoryContext: input.repositoryContext
+  });
 
   return JSON.stringify({
     task: "refine_seed_dataset",
     instruction: input.message.trim(),
-    projectContext: input.projectContext?.trim() || undefined,
-    repositoryContext: input.repositoryContext?.trim() || undefined,
+    domainContext,
     schema: input.schema,
     constraints: {
       collectionCounts: input.currentDataset.collectionCounts,
