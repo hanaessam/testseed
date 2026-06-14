@@ -9,6 +9,7 @@
     "setup:dev": "node scripts/setup-dev.mjs",
     "env:production:init": "node scripts/init-production-env.mjs",
     "env:production:sync": "node scripts/sync-production-env.mjs",
+    "env:production:verify": "node scripts/verify-production-env.mjs",
     "test": "turbo run test",
     "health": "npm install && npm run test:suite",
     "test:suite": "node scripts/test-suite.mjs",
