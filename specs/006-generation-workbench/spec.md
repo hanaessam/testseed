@@ -223,7 +223,7 @@ As a new user, I still want guided setup for project context, GitHub, and schema
 - JS seed script export and direct MongoDB insert remain separate product epics beyond Phase 2.
 - Mobile view may collapse the three-pane layout into stacked sections; desktop is the primary design target.
 - Users are authenticated before accessing the workbench.
-- **Shipped flow:** setup wizard for create → workbench for generation; saved runs persist dataset, counts, and refinement chat per snapshot (`generated_dataset_records`).
+- **Shipped flow:** setup wizard for create → workbench for generation; **dataset versions** persist immutable snapshots with labels, lineage, dataset, counts, and refinement chat (`generated_dataset_records`). See `docs/dataset-version-history.md`.
 - Editable preview cells remain **out of scope** — see epic **007-preview-editing** (planned).
 
 ## Out of Scope (this epic)

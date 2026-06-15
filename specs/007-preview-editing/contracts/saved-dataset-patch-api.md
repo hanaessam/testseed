@@ -1,11 +1,11 @@
-# Contract: Saved Dataset Patch API
+# Contract: Saved Dataset Patch API (Fork)
 
-**Feature**: `007-preview-editing`  
-**Layer**: `apps/api` → `packages/core` (`updateSavedGeneratedDataset`)
+**Feature**: `007-preview-editing` + dataset version history  
+**Layer**: `apps/api` → `packages/core` (`forkSavedGeneratedDataset`)
 
 ## PATCH `/projects/:projectId/generated-datasets/:datasetId`
 
-Persist manual edits to the active saved run.
+**Fork** manual edits into a **new** dataset version. The `:datasetId` path parameter is the **parent** version id.
 
 ### Auth
 
@@ -25,52 +25,57 @@ Persist manual edits to the active saved run.
     "validationResults": [],
     "warnings": [],
     "createdAt": "2026-06-08T12:00:00.000Z"
-  }
+  },
+  "chatHistory": [],
+  "versionLabel": "Manual edits",
+  "source": "manual_edit"
 }
 ```
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `dataset` | yes | Full valid dataset snapshot |
+| `chatHistory` | no | Defaults to parent version chat |
+| `versionLabel` | no | Defaults to `Manual edits` |
+| `source` | no | `manual_edit` (default) or `refinement` (e.g. accept candidate) |
 
 ### Validation (core)
 
 - Reject if `dataset.status !== "valid"`.
 - Reject if any `validationResults` entry has `severity: "error"`.
-- `datasetId` must exist and belong to `projectId`.
+- Parent `datasetId` must exist and belong to `projectId`.
 
 ### Success `200`
 
 ```json
 {
-  "dataset": { "...": "SavedGeneratedDataset with id" }
+  "dataset": { "...": "SavedGeneratedDataset with new id" },
+  "savedDatasetId": "ds_new"
 }
 ```
+
+Client MUST set `activeSavedDatasetId` to `savedDatasetId` (not the parent id).
 
 ### Errors
 
 | Status | When |
 | --- | --- |
 | `422` | Dataset invalid or has validation errors |
-| `404` | Project or saved dataset not found |
+| `404` | Project or parent version not found |
 
-## POST `/projects/:projectId/generated-datasets` (extend existing save)
+## POST `/projects/:projectId/generated-datasets`
 
-Save as new run after manual edits (first save after fresh generation uses same endpoint).
+Create a new version (first save or save-as-new).
 
-### Request body (additions)
+### Request body
 
 ```json
 {
   "dataset": { "...": "valid GeneratedDataset" },
-  "source": "manual_edit",
-  "name": "Optional user label",
-  "chatHistory": []
+  "chatHistory": [],
+  "parentDatasetId": "ds_parent_optional",
+  "versionLabel": "Manual edits"
 }
-```
-
-### Types change
-
-Extend `SavedGeneratedDatasetSource`:
-
-```ts
-type SavedGeneratedDatasetSource = "generation" | "refinement" | "manual_edit";
 ```
 
 ### Success `201`
@@ -84,10 +89,16 @@ type SavedGeneratedDatasetSource = "generation" | "refinement" | "manual_edit";
 
 ## Client flows
 
-| User action | API |
-| --- | --- |
-| First Save (no active run) | `POST .../generated-datasets` with `source: manual_edit` |
-| Save changes (active run) | `PATCH .../generated-datasets/:id` |
-| Save as new | `POST .../generated-datasets` with `source: manual_edit` |
+| User action | API | Result |
+| --- | --- | --- |
+| First Save (no active version) | `POST .../generated-datasets` | New version, no parent |
+| Save changes (active version) | `PATCH .../generated-datasets/:parentId` | **Fork** new version |
+| Save as new | `POST` with `parentDatasetId` | New version with lineage |
+| Accept regeneration candidate | `PATCH` with `source: refinement`, label `Accepted refinement` | Fork refined dataset |
 
-After success, client sets `activeSavedDatasetId` and refreshes `baselineFingerprint`.
+After success, client sets `activeSavedDatasetId` to `savedDatasetId` and refreshes `baselineFingerprint`.
+
+## Related
+
+- `docs/dataset-version-history.md`
+- `packages/core/src/generation/fork-saved-generated-dataset.ts`

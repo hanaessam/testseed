@@ -4,9 +4,11 @@
 
 **Created**: 2026-06-08
 
-**Status**: Draft
+**Status**: Shipped
 
-**Input**: User description: "Preview and Editing epic for TestSeed generation workbench. Users must edit generated record cells in the workbench table before export or direct insert. Edits revalidate against the saved schema (types, enums, required, unique, references). Invalid edits show inline errors; export stays blocked until the dataset is valid again. Edited datasets update in client state; optionally persist as a new saved run or patch the active run. Read-only reference/ObjectId fields may be display-only or restricted. Align with docs/requirements.md Preview and Editing user stories."
+**Input**: User description: "Preview and Editing epic for TestSeed generation workbench. Users must edit generated record cells in the workbench table before export or direct insert. Edits revalidate against the saved schema (types, enums, required, unique, references). Invalid edits show inline errors; export stays blocked until the dataset is valid again. Edited datasets update in client state; persist by **forking** a new dataset version (never overwrite in place). Read-only reference/ObjectId fields may be display-only or restricted. Align with docs/requirements.md Preview and Editing user stories."
+
+**See also**: `docs/dataset-version-history.md`
 
 **Depends on**: Generation Workbench (006) — per-collection table preview, saved generated datasets, schema snapshot review, and dataset validation status already shipped. Export and direct MongoDB insert are downstream consumers that MUST honor edit-time validation gates defined here.
 
@@ -23,7 +25,7 @@ Complete the **Preview and Editing** epic from product requirements by letting d
 1. **Edit** generated record values directly in workbench tables before export or insertion.
 2. **Revalidate** every edit against the saved schema (field types, enum values, required fields, uniqueness, and cross-collection references).
 3. **See inline errors** on invalid cells and **block export and insertion** until the full dataset is valid again.
-4. **Keep edits in workbench state** immediately, with optional **persistence** to the active saved run or as a new saved run.
+4. **Keep edits in workbench state** immediately, with **persistence** by forking a new **dataset version** (PATCH) or creating one (POST).
 5. **Protect referential integrity** by treating identifier and reference fields as read-only or restricted where editing would break ObjectId links.
 6. **Feel like working on a canvas** — direct, in-place editing on the data canvas with a simple, intuitive interface that stays out of the user's way.
 
@@ -33,7 +35,7 @@ Complete the **Preview and Editing** epic from product requirements by letting d
 
 ### Session 2026-06-08
 
-- Q: How should the first save work for a freshly generated dataset with no saved run loaded? → A: First explicit Save creates a new saved run (optional name); subsequent saves may patch that run or save as a new run.
+- Q: How should the first save work for a freshly generated dataset with no saved version loaded? → A: First explicit Save creates a new dataset version; subsequent saves fork new versions from the active one.
 - Q: Can users edit cells on records that already failed validation at generation time? → A: Yes — users may edit any editable cell, including on rows and collections that were invalid after generation, to fix issues without AI refinement.
 - Q: When should a cell edit trigger revalidation? → A: On commit only — when the user leaves the cell (blur) or presses Enter; not on every keystroke.
 - Q: When should the leave-page warning appear? → A: On any unsaved edits, whether the dataset is currently valid or invalid.
@@ -73,7 +75,7 @@ As a developer, I want to edit generated record values directly on the data canv
 4. **Given** a field with reviewed enum values, **When** the user clicks to edit, **Then** a dropdown or select list shows all allowed enum options and the user picks one (no free-text entry for enum fields).
 5. **Given** a dataset with validation errors from generation, **When** the user edits an editable cell on an invalid row, **Then** the cell updates, revalidation runs, and inline errors clear when the fix satisfies schema rules.
 6. **Given** multiple collections in the dataset, **When** the user switches collection tabs, **Then** prior edits in other collections remain visible and unchanged.
-7. **Given** a loaded saved run, **When** the user edits a cell, **Then** the workbench marks the dataset as having unsaved changes until the user persists or discards them.
+7. **Given** a loaded dataset version, **When** the user edits a cell, **Then** the workbench marks the dataset as having unsaved changes until the user persists or discards them.
 8. **Given** the user is editing a cell, **When** they press Escape before commit, **Then** the cell restores its pre-edit value and no revalidation runs.
 
 ---
@@ -131,17 +133,17 @@ As a developer, I want identifier and reference fields protected from casual edi
 
 ### User Story 5 - Persist Edited Datasets (Priority: P2)
 
-As a developer, I want to save my manual edits to the active saved run or as a new saved run so I can resume later without losing corrections.
+As a developer, I want to save my manual edits as new dataset versions so I can resume later without losing corrections or earlier snapshots.
 
-**Why this priority**: Edits that exist only in transient browser state are lost on navigation; persistence completes the preview-and-edit loop started in the workbench.
+**Why this priority**: Edits that exist only in transient browser state are lost on navigation; immutable versioning completes the preview-and-edit loop.
 
-**Independent Test**: Load a saved run, edit a cell, choose "Save changes"; reload the run; confirm the edited value persists. Repeat with "Save as new run" and confirm a second run appears in the saved list.
+**Independent Test**: Load a version, edit a cell, choose "Save changes"; confirm a new version appears with the edited value and the parent version is unchanged.
 
 **Acceptance Scenarios**:
 
-1. **Given** a freshly generated dataset with no saved run loaded, **When** the user chooses Save after valid edits, **Then** the system creates a new saved run (with optional name) and that run becomes the active saved run for later patch saves.
-2. **Given** a loaded saved run with unsaved edits, **When** the user chooses to save changes to the active run, **Then** the persisted snapshot reflects all valid edits and the unsaved indicator clears.
-3. **Given** a dataset with unsaved edits, **When** the user chooses to save as a new run, **Then** a new saved entry appears in the project's saved dataset list with the edited records.
+1. **Given** a freshly generated dataset with no version loaded, **When** the user chooses Save after valid edits, **Then** the system creates a new dataset version and that version becomes active.
+2. **Given** a loaded version with unsaved edits, **When** the user chooses to save changes, **Then** the system forks a new version reflecting all valid edits and the unsaved indicator clears.
+3. **Given** a dataset with unsaved edits, **When** the user chooses to save as a new version, **Then** a new entry appears in the dataset versions list with `parentDatasetId` lineage.
 4. **Given** validation errors remain, **When** the user attempts to persist, **Then** persistence is blocked with the same validation summary used for export.
 5. **Given** the user navigates away with any unsaved edits (valid or invalid dataset), **When** they have not persisted, **Then** the system warns that changes may be lost (or offers to save) before leaving.
 
@@ -187,8 +189,8 @@ As a developer, I want collection- and dataset-level validation status updated a
 - **FR-004**: System MUST disable export and direct insertion actions while any validation error exists in the active dataset and MUST show a navigable summary of remaining issues.
 - **FR-005**: System MUST update the active workbench dataset in memory when a cell edit is committed (blur or Enter), without requiring regeneration or a full page reload; in-cell typing before commit does not trigger revalidation.
 - **FR-006**: System MUST treat document identifier fields and reference fields as read-only by default so users cannot accidentally break ObjectId links; the UI MUST indicate why those fields are restricted.
-- **FR-007**: System MUST allow users to persist a valid edited dataset by updating the active saved run or saving as a new saved run; when no saved run is active (e.g., after fresh generation), the first explicit Save MUST create a new saved run (optional name) that becomes the active run for subsequent patch saves; persistence MUST be blocked when validation errors remain.
-- **FR-008**: System MUST indicate when the dataset has unsaved edits relative to the last persisted saved run.
+- **FR-007**: System MUST allow users to persist a valid edited dataset by **forking** a new dataset version (PATCH with parent id) or creating one (POST); persistence MUST be blocked when validation errors remain.
+- **FR-008**: System MUST indicate when the dataset has unsaved edits relative to the last loaded or saved version.
 - **FR-009**: System MUST preserve edits across collection tab switches and workbench panel collapse/expand within the same session.
 - **FR-010**: System MUST apply the same validation rules used for AI-generated batches to manually edited batches so generation, refinement, editing, export, and insertion share one definition of "valid dataset."
 - **FR-011**: System MUST warn users before navigating away when any unsaved edits exist, regardless of whether the dataset is currently valid or invalid.
@@ -205,7 +207,7 @@ As a developer, I want collection- and dataset-level validation status updated a
 - **Edited cell**: A single field value change within one record row, tied to a collection name, record index, field path, previous value, and new value.
 - **Validation issue**: A schema rule violation produced by revalidation, with collection, field, record location, rule type (type, enum, required, unique, reference), and user-facing message.
 - **Dataset validity state**: Aggregate status (valid / invalid) for the in-memory dataset, derived from zero vs. one-or-more validation issues.
-- **Saved run (persisted dataset)**: A named snapshot of generated records, counts, and optional chat history; may be patched in place or duplicated when the user saves edits.
+- **Dataset version (persisted)**: An immutable snapshot of generated records, counts, optional `versionLabel`, `parentDatasetId` lineage, and chat history; created on generate, refine, save, or accept-candidate — never updated in place for data changes.
 
 ## Success Criteria *(mandatory)*
 
@@ -214,7 +216,7 @@ As a developer, I want collection- and dataset-level validation status updated a
 - **SC-001**: Users can correct a single invalid field value and restore dataset validity in under 30 seconds without using AI refinement.
 - **SC-002**: 100% of export and insert attempts are blocked when the active dataset contains at least one validation error; 0% proceed with a known-invalid batch.
 - **SC-003**: At least 90% of test participants can identify which cell caused a blocked export using inline errors and the validation summary alone, without support documentation.
-- **SC-004**: Users who save edits to a saved run and reload it later see identical field values in 100% of acceptance test cases.
+- **SC-004**: Users who save edits and load the new forked version see identical field values in 100% of acceptance test cases; prior versions remain unchanged.
 - **SC-005**: Validation feedback appears on the same commit interaction (blur or Enter) for type, enum, and required violations in user acceptance testing.
 - **SC-006**: At least 90% of first-time test participants complete a single cell edit (select, change, commit) in under 15 seconds without instructions, demonstrating an intuitive canvas-like flow.
 - **SC-007**: In usability testing, at least 85% of participants rate the editing experience as "simple" or "very simple" on a 5-point scale.
@@ -226,7 +228,7 @@ As a developer, I want collection- and dataset-level validation status updated a
 - Document identifier (`_id`) and ObjectId reference columns are read-only in the first release; editing reference targets to point at different parents is out of scope unless a future epic explicitly adds it.
 - Cell editing targets scalar and simply formatted values shown in table columns; nested object or array editing inside cells is out of scope for v1.
 - Persistence requires an explicit user action (save to active run or save as new run); auto-save on every keystroke is not required.
-- After fresh generation with no loaded saved run, the first Save creates a new saved run rather than requiring a separate "save as new only" path first.
+- After fresh generation with no loaded version, the first Save creates a new dataset version.
 - Direct MongoDB insertion UI may ship in a later epic; this epic still defines the validation gate that insertion must respect when it becomes available.
 - JSON export already exists in the workbench; this epic wires export blocking to edit-time validation state rather than introducing new export formats.
 - Users are authenticated developers with access to the project; editing permissions match existing project access rules.

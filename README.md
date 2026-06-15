@@ -16,7 +16,7 @@
   </table>
 </div>
 
-**Generate realistic, schema-aware MongoDB seed data with AI — preview it, refine it, export it, or insert it with rollback support.**
+**Generate realistic, schema-aware MongoDB seed data with AI — preview it, refine it, version it, export it, or insert it with rollback support.**
 
 TestSeed helps backend and full-stack developers, QA engineers, and student teams skip hand-written seed scripts. Paste a Mongoose schema or discover structure from a live database, generate relational records in dependency order, chat with AI to refine results, then export JSON or a runnable seed script — or insert directly into MongoDB with batch rollback.
 
@@ -37,9 +37,10 @@ TestSeed helps backend and full-stack developers, QA engineers, and student team
 - **Account workspace** — Register, log in, and keep projects, generations, and seed batches tied to your user.
 - **Schema input** — Paste Mongoose schemas manually or discover collections and fields from an existing MongoDB database.
 - **AI generation** — OpenAI-powered seed data that respects types, enums, uniqueness, nesting, and ObjectId references.
-- **Generation workbench** — Per-collection counts, table preview, saved runs, and streamed refinement chat.
+- **Generation workbench** — Per-collection counts, table preview, **immutable dataset versions**, inline editing, and streamed refinement chat.
+- **Dataset version history** — Every generate, refine, and save creates a labeled version; load any version or **re-seed** it to MongoDB after confirmation.
 - **Export** — Download JSON or a ready-to-run JavaScript seed script.
-- **Direct seeding & rollback** — Insert tagged batches into MongoDB and roll them back by `seedBatchId`.
+- **Direct seeding & rollback** — Insert tagged batches into MongoDB; roll back by `seedBatchId` or apply a different dataset version via re-seed.
 - **GitHub context** — Optional repository summaries to improve domain-aware generation.
 - **Branded UI** — Theme-aware logos (`logo-light.svg` / `logo-dark.svg`) in the app shell, auth screens, and browser favicon.
 
@@ -171,8 +172,9 @@ Sensitive MongoDB connection strings submitted for discovery or direct seeding a
 | --- | --- |
 | Auth | `/auth/*` |
 | Schema discovery | `POST /schemas/mongodb/test-connection`, `POST /schemas/mongodb/discover` |
-| Generation | `POST /projects/:id/generations`, refinements, saved datasets |
-| Rollback | Project-scoped rollback routes |
+| Generation | `POST /projects/:id/generations`, refinements, regenerate, saved datasets (versions) |
+| Direct seeding | `POST /projects/:id/direct-seeding` (links `savedDatasetId` to seed batch) |
+| Rollback | Project-scoped seed batch rollback and apply-version routes |
 
 ## Deployment
 
@@ -236,11 +238,15 @@ App secrets (`MONGODB_URI`, `JWT_SECRET`, `GITHUB_*`, etc.) go to **Vercel** onl
 
 ## Documentation
 
+- [**Shipped features**](docs/shipped-features.md) — complete inventory of ready capabilities
 - [Contributing guide](CONTRIBUTING.md)
 - [Requirements & design](docs/requirements.md)
+- [**Shipped features**](docs/shipped-features.md) — complete feature inventory
+- [Dataset version history](docs/dataset-version-history.md) (planned design)
 - [UI design system](docs/ui-design.md)
 - [GitHub auth design](docs/github-auth-design.md)
 - [Email OTP auth](docs/auth-email-otp.md)
+- [Dataset version history](docs/dataset-version-history.md)
 - [Architecture decisions](docs/adr/)
 - [Product design notes](DESIGN.md)
 
