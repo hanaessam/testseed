@@ -8,6 +8,7 @@ import type {
   RefinementProviderRequest,
   RefinementProviderResponse
 } from "@testseed/types";
+import { mergeRefinedCollections } from "./merge-refined-collections";
 import { validateGeneratedDataset } from "./validate-generated-dataset";
 
 export type SeedRefinementProvider = (
@@ -54,7 +55,7 @@ export async function refineGeneratedDataset(
   }
 
   let validationFeedback: GenerationValidationResult[] = [];
-  const maxAttempts = input.maxAttempts ?? 2;
+  const maxAttempts = input.maxAttempts ?? 3;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let providerResponse: RefinementProviderResponse;
@@ -91,11 +92,38 @@ export async function refineGeneratedDataset(
       };
     }
 
+    const schemaCollectionNames = input.schema.collections.map((collection) => collection.name);
+    const mergedCollections = mergeRefinedCollections(
+      input.currentDataset.collections,
+      providerResponse.collections ?? {},
+      schemaCollectionNames,
+      input.currentDataset.collectionCounts
+    );
+    const mergeWarnings: GenerationValidationResult[] = [];
+
+    if (mergedCollections.preservedCollectionNames.length > 0) {
+      mergeWarnings.push({
+        severity: "warning",
+        code: "REFINEMENT_COLLECTION_PRESERVED",
+        message: `Preserved existing records for ${mergedCollections.preservedCollectionNames.join(", ")} because the refinement response omitted them.`,
+        suggestedAction: "Retry with a narrower instruction if those collections also needed changes."
+      });
+    }
+
+    if (mergedCollections.partialMergeCollectionNames.length > 0) {
+      mergeWarnings.push({
+        severity: "warning",
+        code: "REFINEMENT_PARTIAL_MERGE",
+        message: `Merged partial updates for ${mergedCollections.partialMergeCollectionNames.join(", ")} by matching record _id values.`,
+        suggestedAction: "Review the updated records to confirm the requested changes were applied."
+      });
+    }
+
     const dataset: GeneratedDataset = {
       ...input.currentDataset,
-      collections: providerResponse.collections ?? {},
+      collections: mergedCollections.collections,
       validationResults: [],
-      warnings: []
+      warnings: mergeWarnings
     };
     const validation = validateGeneratedDataset({
       dataset,
@@ -103,19 +131,37 @@ export async function refineGeneratedDataset(
       collectionCounts: input.currentDataset.collectionCounts
     });
 
+    const refinementMadeNoChanges =
+      mergedCollections.preservedCollectionNames.length === schemaCollectionNames.length &&
+      schemaCollectionNames.length > 0 &&
+      JSON.stringify(mergedCollections.collections) === JSON.stringify(input.currentDataset.collections);
+
+    if (refinementMadeNoChanges) {
+      validationFeedback = [
+        {
+          severity: "error",
+          code: "REFINEMENT_EMPTY_RESPONSE",
+          message:
+            "The refinement response omitted every collection. Return only the collections you changed, with complete records and preserved _id values.",
+          suggestedAction: "Include at least one changed collection with all of its records."
+        }
+      ];
+      continue;
+    }
+
     if (validation.status === "valid") {
       const acceptedDataset: GeneratedDataset = {
         ...dataset,
         status: "valid",
         validationResults: [],
-        warnings: validation.warnings
+        warnings: [...mergeWarnings, ...validation.warnings]
       };
       return {
         mode: "updated_dataset",
         message: providerResponse.message || "Updated dataset and preserved schema validity.",
         dataset: acceptedDataset,
         validationResults: [],
-        warnings: validation.warnings,
+        warnings: [...mergeWarnings, ...validation.warnings],
         chatHistory: [
           ...nextHistoryBase,
           {

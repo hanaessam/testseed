@@ -73,7 +73,35 @@ function validDataset(overrides: Partial<GeneratedDataset> = {}): GeneratedDatas
 
 class FakeCollection implements DirectMongoCollection {
   inserted: Record<string, unknown>[][] = [];
+  deleted: Array<Record<string, unknown>> = [];
+
   constructor(private readonly failWith?: Error) {}
+
+  async deleteMany(filter: Record<string, unknown>): Promise<{ deletedCount: number }> {
+    const matching = this.inserted.flat().filter((record) =>
+      Object.entries(filter).every(([key, value]) => record[key] === value)
+    );
+    this.deleted.push(filter);
+    return { deletedCount: matching.length };
+  }
+
+  async upsertMany(records: Record<string, unknown>[]): Promise<{ upsertedCount: number; modifiedCount: number }> {
+    let upsertedCount = 0;
+    let modifiedCount = 0;
+    const existing = this.inserted.flat();
+    for (const record of records) {
+      const index = existing.findIndex((entry) => entry._id === record._id);
+      if (index >= 0) {
+        existing[index] = record;
+        modifiedCount += 1;
+      } else {
+        existing.push(record);
+        upsertedCount += 1;
+      }
+    }
+    this.inserted = [existing];
+    return { upsertedCount, modifiedCount };
+  }
 
   async insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number; insertedIds?: string[] }> {
     if (this.failWith) {
@@ -81,6 +109,16 @@ class FakeCollection implements DirectMongoCollection {
     }
     this.inserted.push(records);
     return { insertedCount: records.length, insertedIds: records.map((record) => String(record._id)) };
+  }
+
+  async findByIds(ids: string[]): Promise<Record<string, unknown>[]> {
+    return this.inserted
+      .flat()
+      .filter((record) => ids.includes(String(record._id)));
+  }
+
+  async findBySeedBatchId(seedBatchId: string): Promise<Record<string, unknown>[]> {
+    return this.inserted.flat().filter((record) => record.seedBatchId === seedBatchId);
   }
 }
 
@@ -93,6 +131,10 @@ class FakeDatabase implements DirectMongoDatabase {
     private readonly pingError?: Error,
     private readonly failingCollection?: string
   ) {}
+
+  async listCollectionNames(): Promise<string[]> {
+    return [...this.collections.keys()];
+  }
 
   async command(command: { ping: 1 }): Promise<unknown> {
     this.commandCalls.push(command);
@@ -114,6 +156,10 @@ class FakeDatabase implements DirectMongoDatabase {
       );
     }
     return this.collections.get(name) as FakeCollection;
+  }
+
+  ensureCollection(name: string, collection: FakeCollection): void {
+    this.collections.set(name, collection);
   }
 }
 
@@ -144,8 +190,9 @@ class FakeClient implements DirectMongoClient {
   }
 }
 
-function fakeDeps(client: FakeClient) {
+function fakeDeps(client: FakeClient, insertionObjectIds: string[] = [userId, orderId]) {
   const createCalls: Array<{ connectionString: string; timeoutMs: number }> = [];
+  let insertionIdIndex = 0;
   const clientFactory: DirectMongoClientFactory = {
     create(receivedConnectionString, options) {
       createCalls.push({ connectionString: receivedConnectionString, timeoutMs: options.timeoutMs });
@@ -156,7 +203,10 @@ function fakeDeps(client: FakeClient) {
   return {
     deps: {
       clientFactory,
-      generateSeedBatchId: () => seedBatchId
+      generateSeedBatchId: () => seedBatchId,
+      generateInsertionObjectId: () =>
+        insertionObjectIds[insertionIdIndex++] ??
+        `64f0000000000000000000${String(insertionIdIndex).padStart(2, "0")}`
     },
     createCalls
   };
@@ -496,7 +546,7 @@ describe("seedMongoDataset", () => {
       )
     );
     const client = new FakeClient(database);
-    const { deps } = fakeDeps(client);
+    const { deps } = fakeDeps(client, [userId, newUserId]);
 
     const report = await seedMongoDataset({
       connectionString,
@@ -522,5 +572,42 @@ describe("seedMongoDataset", () => {
     expect(report.totalInsertedCount).toBe(1);
     expect(report.rollback.collections).toEqual([{ collectionName: "users", insertedCount: 1 }]);
     expectNoConnectionString(report);
+  });
+
+  it("upserts records when re-seeding over an active batch", async () => {
+    const priorBatchId = "22222222-2222-4222-8222-222222222222";
+    const database = new FakeDatabase("app");
+    const usersCollection = new FakeCollection();
+    usersCollection.inserted.push([
+      { _id: userId, email: "old@example.com", role: "member", seedBatchId: priorBatchId }
+    ]);
+    database.ensureCollection("users", usersCollection);
+    database.ensureCollection("orders", new FakeCollection());
+    const client = new FakeClient(database);
+    const { deps } = fakeDeps(client);
+
+    const report = await seedMongoDataset(
+      {
+        connectionString,
+        connectionTestToken: await successfulConnectionToken(),
+        schema,
+        dataset: validDataset({
+          collections: {
+            users: [{ _id: userId, email: "updated@example.com", role: "admin" }],
+            orders: [{ _id: orderId, userId, total: 99 }]
+          }
+        }),
+        targetDatabaseName: "app",
+        confirmed: true,
+        insertMode: "upsert"
+      },
+      deps
+    );
+
+    expect(report.insertedRecordCounts).toEqual({ users: 1, orders: 1 });
+    expect(usersCollection.inserted[0]).toEqual([
+      { _id: userId, email: "updated@example.com", role: "admin", seedBatchId: report.seedBatchId }
+    ]);
+    expect(usersCollection.deleted).toEqual([]);
   });
 });
