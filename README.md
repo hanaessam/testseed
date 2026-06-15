@@ -16,7 +16,7 @@
   </table>
 </div>
 
-**Generate realistic, schema-aware MongoDB seed data with AI — preview it, refine it, export it, or insert it with rollback support.**
+**Generate realistic, schema-aware MongoDB seed data with AI — preview it, refine it, version it, export it, or insert it with rollback support.**
 
 TestSeed helps backend and full-stack developers, QA engineers, and student teams skip hand-written seed scripts. Paste a Mongoose schema or discover structure from a live database, generate relational records in dependency order, chat with AI to refine results, then export JSON or a runnable seed script — or insert directly into MongoDB with batch rollback.
 
@@ -37,9 +37,10 @@ TestSeed helps backend and full-stack developers, QA engineers, and student team
 - **Account workspace** — Register, log in, and keep projects, generations, and seed batches tied to your user.
 - **Schema input** — Paste Mongoose schemas manually or discover collections and fields from an existing MongoDB database.
 - **AI generation** — OpenAI-powered seed data that respects types, enums, uniqueness, nesting, and ObjectId references.
-- **Generation workbench** — Per-collection counts, table preview, saved runs, and streamed refinement chat.
+- **Generation workbench** — Per-collection counts, table preview, **immutable dataset versions**, inline editing, and streamed refinement chat.
+- **Dataset version history** — Every generate, refine, and save creates a labeled version; load any version or **re-seed** it to MongoDB after confirmation.
 - **Export** — Download JSON or a ready-to-run JavaScript seed script.
-- **Direct seeding & rollback** — Insert tagged batches into MongoDB and roll them back by `seedBatchId`.
+- **Direct seeding & rollback** — Insert tagged batches into MongoDB; roll back by `seedBatchId` or apply a different dataset version via re-seed.
 - **GitHub context** — Optional repository summaries to improve domain-aware generation.
 - **Branded UI** — Theme-aware logos (`logo-light.svg` / `logo-dark.svg`) in the app shell, auth screens, and browser favicon.
 
@@ -171,8 +172,9 @@ Sensitive MongoDB connection strings submitted for discovery or direct seeding a
 | --- | --- |
 | Auth | `/auth/*` |
 | Schema discovery | `POST /schemas/mongodb/test-connection`, `POST /schemas/mongodb/discover` |
-| Generation | `POST /projects/:id/generations`, refinements, saved datasets |
-| Rollback | Project-scoped rollback routes |
+| Generation | `POST /projects/:id/generations`, refinements, regenerate, saved datasets (versions) |
+| Direct seeding | `POST /projects/:id/direct-seeding` (links `savedDatasetId` to seed batch) |
+| Rollback | Project-scoped seed batch rollback and apply-version routes |
 
 ## Deployment
 
@@ -192,24 +194,38 @@ cd apps/web && npx vercel link
 cd ../api && npx vercel link
 ```
 
-To sync local secrets to Vercel:
+Keep **local** URLs in `.env` (`localhost:3000` / `localhost:3001`). Use a separate **production** file for deploy sync:
 
 ```sh
-# Optional: set production URLs before syncing
-export VERCEL_WEB_URL=https://testseed-web.vercel.app
-export VERCEL_API_URL=https://testseed-api.vercel.app
-node scripts/sync-vercel-env.mjs
-node scripts/fix-vercel-production-urls.mjs
+# 1. Link Vercel projects (once)
+cd apps/web && npx vercel link
+cd ../api && npx vercel link
+
+# 2. Build .env.production from .env + production URLs + linked project IDs
+npm run env:production:init
+
+# 3. Add your Vercel token to .env.production
+#    VERCEL_TOKEN=...   (from https://vercel.com/account/tokens)
+
+# 4. Push app secrets to Vercel and deploy secrets to GitHub Actions
+npm run env:production:sync
+
+# Optional: also sync preview/development on Vercel
+node scripts/sync-production-env.mjs --all-environments
+
+# Audit Vercel env var names (no values printed)
 node scripts/audit-vercel-env.mjs
 ```
 
-Remove secrets that were copied to the wrong project:
+Copy `.env.production.example` to `.env.production` if you prefer to fill production values manually instead of `env:production:init`.
+
+Remove secrets that were copied to the wrong Vercel project:
 
 ```sh
-node scripts/sync-vercel-env.mjs --prune-misplaced
+node scripts/sync-vercel-env.mjs --env-file=.env.production --prune-misplaced
 ```
 
-**GitHub repository secrets** (Settings → Secrets and variables → Actions):
+**GitHub repository secrets** (set automatically by `env:production:sync` when `gh` is authenticated):
 
 | Secret | Description |
 | --- | --- |
@@ -218,13 +234,19 @@ node scripts/sync-vercel-env.mjs --prune-misplaced
 | `VERCEL_WEB_PROJECT_ID` | Web project ID from `apps/web/.vercel/project.json` (`projectId`) |
 | `VERCEL_API_PROJECT_ID` | API project ID from `apps/api/.vercel/project.json` (`projectId`) |
 
+App secrets (`MONGODB_URI`, `JWT_SECRET`, `GITHUB_*`, etc.) go to **Vercel** only — not GitHub Actions.
+
 ## Documentation
 
+- [**Shipped features**](docs/shipped-features.md) — complete inventory of ready capabilities
 - [Contributing guide](CONTRIBUTING.md)
 - [Requirements & design](docs/requirements.md)
+- [**Shipped features**](docs/shipped-features.md) — complete feature inventory
+- [Dataset version history](docs/dataset-version-history.md) (planned design)
 - [UI design system](docs/ui-design.md)
 - [GitHub auth design](docs/github-auth-design.md)
 - [Email OTP auth](docs/auth-email-otp.md)
+- [Dataset version history](docs/dataset-version-history.md)
 - [Architecture decisions](docs/adr/)
 - [Product design notes](DESIGN.md)
 

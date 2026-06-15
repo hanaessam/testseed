@@ -60,7 +60,7 @@ Key decisions are captured in `research.md`:
 - The existing regeneration endpoint is extended rather than replaced.
 - Compare-before-accept uses deterministic summary metadata derived from accepted vs candidate datasets and regeneration outcome details.
 - One automatic retry is allowed only for fixable duplicate unique values or invalid references.
-- Pending candidates are discarded on workbench exit and are not persisted as saved runs until accepted.
+- Pending candidates are discarded on workbench exit; accepting a candidate **forks** a new dataset version (`Accepted refinement`).
 
 All technical unknowns are resolved with no `NEEDS CLARIFICATION` markers.
 

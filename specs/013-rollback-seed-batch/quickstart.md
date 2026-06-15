@@ -4,6 +4,8 @@
 
 Validate rollback planning and implementation for `specs/013-rollback-seed-batch` without storing connection strings or deleting unrelated data.
 
+**Note:** To restore earlier **generated data** in the workbench or MongoDB via a different snapshot, use **dataset versions** and **re-seed** (`docs/dataset-version-history.md`). This quickstart covers **seed batch rollback** only (delete by `seedBatchId`).
+
 ## Prerequisites
 
 - Node.js 20+

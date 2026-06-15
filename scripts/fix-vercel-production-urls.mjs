@@ -1,7 +1,9 @@
 /**
- * Align production/preview URL env vars across testseed-web and testseed-api.
+ * Align production URL env vars across testseed-web and testseed-api.
  *
- * Usage (from repo root):
+ * Prefer: npm run env:production:sync
+ *
+ * Legacy usage (from repo root):
  *   VERCEL_WEB_URL=https://testseed-web.vercel.app \
  *   VERCEL_API_URL=https://testseed-api.vercel.app \
  *   node scripts/fix-vercel-production-urls.mjs

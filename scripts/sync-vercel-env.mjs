@@ -2,9 +2,10 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { applyProductionUrlOverrides, parseEnvFile, resolveEnvFilePath } from "./env-file.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const envPath = path.join(rootDir, ".env");
+const envPath = resolveEnvFilePath(rootDir);
 
 const apiEnvKeys = [
   "OPENAI_API_KEY",
@@ -66,7 +67,7 @@ const environments = process.argv.includes("--all-environments")
   : ["production"];
 const envValues = parseEnvFile(envPath);
 
-applyProductionUrls(envValues);
+applyProductionUrlOverrides(envValues);
 
 if (process.argv.includes("--prune-misplaced")) {
   removeMisplacedEnv("apps/web", webOnlyMisplacedKeys);
@@ -76,55 +77,7 @@ if (process.argv.includes("--prune-misplaced")) {
 syncProjectEnv("apps/api", apiEnvKeys, envValues);
 syncProjectEnv("apps/web", webEnvKeys, envValues);
 
-console.log("Synced environment variables to Vercel projects.");
-console.log("Tip: node scripts/fix-vercel-production-urls.mjs after setting VERCEL_WEB_URL / VERCEL_API_URL.");
-
-function parseEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Missing ${filePath}. Create it from .env.example before syncing.`);
-  }
-
-  const values = {};
-
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
-    const match = line.match(/^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*)?\s*$/);
-
-    if (!match) {
-      continue;
-    }
-
-    const [, key, rawValue = ""] = match;
-    values[key] = normalizeEnvValue(rawValue);
-  }
-
-  return values;
-}
-
-function normalizeEnvValue(rawValue) {
-  const value = rawValue.trim();
-  const quote = value[0];
-
-  if ((quote === '"' || quote === "'") && value.endsWith(quote)) {
-    return value.slice(1, -1);
-  }
-
-  return value.replace(/\s+#.*$/, "");
-}
-
-function applyProductionUrls(values) {
-  const webUrl = values.VERCEL_WEB_URL ?? process.env.VERCEL_WEB_URL;
-  const apiUrl = values.VERCEL_API_URL ?? process.env.VERCEL_API_URL;
-
-  if (webUrl) {
-    values.WEB_APP_URL = webUrl;
-  }
-
-  if (apiUrl) {
-    const normalizedApiUrl = apiUrl.replace(/\/$/, "");
-    values.NEXT_PUBLIC_API_URL = normalizedApiUrl;
-    values.GITHUB_CALLBACK_URL = `${normalizedApiUrl}/auth/github/callback`;
-  }
-}
+console.log(`Synced environment variables to Vercel projects from ${path.basename(envPath)}.`);
 
 function readLinkedProjectEnv(projectDir) {
   const projectFile = path.join(rootDir, projectDir, ".vercel", "project.json");
@@ -197,7 +150,7 @@ function syncProjectEnv(projectDir, keys, values) {
     const value = values[key];
 
     if (value === undefined || value === "") {
-      console.warn(`Skipping ${key} for ${projectDir}: no value in .env`);
+      console.warn(`Skipping ${key} for ${projectDir}: no value in ${path.basename(envPath)}`);
       continue;
     }
 

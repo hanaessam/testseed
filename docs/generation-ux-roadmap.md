@@ -1,10 +1,10 @@
 # Generation UX Roadmap
 
-**Status**: Workbench + setup wizard shipped. Streaming enabled by default. Saved runs persist dataset, counts, and chat history per generation/refinement snapshot. Export (2b) still gated by env flag.
+**Status**: Workbench + setup wizard + dataset version history shipped. Streaming enabled by default. Export and direct seeding gated by `NEXT_PUBLIC_GENERATION_WORKBENCH_EXPORT=true`.
 
 ## Purpose
 
-This document summarizes why TestSeed is moving from a **generate wizard** to a **Generation Workbench**, how that compares to [Tonic Fabricate](https://www.tonic.ai/products/fabricate), and which epics own each slice of work.
+This document summarizes why TestSeed uses a **Generation Workbench**, how that compares to [Tonic Fabricate](https://www.tonic.ai/products/fabricate), and which epics own each slice of work.
 
 ## Current state (shipped)
 
@@ -12,73 +12,70 @@ This document summarizes why TestSeed is moving from a **generate wizard** to a 
 | --- | --- | --- |
 | Setup wizard | `apps/web/components/generation/project-setup-wizard.tsx` | New projects: context → GitHub → schema → review |
 | Generation Workbench | `apps/web/app/generate/page.tsx` | Three-pane: setup rail · tables · agent dock |
-| Saved runs | `generated_dataset_records` + left-rail panel | Data, counts, chat history per snapshot |
+| **Dataset versions** | `generated_dataset_records` + `saved-datasets-panel.tsx` | Immutable snapshots with labels, lineage, load + re-seed |
 | AI generation | `packages/core/src/generation/` | Dependency order, validation, OpenAI via API |
-| Chat refinement | Agent dock (streamed) | `refineGeneratedDataset` + persisted chat per run |
+| Chat refinement | Agent dock (streamed) | Pre-refine snapshot + new version on dataset change |
+| Feedback regeneration | `regenerateWithFeedback` | Candidate review; accept forks `Accepted refinement` version |
 | Collection counts | `collection-counts-panel.tsx` | Editable in workbench left rail |
-| Preview editing | `collection-data-table.tsx` + `editable-table-cell.tsx` | Inline edit, enum dropdown, edited indicator, save bar |
+| Preview editing | `collection-data-table.tsx` + save bar | Inline edit; save **forks** version via PATCH |
+| Export + direct seed | `export-drawer.tsx` | JSON, JS script, MongoDB insert, seed batch history |
+| Confirm dialogs | `confirm-dialog.tsx` + `alert-dialog.tsx` | Re-seed, rollback, destructive actions |
 | Schema review | Wizard review step + project schema tab | Save snapshot before workbench |
 
-See `docs/ui-design.md` § Generate Flow for UI conventions.
+See `docs/dataset-version-history.md` and `docs/ui-design.md` § Generate Flow.
 
-## Target state (planned)
+## Dataset versions (shipped)
 
-**Generation Workbench** — three-pane layout on `/generate` (with `projectId`):
+Every meaningful change creates a new persisted version — never an in-place overwrite:
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  AppShell                                                    │
-├──────────────┬──────────────────────────┬───────────────────┤
-│ Setup rail   │ Data canvas              │ Agent dock        │
-│ (collapsible)│                          │                   │
-│ · Context    │ · Collection tabs        │ · Chat history    │
-│ · GitHub     │ · Table preview          │ · Refine input    │
-│ · Schema     │ · Validation badges      │ · Quick prompts   │
-│ · Plan       │ · Progress (Phase 3)     │                   │
-│ · Counts     │                          │                   │
-├──────────────┴──────────────────────────┴───────────────────┤
-│ Sticky bar: Generate · Regenerate · Export · Finish         │
-└─────────────────────────────────────────────────────────────┘
-```
+| Event | Version label (typical) |
+| --- | --- |
+| Generate | `Initial generation` |
+| Before refine | `Before refine: {feedback}` |
+| Refine success | `Refined: {message}` |
+| Accept candidate | `Accepted refinement` |
+| Manual save | `Manual edits` |
 
-Full specification: [`specs/006-generation-workbench/spec.md`](../specs/006-generation-workbench/spec.md)
+Users browse versions in the left rail, load any into the workbench, and **Re-seed** to MongoDB after confirmation.
 
-## Epic map
+## Target state (remaining)
 
 | Epic | Priority | Scope |
 | --- | --- | --- |
 | **005** AI Seed Generation | Done | Generate, validate, refine (core + API) |
-| **006** Generation Workbench | Done | Wizard + workbench, tables, plan, streaming, JSON export, saved runs |
-| **007** Preview and Editing | **Done** | Canvas-like cell editing, revalidation on commit, export/save gating, persist patches |
-| Export (requirements §2.2) | Partial | JSON shipped; JS seed script after 007 or 008 |
-| Direct insert + rollback | Later | Workbench handoff (006 Phase 3 concept) |
+| **006** Generation Workbench | Done | Wizard + workbench, tables, plan, streaming, versions panel |
+| **007** Preview and Editing | Done | Cell editing, revalidation, fork-on-save |
+| **010–012** Export + direct seed | Done (env-gated) | JSON, JS script, MongoDB insert |
+| **013** Rollback seed batch | Done (core + API) | `seedBatchId` deletion; UI in export/history |
+| Polish | Ongoing | Project detail version list, cross-device connection UX |
 
-## Phased delivery (006)
+## Phased delivery (006 — complete)
 
 | Phase | Focus | User-visible outcome |
 | --- | --- | --- |
-| **1** | Workbench shell | All users on one screen; setup rail + static tables + merged refine; Finish only |
-| **2a** | Streaming | Streamed chat + progressive tables + generation progress (Tonic-demo feel) |
-| **2b** | Export + trust | JSON export, validation badges, quick prompts, refinement summaries |
-| **3** | Handoff | Insert, rollback links, CI snippets |
+| **1** | Workbench shell | One screen; setup rail + tables + refine; Finish |
+| **2a** | Streaming | Streamed chat + progressive tables + progress |
+| **2b** | Export + trust | JSON export, validation badges, quick prompts |
+| **3** | Handoff | Direct insert, seed history, version re-seed |
 
 Details: [`specs/006-generation-workbench/plan.md`](../specs/006-generation-workbench/plan.md)
 
 ## Research reference
 
-Tonic-inspired patterns and gap analysis: [`specs/006-generation-workbench/research.md`](../specs/006-generation-workbench/research.md)
-
-Demo reference: [YouTube — Tonic-style workflow](https://www.youtube.com/watch?v=qAtGUNLav5k)
+Tonic-inspired patterns: [`specs/006-generation-workbench/research.md`](../specs/006-generation-workbench/research.md)
 
 ## Rules for implementers
 
 1. **Keep the setup wizard** for new projects; workbench is for generation after schema save.
 2. **No business logic in `apps/web`** — workbench components render API state only.
-3. **Use `router.push` or `Link`** for finish/navigation; never raw `<a href>` to internal routes.
-4. Update `docs/ui-design.md` when workbench ships; keep wizard section until deprecation.
+3. **Never patch saved datasets in place** — use `forkSavedGeneratedDataset` for saves and PATCH.
+4. **Distinguish versions from seed batches** in docs and UI copy.
+5. Update `docs/ui-design.md` and `docs/dataset-version-history.md` when version behavior changes.
 
 ## Related files
 
-- `docs/requirements.md` — product epics (export, insert, rollback)
-- `specs/005-ai-seed-generation/spec.md` — generation behavior contract
+- `docs/requirements.md` — product epics
+- `docs/dataset-version-history.md` — version + re-seed contract
+- `docs/adr/0003-immutable-dataset-versions.md` — ADR
+- `specs/005-ai-seed-generation/spec.md` — generation behavior
 - `DESIGN.md` — architecture boundaries

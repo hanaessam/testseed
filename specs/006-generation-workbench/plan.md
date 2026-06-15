@@ -6,7 +6,7 @@
 
 **Date**: 2026-06-08 (revised after `/speckit-clarify`)
 
-**Status**: **Shipped** (Phases 1, 2a, 2b). Post-ship amendments: dedicated **setup wizard** for new projects; workbench for generation; **saved runs** with dataset, counts, and chat history. Phase 3 (insert/rollback handoff) deferred to a later epic.
+**Status**: **Shipped** (Phases 1, 2a, 2b). Post-ship: setup wizard; workbench; **immutable dataset versions** with load + re-seed; inline editing (007). Direct seed + rollback in export drawer.
 
 ## Summary
 
@@ -44,7 +44,7 @@ Reuse `005` generation and refinement APIs in Phase 1. Phase 2 adds **streaming*
 
 **Primary Dependencies**: Existing `AppShell`, shadcn-style primitives, `@testseed/types`, `api-client.ts`
 
-**Storage**: Workbench UI is client session state; **saved runs** persist in `generated_dataset_records` (dataset, counts, chat history per snapshot)
+**Storage**: Workbench UI is client session state; **dataset versions** persist in `generated_dataset_records` (immutable snapshots with optional `versionLabel`, `parentDatasetId`)
 
 **Testing**: `npx turbo build lint test`; contract tests for new streaming/plan routes; manual workbench test plan below
 
