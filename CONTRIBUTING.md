@@ -98,6 +98,8 @@ Read the relevant `AGENTS.md` before changing a layer:
 - `apps/api/AGENTS.md`
 - `apps/web/AGENTS.md`
 
+Product docs: `docs/requirements.md`, [`docs/shipped-features.md`](docs/shipped-features.md), `DESIGN.md`.
+
 ## Deployment Notes
 
 Vercel projects `testseed-web` and `testseed-api` map to `apps/web` and `apps/api`. Deployment workflows live in `.github/workflows/`. Contributors do not need Vercel access for most PRs — maintainers handle production env sync.

@@ -8,7 +8,7 @@
 
 **Organization**: Phase 1 user stories (US1–US7) deliver the workbench shell. Plan Phase 2a (streaming) and 2b (export) follow as separate task phases aligned with `plan.md`.
 
-**Status**: All tasks below are complete. Post-006 enhancements in codebase (not separate tasks): setup wizard component, saved runs with chat history, collection counts panel, refinement prompt improvements. Next epic: **`007-preview-editing`**.
+**Status**: All tasks below are complete. Post-006 enhancements: setup wizard, **dataset version history** (fork-on-save, pre-refine snapshots, re-seed), collection counts panel, refinement prompt improvements, preview editing (007).
 
 ## Format: `[ID] [P?] [Story] Description`
 

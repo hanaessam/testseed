@@ -4,7 +4,7 @@
 
 **Spec**: `specs/007-preview-editing/spec.md`
 
-**Builds on**: `006-generation-workbench` (data canvas, saved runs, export drawer), `005-ai-seed-generation` (`validateGeneratedDataset`)
+**Builds on**: `006-generation-workbench` (data canvas, dataset versions, export drawer), `005-ai-seed-generation` (`validateGeneratedDataset`)
 
 ## Problem recap
 
@@ -76,7 +76,7 @@ The workbench already previews generated records in `collection-data-table.tsx` 
 
 ### Decision: Persistence via patch + save-as-new
 
-**Rationale**: Clarifications — first Save after fresh generation creates a saved run; subsequent Save patches active run; Save as new duplicates.
+**Rationale**: Saves **fork** new dataset versions via `forkSavedGeneratedDataset`; PATCH parent id + response `savedDatasetId`.
 
 **Gap today**: `saveGeneratedDataset` exists; no `updateSavedGeneratedDataset` for dataset body.
 

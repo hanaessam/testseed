@@ -19,4 +19,5 @@ Forbidden imports:
 - App route handlers
 - UI modules
 
-Core may depend on `@testseed/types` and pure libraries. It must not read environment variables directly.
+- Generation: `saveGeneratedDataset`, `listSavedGeneratedDatasets`, refine/regenerate, `updateSavedGeneratedDataset` (patch saved run).
+- Rollback: `rollbackSeedBatch` (MongoDB batch operations).

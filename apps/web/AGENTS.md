@@ -54,7 +54,6 @@ Read [`docs/ui-design.md`](../../docs/ui-design.md) before changing layouts or s
 | --- | --- |
 | Dashboard | `p-6`, header divider, metric cards, recent projects list |
 | Projects | `PageSection` ×2 (overview + list); `FilterGroup` toolbar; Cards/List/Compact views; `testseed:projects-view` in `localStorage` |
-| Generate (current) | Wizard `Stepper`, one step per card, Skip on optional steps; Finish via `router.push` |
-| Generate (planned) | Three-pane workbench — see `specs/006-generation-workbench/` |
+| Generate (workbench) | Three-pane layout — `docs/ui-design.md` § Generate Flow; **dataset versions** panel + re-seed — `docs/dataset-version-history.md` |
 | Project details | Horizontal tabs; schema tab is master-detail |
 | Account | Summary card + left section nav (Profile / Security / Danger zone) |

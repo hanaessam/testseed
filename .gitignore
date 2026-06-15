@@ -7,8 +7,6 @@ node_modules
 .pnp.js
 
 # Local env files
-.env
-.env.*
 !.env.example
 !.env.production.example
 
@@ -58,7 +56,6 @@ yarn-error.log*
 Thumbs.db
 *.tmp
 *.swp
-.vscode/
 .idea/
 *.pem
 tree.txt
@@ -67,3 +64,4 @@ tree.txt
 # Logs
 *.log
 logs/
+config.bat

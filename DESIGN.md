@@ -38,7 +38,7 @@ Owns Mongoose schemas, model definitions, and connection factories. It may creat
 
 ### `@testseed/core`
 
-Owns use cases: schema interpretation, seed generation orchestration, validation decisions, export shaping, direct seeding decisions, and rollback decisions. Core functions receive external dependencies as parameters.
+Owns use cases: schema interpretation, seed generation orchestration, validation decisions, **immutable dataset versioning** (`saveGeneratedDataset`, `forkSavedGeneratedDataset`), export shaping, direct seeding decisions, and rollback decisions. Core functions receive external dependencies as parameters.
 
 ### `@testseed/api`
 
@@ -58,7 +58,7 @@ Current product surfaces follow these conventions:
 - **Tokens:** light (`:root`) and dark (`.dark`) CSS variables in `globals.css`; soft `--border` via `color-mix`; semantic info/warning/danger tokens for alerts and badges.
 - **Theme:** Redux Toolkit (`apps/web/src/store/theme/`) with `light` | `dark` | `system` modes, `localStorage` persistence, and sidebar/auth toggles.
 - **Page composition:** mono-tagged sections (`PageSection` pattern), labeled filter groups, multi-view lists with `localStorage` view preference where applicable. Reference: projects page in `docs/ui-design.md`.
-- **Flows:** generate wizard today (project → GitHub → schema → review → generate → refine); finish uses client-side navigation to project detail; **planned** Generation Workbench (`specs/006-generation-workbench`, `docs/generation-ux-roadmap.md`); project details with tabbed Overview / Schema / History / Project settings; account settings with Profile / Security / Danger zone sections.
+- **Flows:** Setup wizard + **Generation Workbench** (shipped): project → GitHub → schema → review → generate → refine with **dataset version history** and re-seed; finish navigates to project detail. See `docs/generation-ux-roadmap.md` and `docs/dataset-version-history.md`. Project details with tabbed Overview / Schema / History / Project settings; account settings with Profile / Security / Danger zone sections.
 - **Projects list:** Cards / List / Compact views; filters for lifecycle, schema readiness, sort, and search; clickable rows with isolated action buttons.
 - **Primitives:** `Card`, `Alert`, `Skeleton`, `Stepper`; messages and loading states use these instead of one-off bordered blocks.
 - **Auth:** `auth-session.shared.ts` for pure helpers; `auth-session.ts` client-only; API 401 clears session and notifies the shell.

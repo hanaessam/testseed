@@ -26,6 +26,17 @@ Extends data contracts from `specs/005-ai-seed-generation` and workbench session
 | `collectionCounts` | `Record<string, number>` | yes | Per-collection counts preserved from accepted baseline |
 | `feedback` | `string` | yes | New feedback instruction |
 | `chatHistory` | `ChatRefinementMessage[]` | no | Prior user-visible context for iteration continuity |
+| `savedDatasetId` | `string` | no | Active dataset version; triggers **Before refine** snapshot |
+
+## Pre-refine snapshot (API)
+
+When `savedDatasetId` is present on regenerate or refinement requests, the API persists the current dataset as a new version:
+
+- `versionLabel`: `Before refine: {truncated feedback}`
+- `parentDatasetId`: `savedDatasetId`
+- `source`: `manual_edit`
+
+This runs before the AI call so users can return to pre-refine data within the same session.
 
 ## Feedback Regeneration Outcome
 

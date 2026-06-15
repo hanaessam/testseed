@@ -21,10 +21,11 @@ Existing TestSeed metadata for a direct seeding operation.
 | `projectId` | `string` | Yes | Owning project id. |
 | `actorId` | `string` | Yes | User that created the batch. |
 | `seedBatchId` | `string` | Yes | Unique per project. |
+| `savedDatasetId` | `string` | No | Links batch to dataset version seeded (`generated_dataset_records` id). |
 | `collectionCounts` | `Record<string, number>` | Yes | Inserted count by collection. |
 | `insertedDocumentIds` | `Record<string, string[]>` | Yes | Inserted document ids by collection for reporting/debug support, not the primary delete filter. |
 | `collectionOrder` | `string[]` | Yes | Original generation/insertion order. Rollback processes `collectionOrder` in reverse. |
-| `status` | `"pending" | "inserted" | "partially_inserted" | "rolled_back"` | Yes | Only eligible inserted batches can complete rollback. Already `rolled_back` is rejected. |
+| `status` | `"pending" | "inserted" | "partially_inserted" | "rolled_back" | "superseded" | "active"` | Yes | Eligible batches for rollback; re-seeding may supersede prior active batch. |
 | `createdAt` | `Date` | Yes | Batch metadata creation time. |
 | `rolledBackAt` | `Date` | No | Set when rollback succeeds. |
 | `rollbackDeletedCounts` | `Record<string, number>` | No | Deleted counts by collection from successful rollback. |

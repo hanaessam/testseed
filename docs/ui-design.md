@@ -210,7 +210,7 @@ Three-pane layout after setup (`?projectId=…&mode=generate`):
 
 | Pane | Contents |
 | --- | --- |
-| **Left — Setup rail** | Edit setup link, context sources, **collection counts**, generation plan, **saved runs** |
+| **Left — Setup rail** | Edit setup link, context sources, **collection counts**, generation plan, **dataset versions** |
 | **Center — Data canvas** | Collection tabs, table preview, validation badges, generation progress |
 | **Right — Agent dock** | Streamed refinement chat (You / TestSeed bubbles), quick prompts |
 
@@ -220,11 +220,16 @@ Three-pane layout after setup (`?projectId=…&mode=generate`):
 
 - Collection counts are editable in the left rail; the generation plan refreshes when counts change.
 - Context sources panel shows project description and GitHub summary before Generate.
-- **Saved runs** persist per project: generated data, collection counts, and refinement **chat history**. Selecting a run restores preview + agent dock transcript.
-- New generation clears the in-memory chat; guidance-only refinements update chat on the active saved run; dataset-changing refinements create a new saved run with full chat history.
+- **Dataset versions** (left rail): immutable snapshots per project with `versionLabel`, `parentDatasetId` lineage, record counts, and chat message count. Click a row to load preview + agent dock transcript. **Re-seed** applies that version to MongoDB after `AlertDialog` confirmation (requires tested connection from Export drawer).
+- Before each refine or feedback regeneration, the API saves a **Before refine** snapshot when an active version exists.
+- Refinement that changes data creates a new version (`Refined: …`); guidance-only refinements update chat on the active version without a new data snapshot.
+- Manual saves and accept-candidate flows **fork** new versions (`Manual edits`, `Accepted refinement`) — they never overwrite in place.
 - Refinement streaming is on by default (`NEXT_PUBLIC_GENERATION_WORKBENCH_STREAMING` — set to `false` to disable).
 - Finish navigates to `/projects/[projectId]`.
-- **Editable cells** are not shipped in 006; planned in epic `007-preview-editing` (see `docs/generation-ux-roadmap.md`).
+- **Editable cells** shipped in epic 007 (`collection-data-table.tsx`, dataset save bar).
+- Export drawer: JSON/JS export, connection test, direct seed of active dataset, seed batch history. Connection string stored per project in browser `localStorage` after successful test (for version re-seed).
+
+See `docs/dataset-version-history.md`.
 
 ## Project Details
 
