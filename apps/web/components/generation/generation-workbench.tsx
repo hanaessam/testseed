@@ -8,7 +8,6 @@ import {
 import { CollectionCountsPanel } from "@/components/generation/collection-counts-panel";
 import { ContextSourcesPanel } from "@/components/generation/context-sources-panel";
 import { DatasetSaveBar } from "@/components/generation/dataset-save-bar";
-import { ExportDrawer } from "@/components/generation/export-drawer";
 import { GenerationPlanPanel } from "@/components/generation/generation-plan-panel";
 import { GenerationProgress } from "@/components/generation/generation-progress";
 import { SavedDatasetsPanel } from "@/components/generation/saved-datasets-panel";
@@ -32,9 +31,6 @@ import { Check, Loader2, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 interface GenerationWorkbenchProps {
-  projectId?: string | null;
-  token?: string | null;
-  schemaSnapshotId?: string | null;
   context?: ProjectContext | null;
   schema?: ParsedSchema | null;
   plan: GenerationPlanResponse | null;
@@ -64,13 +60,12 @@ interface GenerationWorkbenchProps {
   setupContent: ReactNode;
   activeCollection?: string;
   onActiveCollectionChange?(collectionName: string): void;
-  showExport?: boolean;
-  exportOpen?: boolean;
-  onExportOpenChange?(isOpen: boolean): void;
   savedDatasets?: SavedGeneratedDatasetSummary[];
   savedDatasetsLoading?: boolean;
   activeSavedDatasetId?: string | null;
   onSavedDatasetSelect?(datasetId: string): void;
+  onReseedSavedDataset?(datasetId: string, summary: SavedGeneratedDatasetSummary): void;
+  reseedingSavedDatasetId?: string | null;
   onGenerate?(): void;
   generateDisabled?: boolean;
   isGenerating?: boolean;
@@ -90,9 +85,6 @@ interface GenerationWorkbenchProps {
 }
 
 export function GenerationWorkbench({
-  projectId,
-  token,
-  schemaSnapshotId,
   context,
   schema,
   plan,
@@ -114,13 +106,12 @@ export function GenerationWorkbench({
   setupContent,
   activeCollection,
   onActiveCollectionChange,
-  showExport = false,
-  exportOpen = false,
-  onExportOpenChange,
   savedDatasets = [],
   savedDatasetsLoading = false,
   activeSavedDatasetId = null,
   onSavedDatasetSelect,
+  onReseedSavedDataset,
+  reseedingSavedDatasetId = null,
   onGenerate,
   generateDisabled = false,
   isGenerating = false,
@@ -180,21 +171,6 @@ export function GenerationWorkbench({
 
   return (
     <div className={cn("flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden", className)}>
-      {showExport && onExportOpenChange ? (
-        <div className="shrink-0">
-          <ExportDrawer
-            projectId={projectId}
-            token={token}
-            schemaSnapshotId={schemaSnapshotId}
-            dataset={dataset}
-            collectionCounts={collectionCounts}
-            validationResults={validationResults}
-            isOpen={exportOpen}
-            onOpenChange={onExportOpenChange}
-          />
-        </div>
-      ) : null}
-
       <div
         className={cn(
           "grid h-full min-h-0 flex-1 gap-4 overflow-hidden",
@@ -228,7 +204,9 @@ export function GenerationWorkbench({
                 datasets={savedDatasets}
                 activeDatasetId={activeSavedDatasetId}
                 isLoading={savedDatasetsLoading}
+                reseedingDatasetId={reseedingSavedDatasetId}
                 onSelect={onSavedDatasetSelect}
+                onReseed={onReseedSavedDataset}
               />
             ) : null}
           </div>

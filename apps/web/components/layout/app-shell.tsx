@@ -76,9 +76,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 flex w-60 flex-col border-r border-border bg-surface">
-        <div className="border-b border-border px-4 py-4">
-          <Link href="/dashboard" aria-label="TestSeed dashboard">
-            <Wordmark />
+        <div className="border-b border-border px-4 py-5">
+          <Link
+            href="/dashboard"
+            aria-label="TestSeed dashboard"
+            className="inline-flex rounded-lg transition-colors hover:bg-background/60"
+          >
+            <Wordmark size="md" showMarkBackground />
           </Link>
         </div>
 

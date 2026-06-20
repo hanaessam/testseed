@@ -2,6 +2,8 @@
 
 Client-side and API-facing structures for the workbench UI. Generation dataset shapes remain defined in `specs/005-ai-seed-generation/data-model.md`.
 
+**Dataset version persistence** is documented in `docs/dataset-version-history.md`.
+
 ## Generation Workbench Session
 
 Ephemeral UI state for one active project on `/generate`.
@@ -22,6 +24,7 @@ Ephemeral UI state for one active project on `/generate`.
 | `generationProgress` | CollectionProgress[] | Phase 2a per-collection stream state |
 | `setupRailExpanded` | boolean | Collapsed by default for returning users |
 | `activeCollectionTab` | string | Selected collection in data canvas |
+| `activeSavedDatasetId` | string \| null | Active **dataset version** id in workbench |
 | `abortController` | AbortController \| null | Cancels in-flight refine/generate on navigation |
 
 ### State transitions
@@ -31,6 +34,7 @@ idle → generating → complete | error
 idle → streaming (refine) → validating → idle | error
 generating → cancelled (navigate away) → idle
 streaming → cancelled (navigate away) → idle (dataset unchanged)
+save/accept → fork new version → activeSavedDatasetId updated
 ```
 
 ## Generation Plan View
@@ -98,33 +102,42 @@ Workbench Session 1──1 Generation Plan View (refreshed on counts change)
 Workbench Session 1──1 Generated Dataset (last valid)
 Workbench Session 1──* Agent Dock Message
 Workbench Session 1──* Collection Progress (Phase 2a)
+Workbench Session *──* Saved Generated Dataset Version (load/fork)
 ```
 
-## Saved Generated Dataset Run (persisted)
+## Saved Generated Dataset Version (persisted)
 
-Stored in MongoDB `generated_dataset_records` when generation or refinement succeeds.
+Stored in MongoDB `generated_dataset_records`. **Immutable** — updates fork new documents.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | string | Saved run identifier |
+| `id` | string | Version identifier |
 | `projectId` | string | Owning project |
 | `schemaSnapshotId` | string | Schema version used |
-| `source` | `generation` \| `refinement` | How the snapshot was created |
-| `collectionCounts` | Record<string, number> | Counts used for this run |
+| `source` | `generation` \| `refinement` \| `manual_edit` | How the version was created |
+| `versionLabel` | string? | UI label (e.g. `Before refine: …`, `Manual edits`) |
+| `parentDatasetId` | string? | Prior version this branched from |
+| `collectionCounts` | Record<string, number> | Counts for this version |
 | `collections` | Generated records by collection | Preview data |
 | `generationOrder` | string[] | Dependency order |
-| `chatHistory` | ChatRefinementMessage[] | User/assistant refinement transcript for this run |
-| `createdAt` | ISO string | When the run was saved |
+| `validationResults` | ValidationResult[] | Stored validation state |
+| `warnings` | ValidationResult[] | Non-blocking warnings |
+| `chatHistory` | ChatRefinementMessage[] | Refinement transcript |
+| `createdAt` | ISO string | When the version was saved |
 
-**Persistence rules:**
+**Persistence rules (shipped):**
 
-- **Generate** → new run with empty `chatHistory`.
-- **Refinement (dataset updated)** → new run with full `chatHistory` from the refinement result.
-- **Refinement (guidance/rejected)** → update `chatHistory` on the active `savedDatasetId` without a new data snapshot.
+- **Generate** → new version, label `Initial generation`, empty `chatHistory`.
+- **Before refine/regenerate** → snapshot current dataset as `Before refine: {feedback}` with `parentDatasetId` = active version (when `savedDatasetId` provided).
+- **Refinement (dataset updated)** → new version `Refined: {message}` with full `chatHistory`.
+- **Accept candidate** → fork `Accepted refinement` via PATCH.
+- **Manual save** → fork via PATCH or POST with `Manual edits`.
+- **Refinement (guidance/rejected)** → update `chatHistory` on active version only; no new data snapshot.
 
-List summaries include `chatMessageCount` for the saved-runs panel.
+List summaries include `chatMessageCount`, `versionLabel`, and `parentDatasetId` for the versions panel.
 
 ## Out of scope for this data model
 
-- Persisted workbench sessions across devices (only saved runs are persisted)
-- Connection strings (never stored)
+- Ephemeral workbench sessions across devices (only dataset versions are persisted)
+- Connection strings (never stored server-side)
+- Seed batch documents (see `specs/012-direct-mongodb-seeding/data-model.md`)

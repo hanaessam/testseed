@@ -55,8 +55,119 @@ export interface JavaScriptSeedScriptResult {
   warnings: GenerationValidationResult[];
 }
 
+export type DirectMongoSeedingErrorCode =
+  | "DIRECT_SEED_CONNECTION_STRING_REQUIRED"
+  | "DIRECT_SEED_CONNECTION_FAILED"
+  | "DIRECT_SEED_CONNECTION_TEST_REQUIRED"
+  | "DIRECT_SEED_CONFIRMATION_REQUIRED"
+  | "DIRECT_SEED_DATASET_EMPTY"
+  | "DIRECT_SEED_VALIDATION_FAILED"
+  | "DIRECT_SEED_GENERATION_ORDER_UNSAFE";
+
+export interface DirectMongoSeedingErrorDetails {
+  code: DirectMongoSeedingErrorCode;
+  message: string;
+  validationResults?: GenerationValidationResult[];
+}
+
+export interface DirectMongoConnectionTestRequest {
+  connectionString?: string;
+  timeoutMs?: number;
+}
+
+export interface DirectMongoConnectionTestResult {
+  ok: boolean;
+  databaseName?: string;
+  connectionTestToken?: string;
+  connectionFingerprint?: string;
+  message: string;
+  errorSummary?: string;
+}
+
+export interface DirectSeedingConfirmationRequest {
+  targetDatabaseName: string;
+  dataset: GeneratedDataset;
+}
+
+export interface DirectSeedingConfirmationSummary {
+  targetDatabaseName: string;
+  orderedCollections: string[];
+  collectionCounts: Record<string, number>;
+  totalRecordCount: number;
+  warning: string;
+}
+
+export interface DirectSeedingRequest {
+  connectionString?: string;
+  connectionTestToken?: string;
+  schema: ParsedSchema;
+  dataset: GeneratedDataset;
+  targetDatabaseName: string;
+  confirmed: boolean;
+  timeoutMs?: number;
+  seedBatchId?: string;
+  insertMode?: "insert" | "upsert";
+}
+
+export interface DirectSeedingConfirmationApiRequest {
+  schemaSnapshotId: string;
+  connectionTestToken: string;
+  targetDatabaseName: string;
+  dataset: GeneratedDataset;
+}
+
+export interface DirectSeedingExecuteApiRequest {
+  schemaSnapshotId: string;
+  connectionString?: string;
+  connectionTestToken?: string;
+  dataset: GeneratedDataset;
+  targetDatabaseName: string;
+  confirmed: boolean;
+  timeoutMs?: number;
+  savedDatasetId?: string;
+}
+
+export interface DirectSeedingExecuteApiResponse {
+  report: DirectSeedingReport;
+  seedBatch?: import("./projects").SeedBatch;
+  historyWarning?: string;
+}
+
+export type InsertedCollectionStatus = "succeeded" | "failed";
+
+export interface InsertedCollectionResult {
+  collectionName: string;
+  requestedCount: number;
+  insertedCount: number;
+  status: InsertedCollectionStatus;
+  errorSummary?: string;
+}
+
+export interface DirectSeedingRollbackCollection {
+  collectionName: string;
+  insertedCount: number;
+}
+
+export interface DirectSeedingRollbackMetadata {
+  seedBatchId: string;
+  collectionOrder: string[];
+  collections: DirectSeedingRollbackCollection[];
+}
+
+export interface DirectSeedingReport {
+  seedBatchId: string;
+  targetDatabaseName: string;
+  successfulCollections: InsertedCollectionResult[];
+  failedCollections: InsertedCollectionResult[];
+  insertedRecordCounts: Record<string, number>;
+  totalInsertedCount: number;
+  insertedDocumentIds?: Record<string, string[]>;
+  rollback: DirectSeedingRollbackMetadata;
+}
+
 export interface GenerateSeedDataRequest {
   collectionCounts: Record<string, number>;
+  projectContext?: string;
 }
 
 export interface GenerateSeedDataResponse {
@@ -241,15 +352,20 @@ export interface ValidateDatasetResponse {
 export interface PatchSavedGeneratedDatasetRequest {
   dataset: GeneratedDataset;
   chatHistory?: ChatRefinementMessage[];
+  versionLabel?: string;
+  source?: Extract<SavedGeneratedDatasetSource, "manual_edit" | "refinement">;
 }
 
 export interface PatchSavedGeneratedDatasetResponse {
   dataset: SavedGeneratedDataset;
+  savedDatasetId: string;
 }
 
 export interface SaveManualEditDatasetRequest {
   dataset: GeneratedDataset;
   chatHistory?: ChatRefinementMessage[];
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export interface SavedGeneratedDatasetSummary {
@@ -262,12 +378,16 @@ export interface SavedGeneratedDatasetSummary {
   totalRecords: number;
   chatMessageCount: number;
   createdAt: string;
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export interface SavedGeneratedDataset extends GeneratedDataset {
   id: string;
   source: SavedGeneratedDatasetSource;
   chatHistory: ChatRefinementMessage[];
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export interface ListSavedGeneratedDatasetsResponse {

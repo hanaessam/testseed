@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -55,6 +56,7 @@ export default function ProjectsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -190,7 +192,12 @@ export default function ProjectsPage() {
       return;
     }
 
-    if (!window.confirm(`Archive "${project.name}"? You can restore it anytime from the Archived tab.`)) {
+    const confirmed = await confirm({
+      title: `Archive "${project.name}"?`,
+      description: "You can restore it anytime from the Archived tab.",
+      confirmLabel: "Archive project"
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -250,11 +257,13 @@ export default function ProjectsPage() {
       return;
     }
 
-    if (
-      !window.confirm(
-        `Permanently delete "${project.name}"? This removes the project and cannot be undone.`
-      )
-    ) {
+    const confirmed = await confirm({
+      title: `Permanently delete "${project.name}"?`,
+      description: "This removes the project and cannot be undone.",
+      confirmLabel: "Delete permanently",
+      variant: "destructive"
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -285,6 +294,7 @@ export default function ProjectsPage() {
 
   return (
     <AppShell>
+      <ConfirmDialog />
       <section className="space-y-6 p-6">
         <div className="flex flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div>

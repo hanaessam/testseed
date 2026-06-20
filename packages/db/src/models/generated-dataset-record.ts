@@ -14,6 +14,8 @@ export interface GeneratedDatasetRecordDocumentShape {
   warnings: Array<Record<string, unknown>>;
   chatHistory: ChatRefinementMessage[];
   createdAt: Date;
+  parentDatasetId?: string;
+  versionLabel?: string;
 }
 
 export type GeneratedDatasetRecordDocument = HydratedDocument<GeneratedDatasetRecordDocumentShape>;
@@ -44,7 +46,7 @@ const generatedDatasetRecordSchema = new Schema<GeneratedDatasetRecordDocumentSh
     source: {
       type: String,
       required: true,
-      enum: ["generation", "refinement"]
+      enum: ["generation", "refinement", "manual_edit"]
     },
     generationOrder: {
       type: [String],
@@ -77,6 +79,15 @@ const generatedDatasetRecordSchema = new Schema<GeneratedDatasetRecordDocumentSh
       type: Date,
       required: true,
       index: true
+    },
+    parentDatasetId: {
+      type: String,
+      required: false,
+      index: true
+    },
+    versionLabel: {
+      type: String,
+      required: false
     }
   },
   {

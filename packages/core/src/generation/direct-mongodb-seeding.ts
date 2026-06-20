@@ -1,0 +1,372 @@
+import { createHash, randomUUID } from "crypto";
+import type {
+  DirectMongoConnectionTestRequest,
+  DirectMongoConnectionTestResult,
+  DirectMongoSeedingErrorCode,
+  DirectMongoSeedingErrorDetails,
+  DirectSeedingConfirmationRequest,
+  DirectSeedingConfirmationSummary,
+  DirectSeedingReport,
+  DirectSeedingRequest,
+  GeneratedDataset,
+  GeneratedRecord,
+  GenerationValidationResult,
+  InsertedCollectionResult
+} from "@testseed/types";
+import { validateGeneratedDataset } from "./validate-generated-dataset";
+import { prepareDatasetIdsForInsertion } from "./prepare-dataset-ids-for-insertion";
+
+export const DIRECT_SEEDING_CONFIRMATION_WARNING =
+  "Each direct seed creates a new run. You can switch MongoDB back to any previous run from Seed runs.";
+
+const defaultTimeoutMs = 7000;
+const minTimeoutMs = 5000;
+const maxTimeoutMs = 10000;
+const connectionTokenPrefix = "direct-seed-v1";
+
+export interface DirectMongoClientFactory {
+  create(connectionString: string, options: { timeoutMs: number }): DirectMongoClient;
+}
+
+export interface DirectMongoClient {
+  connect(): Promise<void>;
+  db(databaseName?: string): DirectMongoDatabase;
+  close(): Promise<void>;
+}
+
+export interface DirectMongoDatabase {
+  databaseName: string;
+  command(command: { ping: 1 }): Promise<unknown>;
+  listCollectionNames(): Promise<string[]>;
+  collection(name: string): DirectMongoCollection;
+}
+
+export interface DirectMongoCollection {
+  insertMany(records: Record<string, unknown>[]): Promise<{ insertedCount: number; insertedIds?: string[] }>;
+  upsertMany(records: Record<string, unknown>[]): Promise<{ upsertedCount: number; modifiedCount: number }>;
+  deleteMany(filter: Record<string, unknown>): Promise<{ deletedCount: number }>;
+  findByIds(ids: string[]): Promise<Record<string, unknown>[]>;
+  findBySeedBatchId(seedBatchId: string): Promise<Record<string, unknown>[]>;
+}
+
+export interface DirectMongoSeedingDeps {
+  clientFactory: DirectMongoClientFactory;
+  generateSeedBatchId?: () => string;
+  generateInsertionObjectId?: () => string;
+  createConnectionFingerprint?: (connectionString: string) => string;
+  defaultTimeoutMs?: number;
+}
+
+export class DirectMongoSeedingError extends Error implements DirectMongoSeedingErrorDetails {
+  code: DirectMongoSeedingErrorCode;
+  validationResults?: GenerationValidationResult[];
+
+  constructor(details: DirectMongoSeedingErrorDetails) {
+    super(details.message);
+    this.name = "DirectMongoSeedingError";
+    this.code = details.code;
+    this.validationResults = details.validationResults;
+  }
+}
+
+export class DirectMongoInsertManyError extends Error {
+  insertedCount: number;
+  insertedIds: string[];
+
+  constructor(details: { message: string; insertedCount?: number; insertedIds?: string[] }) {
+    super(details.message);
+    this.name = "DirectMongoInsertManyError";
+    this.insertedCount = details.insertedCount ?? 0;
+    this.insertedIds = details.insertedIds ?? [];
+  }
+}
+
+export async function testDirectMongoConnection(
+  request: DirectMongoConnectionTestRequest,
+  deps: DirectMongoSeedingDeps
+): Promise<DirectMongoConnectionTestResult> {
+  const connectionString = requireConnectionString(request.connectionString);
+  const timeoutMs = normalizeTimeoutMs(request.timeoutMs ?? deps.defaultTimeoutMs);
+  const fingerprint = createConnectionFingerprint(connectionString, deps);
+  let client: DirectMongoClient | undefined;
+
+  try {
+    client = deps.clientFactory.create(connectionString, { timeoutMs });
+    await client.connect();
+    const db = client.db();
+    await db.command({ ping: 1 });
+
+    return {
+      ok: true,
+      databaseName: db.databaseName,
+      connectionFingerprint: fingerprint,
+      connectionTestToken: buildConnectionTestToken(fingerprint),
+      message: "Connection successful."
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: "Connection failed.",
+      errorSummary: sanitizeErrorSummary(error, connectionString)
+    };
+  } finally {
+    if (client) {
+      await client.close();
+    }
+  }
+}
+
+export function buildDirectSeedingConfirmation(
+  request: DirectSeedingConfirmationRequest
+): DirectSeedingConfirmationSummary {
+  const orderedCollections = resolveOrderedCollections(request.dataset);
+  const collectionCounts = Object.fromEntries(
+    orderedCollections.map((collectionName) => [
+      collectionName,
+      request.dataset.collections[collectionName]?.length ?? 0
+    ])
+  );
+  const totalRecordCount = Object.values(collectionCounts).reduce((sum, count) => sum + count, 0);
+
+  return {
+    targetDatabaseName: request.targetDatabaseName,
+    orderedCollections,
+    collectionCounts,
+    totalRecordCount,
+    warning: DIRECT_SEEDING_CONFIRMATION_WARNING
+  };
+}
+
+export async function seedMongoDataset(
+  request: DirectSeedingRequest,
+  deps: DirectMongoSeedingDeps
+): Promise<DirectSeedingReport> {
+  const connectionString = requireConnectionString(request.connectionString);
+  assertConfirmed(request.confirmed);
+  assertConnectionTestToken(connectionString, request.connectionTestToken, deps);
+
+  const validation = validateGeneratedDataset({
+    schema: request.schema,
+    dataset: request.dataset,
+    collectionCounts: request.dataset.collectionCounts
+  });
+  const blockingResults = validation.validationResults.filter((result) => result.severity === "error");
+  if (blockingResults.length > 0) {
+    throw new DirectMongoSeedingError({
+      code: "DIRECT_SEED_VALIDATION_FAILED",
+      message: "Cannot seed MongoDB until validation errors are fixed.",
+      validationResults: blockingResults
+    });
+  }
+
+  const timeoutMs = normalizeTimeoutMs(request.timeoutMs ?? deps.defaultTimeoutMs);
+  const seedBatchId = request.seedBatchId ?? (deps.generateSeedBatchId ?? randomUUID)();
+  const insertMode = request.insertMode ?? "insert";
+  const insertionDataset = prepareDatasetIdsForInsertion(request.dataset, request.schema, {
+    generateId: deps.generateInsertionObjectId
+  });
+  const orderedCollections = resolveOrderedCollections(insertionDataset);
+  const successfulCollections: InsertedCollectionResult[] = [];
+  const failedCollections: InsertedCollectionResult[] = [];
+  const insertedRecordCounts: Record<string, number> = {};
+  const insertedDocumentIds: Record<string, string[]> = {};
+  let client: DirectMongoClient | undefined;
+
+  try {
+    client = deps.clientFactory.create(connectionString, { timeoutMs });
+    await client.connect();
+    const db = client.db(request.targetDatabaseName);
+
+    for (const collectionName of orderedCollections) {
+      const sourceRecords = insertionDataset.collections[collectionName] ?? [];
+      const records = sourceRecords.map((record) => tagRecord(record, seedBatchId));
+
+      try {
+        if (insertMode === "upsert") {
+          const result = await db.collection(collectionName).upsertMany(records);
+          const affectedCount = result.upsertedCount + result.modifiedCount;
+          insertedRecordCounts[collectionName] = affectedCount;
+          insertedDocumentIds[collectionName] = sourceRecords.map((record) => record._id);
+          successfulCollections.push({
+            collectionName,
+            requestedCount: records.length,
+            insertedCount: affectedCount,
+            status: "succeeded"
+          });
+          continue;
+        }
+
+        const result = await db.collection(collectionName).insertMany(records);
+        const insertedCount = result.insertedCount;
+        insertedRecordCounts[collectionName] = insertedCount;
+        insertedDocumentIds[collectionName] = resolveInsertedIds(sourceRecords, result.insertedIds, insertedCount);
+        successfulCollections.push({
+          collectionName,
+          requestedCount: records.length,
+          insertedCount,
+          status: "succeeded"
+        });
+      } catch (error) {
+        const partialInsert = getPartialInsertDetails(sourceRecords, error);
+        if (partialInsert.insertedCount > 0) {
+          insertedRecordCounts[collectionName] = partialInsert.insertedCount;
+          insertedDocumentIds[collectionName] = partialInsert.insertedIds;
+        }
+        failedCollections.push({
+          collectionName,
+          requestedCount: records.length,
+          insertedCount: partialInsert.insertedCount,
+          status: "failed",
+          errorSummary: sanitizeErrorSummary(error, connectionString)
+        });
+        break;
+      }
+    }
+  } finally {
+    if (client) {
+      await client.close();
+    }
+  }
+
+  return {
+    seedBatchId,
+    targetDatabaseName: request.targetDatabaseName,
+    successfulCollections,
+    failedCollections,
+    insertedRecordCounts,
+    totalInsertedCount: Object.values(insertedRecordCounts).reduce((sum, count) => sum + count, 0),
+    insertedDocumentIds,
+    rollback: {
+      seedBatchId,
+      collectionOrder: successfulCollections.map((collection) => collection.collectionName),
+      collections: [...successfulCollections, ...failedCollections]
+        .filter((collection) => collection.insertedCount > 0)
+        .map((collection) => ({
+          collectionName: collection.collectionName,
+          insertedCount: collection.insertedCount
+        }))
+    }
+  };
+}
+
+export function createDirectMongoConnectionFingerprint(connectionString: string): string {
+  return createHash("sha256").update(connectionString).digest("hex");
+}
+
+function assertConfirmed(confirmed: boolean): void {
+  if (!confirmed) {
+    throw new DirectMongoSeedingError({
+      code: "DIRECT_SEED_CONFIRMATION_REQUIRED",
+      message: "Direct seeding requires explicit confirmation before insertion begins."
+    });
+  }
+}
+
+function assertConnectionTestToken(
+  connectionString: string,
+  token: string | undefined,
+  deps: DirectMongoSeedingDeps
+): void {
+  const expected = buildConnectionTestToken(createConnectionFingerprint(connectionString, deps));
+  if (!token || token !== expected) {
+    throw new DirectMongoSeedingError({
+      code: "DIRECT_SEED_CONNECTION_TEST_REQUIRED",
+      message: "Direct seeding requires a successful connection test for the active connection string."
+    });
+  }
+}
+
+function buildConnectionTestToken(fingerprint: string): string {
+  return `${connectionTokenPrefix}.${fingerprint}`;
+}
+
+function createConnectionFingerprint(connectionString: string, deps: DirectMongoSeedingDeps): string {
+  return (deps.createConnectionFingerprint ?? createDirectMongoConnectionFingerprint)(connectionString);
+}
+
+function requireConnectionString(connectionString: string | undefined): string {
+  const trimmed = connectionString?.trim();
+  if (!trimmed) {
+    throw new DirectMongoSeedingError({
+      code: "DIRECT_SEED_CONNECTION_STRING_REQUIRED",
+      message: "MongoDB connection string is required."
+    });
+  }
+  return trimmed;
+}
+
+function normalizeTimeoutMs(timeoutMs: number | undefined): number {
+  if (!timeoutMs || !Number.isFinite(timeoutMs)) {
+    return defaultTimeoutMs;
+  }
+  return Math.min(Math.max(Math.trunc(timeoutMs), minTimeoutMs), maxTimeoutMs);
+}
+
+function resolveOrderedCollections(dataset: GeneratedDataset): string[] {
+  const nonEmptyCollections = Object.keys(dataset.collections).filter(
+    (collectionName) => (dataset.collections[collectionName] ?? []).length > 0
+  );
+  if (nonEmptyCollections.length === 0) {
+    throw new DirectMongoSeedingError({
+      code: "DIRECT_SEED_DATASET_EMPTY",
+      message: "Cannot seed MongoDB because the dataset contains no records."
+    });
+  }
+
+  const generationOrder = dataset.generationOrder.filter(
+    (collectionName) => (dataset.collections[collectionName] ?? []).length > 0
+  );
+  const orderedSet = new Set(generationOrder);
+  const missingCollections = nonEmptyCollections.filter((collectionName) => !orderedSet.has(collectionName));
+  if (missingCollections.length > 0) {
+    throw new DirectMongoSeedingError({
+      code: "DIRECT_SEED_GENERATION_ORDER_UNSAFE",
+      message: `Cannot seed MongoDB because generationOrder is missing: ${missingCollections.join(", ")}.`
+    });
+  }
+
+  return generationOrder;
+}
+
+function tagRecord(record: GeneratedRecord, seedBatchId: string): Record<string, unknown> {
+  return {
+    ...record,
+    seedBatchId
+  };
+}
+
+function getPartialInsertDetails(
+  sourceRecords: GeneratedRecord[],
+  error: unknown
+): { insertedCount: number; insertedIds: string[] } {
+  if (error instanceof DirectMongoInsertManyError) {
+    return {
+      insertedCount: error.insertedCount,
+      insertedIds: resolveInsertedIds(sourceRecords, error.insertedIds, error.insertedCount)
+    };
+  }
+
+  return { insertedCount: 0, insertedIds: [] };
+}
+
+function resolveInsertedIds(
+  sourceRecords: GeneratedRecord[],
+  insertedIds: string[] | undefined,
+  insertedCount: number
+): string[] {
+  if (insertedIds?.length) {
+    return insertedIds.slice(0, insertedCount);
+  }
+
+  return sourceRecords.slice(0, insertedCount).map((record) => record._id);
+}
+
+function sanitizeErrorSummary(error: unknown, connectionString: string): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const withoutConnection = raw.split(connectionString).join("[connection string redacted]");
+  const withoutMongoUri = withoutConnection.replace(
+    /mongodb(?:\+srv)?:\/\/[^\s"'<>]+/gi,
+    "[connection string redacted]"
+  );
+  return withoutMongoUri.replace(/\/\/([^:@/\s]+):([^@/\s]+)@/g, "//[credentials redacted]@");
+}

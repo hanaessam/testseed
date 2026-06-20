@@ -34,6 +34,13 @@ import type {
   DeleteProjectRequest,
   DeleteProjectResponse,
   RestoreProjectResponse,
+  RollbackSeedBatchRequest,
+  RollbackSeedBatchResponse,
+  RollbackSeedBatchReport,
+  RestoreSeedBatchRequest,
+  RestoreSeedBatchResponse,
+  ApplySeedBatchRequest,
+  ApplySeedBatchResponse,
   UpdateProjectSchemaRequest,
   UpdateProjectSchemaResponse,
   DeleteProjectSchemaRequest,
@@ -46,6 +53,12 @@ import type {
   GenerationPlanResponse,
   JavaScriptSeedScriptRequest,
   JavaScriptSeedScriptResult,
+  DirectMongoConnectionTestRequest,
+  DirectMongoConnectionTestResult,
+  DirectSeedingConfirmationApiRequest,
+  DirectSeedingConfirmationSummary,
+  DirectSeedingExecuteApiRequest,
+  DirectSeedingExecuteApiResponse,
   RefineGeneratedDatasetRequest,
   RefineGeneratedDatasetResponse,
   ListSavedGeneratedDatasetsResponse,
@@ -332,9 +345,116 @@ export async function listProjectHistory(
     })),
     seedBatches: response.seedBatches.map((batch) => ({
       ...batch,
+      collectionCounts: batch.collectionCounts ?? {},
+      insertedDocumentIds: batch.insertedDocumentIds ?? {},
+      collectionOrder: batch.collectionOrder ?? [],
       createdAt: new Date(batch.createdAt),
       rolledBackAt: batch.rolledBackAt ? new Date(batch.rolledBackAt) : undefined
     }))
+  };
+}
+
+export async function rollbackSeedBatch(
+  projectId: string,
+  request: RollbackSeedBatchRequest,
+  token: string
+): Promise<RollbackSeedBatchResponse> {
+  const response = await postJson<
+    RollbackSeedBatchRequest,
+    RollbackSeedBatchResponse & Partial<RollbackSeedBatchReport>
+  >(`/projects/${encodeURIComponent(projectId)}/rollback`, request, token);
+
+  const batch = response.batch;
+  if (!batch) {
+    throw new Error(
+      "Rollback response is missing batch metadata. Restart the API server and try rollback again."
+    );
+  }
+
+  const deletedCounts = response.deletedCounts ?? response.report?.deletedCounts ?? {};
+
+  if (response.report?.status === "partial_failure") {
+    const failedCollection = response.report.failedCollection?.collectionName ?? "a collection";
+    throw new Error(
+      `Rollback partially failed while deleting ${failedCollection}. Completed deletions: ${Object.entries(
+        deletedCounts
+      )
+        .map(([name, count]) => `${name}: ${count}`)
+        .join(", ") || "none"}.`
+    );
+  }
+
+  return {
+    batch: {
+      ...batch,
+      collectionCounts: batch.collectionCounts ?? {},
+      insertedDocumentIds: batch.insertedDocumentIds ?? {},
+      collectionOrder: batch.collectionOrder ?? [],
+      createdAt: new Date(batch.createdAt),
+      rolledBackAt: batch.rolledBackAt ? new Date(batch.rolledBackAt) : undefined
+    },
+    deletedCounts: deletedCounts ?? {},
+    restoredSeedBatch: response.restoredSeedBatch
+      ? {
+          ...response.restoredSeedBatch,
+          collectionCounts: response.restoredSeedBatch.collectionCounts ?? {},
+          insertedDocumentIds: response.restoredSeedBatch.insertedDocumentIds ?? {},
+          collectionOrder: response.restoredSeedBatch.collectionOrder ?? [],
+          createdAt: new Date(response.restoredSeedBatch.createdAt),
+          rolledBackAt: response.restoredSeedBatch.rolledBackAt
+            ? new Date(response.restoredSeedBatch.rolledBackAt)
+            : undefined
+        }
+      : undefined,
+    restoreMessage: response.restoreMessage,
+    ...(response.event
+      ? {
+          event: {
+            ...response.event,
+            createdAt: new Date(response.event.createdAt)
+          }
+        }
+      : {})
+  };
+}
+
+export async function applySeedBatchVersion(
+  projectId: string,
+  request: ApplySeedBatchRequest,
+  token: string
+): Promise<ApplySeedBatchResponse> {
+  const response = await postJson<ApplySeedBatchRequest, ApplySeedBatchResponse>(
+    `/projects/${encodeURIComponent(projectId)}/apply-seed-batch`,
+    request,
+    token
+  );
+
+  return normalizeApplySeedBatchResponse(response);
+}
+
+export async function restoreSeedBatch(
+  projectId: string,
+  request: RestoreSeedBatchRequest,
+  token: string
+): Promise<RestoreSeedBatchResponse> {
+  return applySeedBatchVersion(projectId, request, token);
+}
+
+function normalizeApplySeedBatchResponse(response: ApplySeedBatchResponse): ApplySeedBatchResponse {
+  return {
+    ...response,
+    batch: {
+      ...response.batch,
+      collectionCounts: response.batch.collectionCounts ?? {},
+      insertedDocumentIds: response.batch.insertedDocumentIds ?? {},
+      collectionOrder: response.batch.collectionOrder ?? [],
+      createdAt: new Date(response.batch.createdAt),
+      rolledBackAt: response.batch.rolledBackAt ? new Date(response.batch.rolledBackAt) : undefined
+    },
+    event: {
+      ...response.event,
+      createdAt: new Date(response.event.createdAt)
+    }
   };
 }
 
@@ -513,6 +633,42 @@ export async function exportJavaScriptSeedScript(
 ): Promise<JavaScriptSeedScriptResult> {
   return postJson<typeof request, JavaScriptSeedScriptResult>(
     `/projects/${encodeURIComponent(projectId)}/datasets/javascript-seed-script`,
+    request,
+    token
+  );
+}
+
+export async function testDirectSeedConnection(
+  projectId: string,
+  request: DirectMongoConnectionTestRequest,
+  token: string
+): Promise<DirectMongoConnectionTestResult> {
+  return postJson<DirectMongoConnectionTestRequest, DirectMongoConnectionTestResult>(
+    `/projects/${encodeURIComponent(projectId)}/direct-seeding/test-connection`,
+    request,
+    token
+  );
+}
+
+export async function buildDirectSeedConfirmation(
+  projectId: string,
+  request: DirectSeedingConfirmationApiRequest,
+  token: string
+): Promise<DirectSeedingConfirmationSummary> {
+  return postJson<DirectSeedingConfirmationApiRequest, DirectSeedingConfirmationSummary>(
+    `/projects/${encodeURIComponent(projectId)}/direct-seeding/confirmation`,
+    request,
+    token
+  );
+}
+
+export async function executeDirectSeed(
+  projectId: string,
+  request: DirectSeedingExecuteApiRequest,
+  token: string
+): Promise<DirectSeedingExecuteApiResponse> {
+  return postJson<DirectSeedingExecuteApiRequest, DirectSeedingExecuteApiResponse>(
+    `/projects/${encodeURIComponent(projectId)}/direct-seeding`,
     request,
     token
   );

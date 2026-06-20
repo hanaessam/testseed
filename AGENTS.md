@@ -10,6 +10,8 @@ Team: Hana, Mariam, Hassan, Mazen.
 
 Full requirements, user stories, acceptance criteria, and alternative flows are in `docs/requirements.md`. Read this file before implementing any feature.
 
+**Dataset versions vs seed batches:** Saved runs (patch in place) ship today; immutable version history is planned in `docs/dataset-version-history.md`. **Seed batch rollback** deletes MongoDB records by `seedBatchId`. See `docs/shipped-features.md` for the full inventory.
+
 ## Dependency Rule
 
 The only allowed dependency direction is:
@@ -70,5 +72,5 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/012-direct-mongodb-seeding/plan.md
+at specs/013-rollback-seed-batch/plan.md
 <!-- SPECKIT END -->

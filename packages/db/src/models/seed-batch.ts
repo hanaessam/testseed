@@ -29,10 +29,15 @@ const seedBatchSchema = new Schema<Omit<SeedBatch, "id">>(
       type: Schema.Types.Mixed,
       required: true
     },
+    collectionOrder: {
+      type: [String],
+      required: true,
+      default: []
+    },
     status: {
       type: String,
       required: true,
-      enum: ["pending", "inserted", "partially_inserted", "rolled_back"]
+      enum: ["pending", "inserted", "partially_inserted", "rolled_back", "superseded"]
     },
     createdAt: {
       type: Date,
@@ -41,6 +46,23 @@ const seedBatchSchema = new Schema<Omit<SeedBatch, "id">>(
     },
     rolledBackAt: {
       type: Date,
+      required: false
+    },
+    rollbackDeletedCounts: {
+      type: Schema.Types.Mixed,
+      required: false
+    },
+    savedDatasetId: {
+      type: String,
+      required: false
+    },
+    supersededBySeedBatchId: {
+      type: String,
+      required: false,
+      index: true
+    },
+    targetDatabaseName: {
+      type: String,
       required: false
     }
   },

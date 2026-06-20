@@ -2,6 +2,7 @@
 
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentDockMessage } from "@/components/generation/agent-dock";
+import { ExportDrawer, ExportDrawerTrigger } from "@/components/generation/export-drawer";
 import { GenerationWorkbench } from "@/components/generation/generation-workbench";
 import {
   isWizardStep,
@@ -11,11 +12,14 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { DatasetCellCommitPayload } from "@/components/generation/collection-data-table";
 import {
   applyDatasetCellEdit,
+  buildDirectSeedConfirmation,
   createProject,
   discoverMongoSchema,
+  executeDirectSeed,
   generateSeedData,
   getGenerationPlan,
   getGenerationStreamUrl,
@@ -27,6 +31,7 @@ import {
   regenerateWithFeedback,
   saveManualEditDataset,
   startRepositoryContextAuthorization,
+  testDirectSeedConnection,
   testMongoConnection,
   updateProjectContext,
   updateProjectSchema
@@ -66,6 +71,7 @@ const GENERIC_REPOSITORY_WARNING_MESSAGE = "Repository context summary included 
 const STREAMING_ENABLED =
   process.env.NEXT_PUBLIC_GENERATION_WORKBENCH_STREAMING !== "false";
 const EXPORT_ENABLED = process.env.NEXT_PUBLIC_GENERATION_WORKBENCH_EXPORT === "true";
+const DIRECT_SEED_STORAGE_PREFIX = "testseed:direct-seed:";
 const QUICK_PROMPT_CHIPS = [
   "Make users Canadian",
   "Use university.edu emails",
@@ -86,6 +92,9 @@ export default function GeneratePage() {
   const router = useRouter();
   const pathname = usePathname();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const { confirm, ConfirmDialog } = useConfirmDialog();
+  const confirmRef = useRef(confirm);
+  confirmRef.current = confirm;
 
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
@@ -150,6 +159,7 @@ export default function GeneratePage() {
   const [isSavingDataset, setIsSavingDataset] = useState(false);
   const [isCommittingCellEdit, setIsCommittingCellEdit] = useState(false);
   const [isAcceptingCandidate, setIsAcceptingCandidate] = useState(false);
+  const [reseedingSavedDatasetId, setReseedingSavedDatasetId] = useState<string | null>(null);
 
   const hasUnsavedEdits = useMemo(() => {
     if (!generatedDataset) {
@@ -484,7 +494,7 @@ export default function GeneratePage() {
         projectId,
         {
           schemaSnapshotId: schemaSnapshot.id,
-          collectionCounts,
+          collectionCounts: generatedDataset.collectionCounts,
           dataset: generatedDataset,
           edit: {
             collectionName: payload.collectionName,
@@ -524,11 +534,14 @@ export default function GeneratePage() {
         const response = await patchSavedGeneratedDataset(
           projectId,
           activeSavedDatasetId,
-          { dataset: generatedDataset },
+          {
+            dataset: generatedDataset,
+            versionLabel: "Manual edits"
+          },
           token
         );
-        syncDatasetState(response.dataset, response.dataset.id);
-        setGenerationMessage("Saved changes to the active dataset run.");
+        syncDatasetState(response.dataset, response.savedDatasetId);
+        setGenerationMessage("Saved a new dataset version from your edits.");
       } else {
         const response = await saveManualEditDataset(
           projectId,
@@ -564,7 +577,9 @@ export default function GeneratePage() {
         projectId,
         {
           dataset: generatedDataset,
-          chatHistory: toChatHistoryPayload(agentMessages)
+          chatHistory: toChatHistoryPayload(agentMessages),
+          parentDatasetId: activeSavedDatasetId ?? undefined,
+          versionLabel: "Manual edits"
         },
         token
       );
@@ -602,11 +617,14 @@ export default function GeneratePage() {
           activeSavedDatasetId,
           {
             dataset: pendingCandidate.dataset,
-            chatHistory: pendingCandidate.chatHistory
+            chatHistory: pendingCandidate.chatHistory,
+            versionLabel: "Accepted refinement",
+            source: "refinement"
           },
           token
         );
-        syncDatasetState(response.dataset, response.dataset.id, { setAsAccepted: true });
+        syncDatasetState(response.dataset, response.savedDatasetId, { setAsAccepted: true });
+        setCollectionCounts({ ...response.dataset.collectionCounts });
       } else {
         const response = await saveManualEditDataset(
           projectId,
@@ -617,6 +635,7 @@ export default function GeneratePage() {
           token
         );
         syncDatasetState(response.dataset, response.savedDatasetId, { setAsAccepted: true });
+        setCollectionCounts({ ...response.dataset.collectionCounts });
       }
 
       setAgentMessages(buildAgentMessagesFromChatHistory(pendingCandidate.chatHistory));
@@ -667,13 +686,20 @@ export default function GeneratePage() {
         return;
       }
 
-      const shouldLeave = window.confirm(
-        "You have unsaved edits on the data canvas. Leave without saving?"
-      );
-      if (!shouldLeave) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      const targetHref = nextUrl.href;
+
+      void confirmRef.current({
+        title: "Leave without saving?",
+        description: "You have unsaved edits on the data canvas. Leave without saving?",
+        confirmLabel: "Leave without saving",
+        cancelLabel: "Stay on page"
+      }).then((shouldLeave) => {
+        if (shouldLeave) {
+          window.location.assign(targetHref);
+        }
+      });
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -716,6 +742,86 @@ export default function GeneratePage() {
       setGenerationMessage(
         loadError instanceof Error ? loadError.message : "Could not load the saved dataset."
       );
+    }
+  };
+
+  const handleReseedSavedDataset = async (
+    datasetId: string,
+    summary: SavedGeneratedDatasetSummary
+  ) => {
+    if (!token || !projectId) {
+      return;
+    }
+
+    const connectionString = localStorage.getItem(`${DIRECT_SEED_STORAGE_PREFIX}${projectId}`);
+    if (!connectionString?.trim()) {
+      setGenerationMessage(
+        "Open Export, test your MongoDB connection once, then use Re-seed on any version."
+      );
+      setExportOpen(true);
+      return;
+    }
+
+    const versionLabel =
+      summary.versionLabel?.trim() ||
+      `${summary.totalRecords.toLocaleString()} records`;
+
+    const confirmed = await confirmRef.current({
+      title: "Re-seed this version to MongoDB?",
+      description: `Apply "${versionLabel}" to your MongoDB database? Existing records from the active seed batch will be superseded.`,
+      confirmLabel: "Re-seed to MongoDB"
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    setReseedingSavedDatasetId(datasetId);
+    setGenerationMessage(null);
+
+    try {
+      const { dataset } = await getSavedGeneratedDataset(projectId, datasetId, token);
+      const connectionTest = await testDirectSeedConnection(
+        projectId,
+        { connectionString },
+        token
+      );
+      if (!connectionTest.ok || !connectionTest.connectionTestToken || !connectionTest.databaseName) {
+        throw new Error(connectionTest.message ?? "MongoDB connection test failed.");
+      }
+
+      const confirmation = await buildDirectSeedConfirmation(
+        projectId,
+        {
+          schemaSnapshotId: dataset.schemaSnapshotId,
+          connectionTestToken: connectionTest.connectionTestToken,
+          targetDatabaseName: connectionTest.databaseName,
+          dataset
+        },
+        token
+      );
+
+      await executeDirectSeed(
+        projectId,
+        {
+          schemaSnapshotId: dataset.schemaSnapshotId,
+          connectionString,
+          connectionTestToken: connectionTest.connectionTestToken,
+          targetDatabaseName: confirmation.targetDatabaseName,
+          dataset,
+          confirmed: true,
+          savedDatasetId: datasetId
+        },
+        token
+      );
+
+      await loadSavedDataset(datasetId);
+      setGenerationMessage(`Re-seeded "${versionLabel}" to MongoDB.`);
+    } catch (reseedError) {
+      setGenerationMessage(
+        reseedError instanceof Error ? reseedError.message : "Could not re-seed this version."
+      );
+    } finally {
+      setReseedingSavedDatasetId(null);
     }
   };
 
@@ -1108,9 +1214,14 @@ export default function GeneratePage() {
         const fallbackResult = await streamWorkbenchRequest({
           url: getGenerationStreamUrl(projectId),
           token,
-          body: { collectionCounts },
+          body: { collectionCounts, projectContext: projectContext?.description },
           signal: controller.signal,
-          fallback: () => generateSeedData(projectId, { collectionCounts }, token),
+          fallback: () =>
+            generateSeedData(
+              projectId,
+              { collectionCounts, projectContext: projectContext?.description },
+              token
+            ),
           onEvent: (event) => {
             if (event.type === "plan") {
               setGenerationPlan((currentPlan) =>
@@ -1198,7 +1309,11 @@ export default function GeneratePage() {
           setGenerationMessage(fallbackResult.message);
         }
       } else {
-        const result = await generateSeedData(projectId, { collectionCounts }, token);
+        const result = await generateSeedData(
+          projectId,
+          { collectionCounts, projectContext: projectContext?.description },
+          token
+        );
         syncDatasetState(result.dataset, result.savedDatasetId);
         setGenerationProgress(buildCompleteProgress(result.dataset, collectionCounts));
         setGenerationMessage(result.message);
@@ -1569,6 +1684,9 @@ mongoose.model('Product', ProductSchema);`;
             </div>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            {EXPORT_ENABLED ? (
+              <ExportDrawerTrigger isOpen={exportOpen} onOpenChange={setExportOpen} />
+            ) : null}
             <Button type="button" variant="secondary" onClick={handleEditProjectSetup}>
               Setup wizard
             </Button>
@@ -1586,6 +1704,21 @@ mongoose.model('Product', ProductSchema);`;
             </Button>
           </div>
         </div>
+        {EXPORT_ENABLED ? (
+          <ExportDrawer
+            showTrigger={false}
+            projectId={projectId}
+            token={token}
+            schemaSnapshotId={schemaSnapshot?.id ?? null}
+            dataset={generatedDataset}
+            collectionCounts={collectionCounts}
+            savedDatasetId={activeSavedDatasetId}
+            validationResults={generationValidationResults}
+            isOpen={exportOpen}
+            onOpenChange={setExportOpen}
+            className="mt-4"
+          />
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 py-3 lg:px-6 lg:py-4">
@@ -1603,9 +1736,6 @@ mongoose.model('Product', ProductSchema);`;
 
         <GenerationWorkbench
           className="min-h-0 flex-1"
-          projectId={projectId}
-          token={token}
-          schemaSnapshotId={schemaSnapshot?.id ?? null}
           context={projectContext}
           schema={parsedSchema}
           plan={generationPlan}
@@ -1627,13 +1757,12 @@ mongoose.model('Product', ProductSchema);`;
           setupContent={workbenchSetupContent}
           activeCollection={activeCollectionTab}
           onActiveCollectionChange={setActiveCollectionTab}
-          showExport={EXPORT_ENABLED}
-          exportOpen={exportOpen}
-          onExportOpenChange={setExportOpen}
           savedDatasets={savedDatasets}
           savedDatasetsLoading={isSavedDatasetsLoading}
           activeSavedDatasetId={activeSavedDatasetId}
           onSavedDatasetSelect={loadSavedDataset}
+          onReseedSavedDataset={EXPORT_ENABLED ? handleReseedSavedDataset : undefined}
+          reseedingSavedDatasetId={reseedingSavedDatasetId}
           onGenerate={handleGenerateSeedData}
           generateDisabled={!canGenerate}
           isGenerating={isGeneratingSeedData}
@@ -1654,7 +1783,12 @@ mongoose.model('Product', ProductSchema);`;
     </section>
   );
 
-  return <AppShell>{workbenchActive ? workbenchView : wizardView}</AppShell>;
+  return (
+    <>
+      <ConfirmDialog />
+      <AppShell>{workbenchActive ? workbenchView : wizardView}</AppShell>
+    </>
+  );
 }
 
 function getMeaningfulRepositoryWarnings(warnings: ContextWarning[]): ContextWarning[] {

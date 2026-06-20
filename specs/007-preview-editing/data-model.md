@@ -11,7 +11,7 @@ Ephemeral state in `apps/web/app/generate/page.tsx` (or extracted hook). Present
 | `currentDataset` | `GeneratedDataset \| null` | Active in-memory dataset including manual edits |
 | `validationResults` | `GenerationValidationResult[]` | Latest from API after commit or load |
 | `warnings` | `GenerationValidationResult[]` | Non-blocking plan/schema warnings |
-| `activeSavedDatasetId` | `string \| null` | Loaded or first-saved run id |
+| `activeSavedDatasetId` | `string \| null` | Active dataset version id |
 | `baselineFingerprint` | `string \| null` | Hash of last persisted dataset for dirty detection |
 | `hasUnsavedEdits` | `boolean` | `currentDataset` differs from baseline |
 | `editingStatus` | enum | `idle` \| `editing_cell` \| `committing` \| `saving` |
@@ -72,18 +72,29 @@ Used for subtle edited-state styling; cleared when baseline resets after save or
 | Scalar String / Number / Boolean / Date | true |
 | `ObjectId` without ref on non-id field | false (v1) |
 
-## Update Saved Dataset Request (PATCH)
+## Update Saved Dataset Request (PATCH — fork)
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | `dataset` | `GeneratedDataset` | yes | Full valid dataset snapshot |
-| `chatHistory` | `ChatRefinementMessage[]` | no | Unchanged unless explicitly sent |
+| `chatHistory` | `ChatRefinementMessage[]` | no | Defaults to parent chat |
+| `versionLabel` | string | no | Defaults to `Manual edits` |
+| `source` | `manual_edit` \| `refinement` | no | Defaults to `manual_edit` |
 
-**Validation**: Core rejects PATCH when `dataset.status !== "valid"` or errors present.
+**Behavior**: Creates a **new** version via `forkSavedGeneratedDataset`; parent id is the path `:datasetId`. Response includes `savedDatasetId` for the new version.
 
-## Save As New Request
+**Validation**: Core rejects when `dataset.status !== "valid"` or errors present.
 
-Reuses `SaveGeneratedDatasetRequest` with `source: "manual_edit"`.
+## Save As New Request (POST)
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `dataset` | `GeneratedDataset` | yes | Valid snapshot |
+| `chatHistory` | `ChatRefinementMessage[]` | no | Chat transcript |
+| `parentDatasetId` | string | no | Lineage link |
+| `versionLabel` | string | no | UI label |
+
+Reuses `saveGeneratedDataset` with `source: "manual_edit"`.
 
 ## Collection Table View (extended)
 
@@ -107,7 +118,9 @@ Generation Workbench Session
   └── Dataset Edit Session (1)
         └── lastEditedCells (*)
 
-SavedGeneratedDataset (persisted)
+SavedGeneratedDataset (persisted version)
+  ├── parentDatasetId → optional parent version
+  ├── versionLabel → UI display
   └── collections (same shape as GeneratedDataset)
 
 applyCellEditToDataset → validateGeneratedDataset → GenerationValidationResult[]

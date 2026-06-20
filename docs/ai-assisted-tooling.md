@@ -78,10 +78,14 @@ Invoke in Cursor/Codex chat; skills live in `.agents/skills/`.
 | 003 | `specs/003-mongodb-schema-discovery/` | Shipped |
 | 004 | `specs/004-schema-review/` | Shipped |
 | 005 | `specs/005-ai-seed-generation/` | Shipped |
-| 006 | `specs/006-generation-workbench/` | Shipped (wizard + workbench + saved runs) |
-| 007 | `specs/007-preview-editing/` | **Shipped** — canvas editing, revalidation, save/patch, export gating |
+| 006 | `specs/006-generation-workbench/` | Shipped (wizard + workbench + dataset versions) |
+| 007 | `specs/007-preview-editing/` | Shipped — canvas editing, fork-on-save, export gating |
+| 008 | `specs/008-feedback-based-regeneration/` | Shipped — feedback regenerate + pre-refine snapshots |
+| 012 | `specs/012-direct-mongodb-seeding/` | Shipped — direct insert, `savedDatasetId` link |
+| 013 | `specs/013-rollback-seed-batch/` | Shipped — MongoDB batch rollback by `seedBatchId` |
+| 015 | `specs/015-dataset-version-history/` | Planned — design in `docs/dataset-version-history.md` |
 
-Roadmap pointer: `docs/generation-ux-roadmap.md`
+Roadmap pointer: `docs/generation-ux-roadmap.md` · Version history: `docs/dataset-version-history.md`
 
 ---
 

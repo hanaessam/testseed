@@ -18,7 +18,8 @@ Add **canvas-like inline cell editing** to the generation workbench data canvas.
 
 | Topic | Decision |
 | --- | --- |
-| First save after generate | `POST` creates new saved run; becomes active for patch |
+| First save after generate | `POST` creates new version |
+| Subsequent save | `PATCH` **forks** new version; client uses `savedDatasetId` from response |
 | Edit AI-invalid rows | Yes — any editable cell |
 | Validation timing | Commit only (blur / Enter) |
 | Navigate-away warning | Any unsaved edits |
@@ -34,7 +35,7 @@ Add **canvas-like inline cell editing** to the generation workbench data canvas.
 | Data canvas cells | Read-only preview | In-place editable scalars |
 | Validation | Shown after generate/refine | Re-run on every committed edit |
 | Export | Blocks on invalid dataset | Same, driven by live edit validation |
-| Saved runs | Save on generate/refine only | Patch active run + save as new + manual_edit source |
+| Saved versions | Immutable fork on every save | `forkSavedGeneratedDataset` + `versionLabel` / `parentDatasetId` |
 | `_id` / refs | Display only | Read-only with tooltip |
 | Unsaved state | N/A | Dirty indicator + leave warning |
 
@@ -62,7 +63,7 @@ Add **canvas-like inline cell editing** to the generation workbench data canvas.
 | --- | --- |
 | `POST /projects/:projectId/dataset-edits` | Apply one cell edit + full revalidation |
 | `POST /projects/:projectId/datasets/validate` | Optional full revalidate without edit |
-| `PATCH /projects/:projectId/generated-datasets/:datasetId` | Persist edits to active saved run |
+| `PATCH /projects/:projectId/generated-datasets/:datasetId` | Fork edits into new dataset version |
 | `POST /projects/:projectId/generated-datasets` | Save as new / first save (`source: manual_edit`) |
 
 ## Constitution Check

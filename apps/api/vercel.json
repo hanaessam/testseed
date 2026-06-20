@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "node ../../scripts/vercel-monorepo-install.mjs",
+  "buildCommand": "node ../../scripts/vercel-monorepo-build.mjs @testseed/api...",
+  "functions": {
+    "server.ts": {
+      "includeFiles": "../../packages/**/dist/**"
+    }
+  }
+}

@@ -11,10 +11,20 @@ import {
   mapGenerationPlanToResponse,
   REFINEMENT_SYSTEM_PROMPT,
   buildRefinementUserPromptContent,
+  GENERATION_SYSTEM_PROMPT,
+  buildGenerationUserPromptContent,
+  resolveGenerationProjectContext,
   regenerateWithFeedback,
   refineGeneratedDataset,
+  recordSeedBatch,
   saveGeneratedDataset,
-  updateSavedGeneratedDataset,
+  buildDirectSeedingConfirmation,
+  createMongoNativeDriverClientFactory,
+  DirectMongoSeedingError,
+  seedMongoDataset,
+  snapshotSeedBatchFromMongo,
+  testDirectMongoConnection,
+  forkSavedGeneratedDataset,
   updateSavedGeneratedDatasetChatHistory,
   validateGeneratedDataset,
   type SeedGenerationProvider,
@@ -22,6 +32,9 @@ import {
 } from "@testseed/core";
 import type {
   ChatRefinementMessage,
+  DirectMongoConnectionTestResult,
+  DirectSeedingConfirmationSummary,
+  DirectSeedingExecuteApiResponse,
   FeedbackRegenerationResponse,
   GeneratedDataset,
   GeneratedRecord,
@@ -30,7 +43,8 @@ import type {
   ParsedSchema,
   RefineGeneratedDatasetResponse,
   SavedGeneratedDatasetSource,
-  SchemaField
+  SchemaField,
+  SeedBatch
 } from "@testseed/types";
 import type {
   createGeneratedDatasetRepository,
@@ -62,7 +76,8 @@ const collectionCountsSchema = z
   });
 
 const generateSeedDataRequestSchema = z.object({
-  collectionCounts: collectionCountsSchema
+  collectionCounts: collectionCountsSchema,
+  projectContext: z.string().max(4000).optional()
 });
 
 const chatMessageSchema = z.object({
@@ -70,17 +85,23 @@ const chatMessageSchema = z.object({
   content: z.string().min(1).max(2000)
 });
 
-const generatedDatasetSchema: z.ZodType<GeneratedDataset> = z.object({
+const generatedRecordSchema = z
+  .object({
+    _id: z.string()
+  })
+  .passthrough();
+
+const generatedDatasetSchema: z.ZodSchema<GeneratedDataset> = z.object({
   projectId: z.string().min(1),
   schemaSnapshotId: z.string().min(1),
   status: z.enum(["valid", "invalid", "failed"]),
   generationOrder: z.array(z.string()),
   collectionCounts: z.record(z.number().int().min(0)),
-  collections: z.record(z.array(z.record(z.unknown()).and(z.object({ _id: z.string() })))),
+  collections: z.record(z.array(generatedRecordSchema)),
   validationResults: z.array(z.custom<GenerationValidationResult>()),
   warnings: z.array(z.custom<GenerationValidationResult>()),
   createdAt: z.string()
-});
+}) as z.ZodSchema<GeneratedDataset>;
 
 const refineGeneratedDatasetRequestSchema = z.object({
   currentDataset: generatedDatasetSchema,
@@ -125,14 +146,41 @@ const exportJavaScriptSeedScriptRequestSchema = z.object({
   dataset: generatedDatasetSchema
 });
 
+const directSeedConnectionTestRequestSchema = z.object({
+  connectionString: z.string().min(1),
+  timeoutMs: z.number().int().min(1).optional()
+});
+
+const directSeedConfirmationRequestSchema = z.object({
+  schemaSnapshotId: z.string().min(1),
+  connectionTestToken: z.string().min(1),
+  targetDatabaseName: z.string().min(1),
+  dataset: generatedDatasetSchema
+});
+
+const directSeedExecuteRequestSchema = z.object({
+  schemaSnapshotId: z.string().min(1),
+  connectionString: z.string().min(1),
+  connectionTestToken: z.string().min(1),
+  targetDatabaseName: z.string().min(1),
+  dataset: generatedDatasetSchema,
+  confirmed: z.boolean(),
+  timeoutMs: z.number().int().min(1).optional(),
+  savedDatasetId: z.string().min(1).optional()
+});
+
 const patchSavedGeneratedDatasetRequestSchema = z.object({
   dataset: generatedDatasetSchema,
-  chatHistory: z.array(chatMessageSchema).optional()
+  chatHistory: z.array(chatMessageSchema).optional(),
+  versionLabel: z.string().min(1).max(200).optional(),
+  source: z.enum(["manual_edit", "refinement"]).optional()
 });
 
 const saveManualEditDatasetRequestSchema = z.object({
   dataset: generatedDatasetSchema,
-  chatHistory: z.array(chatMessageSchema).optional()
+  chatHistory: z.array(chatMessageSchema).optional(),
+  parentDatasetId: z.string().min(1).optional(),
+  versionLabel: z.string().min(1).max(200).optional()
 });
 
 function writeSseEvent(response: Response, event: string, data: unknown): void {
@@ -388,6 +436,225 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
     }
   );
 
+  router.post(
+    "/:projectId/direct-seeding/test-connection",
+    validateBody(directSeedConnectionTestRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        const result: DirectMongoConnectionTestResult = await testDirectMongoConnection(
+          request.body,
+          { clientFactory: createMongoNativeDriverClientFactory() }
+        );
+
+        response.status(result.ok ? 200 : 400).json(result);
+      } catch (error) {
+        if (error instanceof DirectMongoSeedingError) {
+          response.status(400).json({
+            code: error.code,
+            message: error.message,
+            validationResults: error.validationResults
+          });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/direct-seeding/confirmation",
+    validateBody(directSeedConfirmationRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before direct seeding." });
+          return;
+        }
+
+        if (request.body.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        if (request.body.dataset.projectId !== params.projectId) {
+          response.status(409).json({ message: "The dataset does not match the requested project." });
+          return;
+        }
+
+        const summary: DirectSeedingConfirmationSummary = buildDirectSeedingConfirmation({
+          targetDatabaseName: request.body.targetDatabaseName,
+          dataset: request.body.dataset
+        });
+
+        response.status(200).json(summary);
+      } catch (error) {
+        if (error instanceof DirectMongoSeedingError) {
+          response.status(422).json({
+            code: error.code,
+            message: error.message,
+            validationResults: error.validationResults
+          });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
+  router.post(
+    "/:projectId/direct-seeding",
+    validateBody(directSeedExecuteRequestSchema),
+    async (request: Request, response: Response, next: NextFunction) => {
+      try {
+        const params = z.object({ projectId: z.string().min(1) }).parse(request.params);
+        const authenticatedRequest = request as AuthenticatedRequest;
+        if (!authenticatedRequest.auth) {
+          response.status(401).json({ message: "Authentication required" });
+          return;
+        }
+
+        const context = await loadGenerationContext(params.projectId, authenticatedRequest.auth.userId, deps);
+        if (!context) {
+          response.status(404).json({ message: "Project not found" });
+          return;
+        }
+
+        if (!context.schemaSnapshot) {
+          response.status(409).json({ message: "Review and save a schema before direct seeding." });
+          return;
+        }
+
+        if (request.body.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        if (request.body.dataset.projectId !== params.projectId) {
+          response.status(409).json({ message: "The dataset does not match the requested project." });
+          return;
+        }
+
+        const priorBatches = await deps.projectHistoryRepository.listSeedBatches(params.projectId);
+        const activeBatches = priorBatches.filter(
+          (batch) => batch.status === "inserted" || batch.status === "partially_inserted"
+        );
+
+        if (activeBatches.length > 0) {
+          await ensureSeedBatchesRestorable(
+            deps,
+            activeBatches,
+            {
+              projectId: params.projectId,
+              ownerId: authenticatedRequest.auth.userId,
+              schemaSnapshotId: context.schemaSnapshot.id,
+              connectionString: request.body.connectionString,
+              targetDatabaseName: request.body.targetDatabaseName
+            }
+          );
+        }
+
+        const report = await seedMongoDataset(
+          {
+            connectionString: request.body.connectionString,
+            connectionTestToken: request.body.connectionTestToken,
+            schema: context.schemaSnapshot.schema,
+            dataset: request.body.dataset,
+            targetDatabaseName: request.body.targetDatabaseName,
+            confirmed: request.body.confirmed,
+            timeoutMs: request.body.timeoutMs,
+            insertMode: activeBatches.length > 0 ? "upsert" : "insert"
+          },
+          { clientFactory: createMongoNativeDriverClientFactory() }
+        );
+
+        await Promise.all(
+          activeBatches.map((batch) =>
+            deps.projectHistoryRepository.markSeedBatchSuperseded({
+              projectId: context.project.id,
+              seedBatchId: batch.seedBatchId,
+              supersededBySeedBatchId: report.seedBatchId
+            })
+          )
+        );
+
+        const insertedDocumentIds =
+          report.insertedDocumentIds ??
+          buildInsertedDocumentIds(request.body.dataset, [...report.successfulCollections, ...report.failedCollections]);
+        const status = report.failedCollections.length > 0 ? "partially_inserted" : "inserted";
+        const savedDatasetId = await resolveDirectSeedSavedDatasetId(
+          deps,
+          params.projectId,
+          authenticatedRequest.auth.userId,
+          request.body.dataset,
+          request.body.savedDatasetId
+        );
+        const body: DirectSeedingExecuteApiResponse = { report };
+
+        try {
+          const { batch } = await recordSeedBatch(
+            {
+              projectId: context.project.id,
+              actorId: authenticatedRequest.auth.userId,
+              seedBatchId: report.seedBatchId,
+              collectionCounts: report.insertedRecordCounts,
+              insertedDocumentIds,
+              collectionOrder: report.rollback.collectionOrder,
+              status,
+              savedDatasetId,
+              targetDatabaseName: report.targetDatabaseName
+            },
+            {
+              recordSeedBatchRecord: deps.projectHistoryRepository.recordSeedBatch,
+              appendProjectEvent: deps.projectHistoryRepository.appendProjectEvent
+            }
+          );
+          body.seedBatch = batch;
+        } catch {
+          body.historyWarning =
+            "Direct seeding completed, but TestSeed could not save the seed batch history entry.";
+        }
+
+        response.status(report.failedCollections.length > 0 ? 207 : 200).json(body);
+      } catch (error) {
+        if (error instanceof DirectMongoSeedingError) {
+          response.status(422).json({
+            code: error.code,
+            message: error.message,
+            validationResults: error.validationResults
+          });
+          return;
+        }
+        next(error);
+      }
+    }
+  );
+
   router.patch(
     "/:projectId/generated-datasets/:datasetId",
     validateBody(patchSavedGeneratedDatasetRequestSchema),
@@ -403,37 +670,25 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
         }
 
         try {
-          let dataset = await updateSavedGeneratedDataset(
+          const dataset = await forkSavedGeneratedDataset(
             {
               projectId: params.projectId,
-              datasetId: params.datasetId,
+              parentDatasetId: params.datasetId,
               ownerId: authenticatedRequest.auth.userId,
-              dataset: request.body.dataset
+              dataset: request.body.dataset,
+              chatHistory: request.body.chatHistory,
+              versionLabel: request.body.versionLabel ?? "Manual edits",
+              source: request.body.source ?? "manual_edit"
             },
             {
               findProjectById: deps.projectRepository.findProjectById,
               findGeneratedDatasetById: deps.generatedDatasetRepository.findGeneratedDatasetById,
-              updateGeneratedDatasetRecord: deps.generatedDatasetRepository.updateGeneratedDatasetRecord
+              createGeneratedDatasetRecord: deps.generatedDatasetRepository.createGeneratedDatasetRecord,
+              appendProjectEvent: deps.projectHistoryRepository.appendProjectEvent
             }
           );
 
-          if (request.body.chatHistory?.length) {
-            dataset = await updateSavedGeneratedDatasetChatHistory(
-              {
-                projectId: params.projectId,
-                datasetId: params.datasetId,
-                ownerId: authenticatedRequest.auth.userId,
-                chatHistory: request.body.chatHistory
-              },
-              {
-                findProjectById: deps.projectRepository.findProjectById,
-                updateGeneratedDatasetChatHistory:
-                  deps.generatedDatasetRepository.updateGeneratedDatasetChatHistory
-              }
-            );
-          }
-
-          response.status(200).json({ dataset });
+          response.status(200).json({ dataset, savedDatasetId: dataset.id });
         } catch (error) {
           if (error instanceof Error) {
             if (error.message.includes("was not found")) {
@@ -494,7 +749,11 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           authenticatedRequest.auth.userId,
           request.body.dataset,
           "manual_edit",
-          request.body.chatHistory ?? []
+          request.body.chatHistory ?? [],
+          {
+            parentDatasetId: request.body.parentDatasetId,
+            versionLabel: request.body.versionLabel ?? "Manual edits"
+          }
         );
 
         response.status(201).json({
@@ -588,7 +847,10 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
             actorId: authenticatedRequest.auth.userId,
             schemaSnapshotId: context.schemaSnapshot.id,
             schema: context.schemaSnapshot.schema,
-            projectContext: context.project.context,
+            projectContext: resolveGenerationProjectContext(
+              context.project.context,
+              request.body.projectContext
+            ),
             collectionCounts: request.body.collectionCounts
           },
           {
@@ -610,7 +872,9 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           context.project.id,
           authenticatedRequest.auth.userId,
           dataset,
-          "generation"
+          "generation",
+          [],
+          { versionLabel: "Initial generation" }
         );
 
         response.status(201).json({
@@ -658,13 +922,28 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
             .map((collection) => `${collection.name}(${collection.fields.length})`)
             .join(", ");
 
+        if (request.body.savedDatasetId) {
+          await snapshotDatasetBeforeRefinement(
+            deps,
+            context.project.id,
+            authenticatedRequest.auth.userId,
+            request.body.savedDatasetId,
+            request.body.acceptedDataset,
+            request.body.chatHistory ?? [],
+            request.body.feedback
+          );
+        }
+
         const result = await regenerateWithFeedback(
           {
             projectId: context.project.id,
             actorId: authenticatedRequest.auth.userId,
             schemaSnapshotId: context.schemaSnapshot.id,
             schema: context.schemaSnapshot.schema,
-            projectContext: context.project.context,
+            projectContext: resolveGenerationProjectContext(
+              context.project.context,
+              request.body.projectContext
+            ),
             acceptedDataset: request.body.acceptedDataset,
             feedback: request.body.feedback,
             chatHistory: request.body.chatHistory,
@@ -735,6 +1014,18 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           return;
         }
 
+        if (request.body.savedDatasetId) {
+          await snapshotDatasetBeforeRefinement(
+            deps,
+            context.project.id,
+            authenticatedRequest.auth.userId,
+            request.body.savedDatasetId,
+            request.body.currentDataset,
+            request.body.chatHistory ?? [],
+            request.body.message
+          );
+        }
+
         const result = await refineGeneratedDataset(
           {
             projectId: context.project.id,
@@ -765,7 +1056,8 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           context.project.id,
           authenticatedRequest.auth.userId,
           result,
-          request.body.savedDatasetId
+          request.body.savedDatasetId,
+          request.body.message
         );
 
         response.status(result.mode === "rejected" ? 422 : 200).json({
@@ -826,7 +1118,10 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
             actorId: authenticatedRequest.auth.userId,
             schemaSnapshotId: context.schemaSnapshot.id,
             schema: context.schemaSnapshot.schema,
-            projectContext: context.project.context,
+            projectContext: resolveGenerationProjectContext(
+              context.project.context,
+              request.body.projectContext
+            ),
             collectionCounts: request.body.collectionCounts
           },
           {
@@ -870,7 +1165,9 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           context.project.id,
           authenticatedRequest.auth.userId,
           dataset,
-          "generation"
+          "generation",
+          [],
+          { versionLabel: "Initial generation" }
         );
 
         writeSseEvent(response, "complete", {
@@ -907,6 +1204,23 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           return;
         }
 
+        if (request.body.currentDataset.schemaSnapshotId !== context.schemaSnapshot.id) {
+          response.status(409).json({ message: "The generated dataset does not match the active reviewed schema." });
+          return;
+        }
+
+        if (request.body.savedDatasetId) {
+          await snapshotDatasetBeforeRefinement(
+            deps,
+            context.project.id,
+            authenticatedRequest.auth.userId,
+            request.body.savedDatasetId,
+            request.body.currentDataset,
+            request.body.chatHistory ?? [],
+            request.body.message
+          );
+        }
+
         response.setHeader("Content-Type", "text/event-stream");
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("Connection", "keep-alive");
@@ -935,7 +1249,8 @@ export function createGenerationRouter(deps: GenerationRouterDeps): Router {
           context.project.id,
           authenticatedRequest.auth.userId,
           result,
-          request.body.savedDatasetId
+          request.body.savedDatasetId,
+          request.body.message
         );
 
         writeSseEvent(response, "complete", {
@@ -961,7 +1276,11 @@ async function persistValidDataset(
   ownerId: string,
   dataset: GeneratedDataset,
   source: SavedGeneratedDatasetSource,
-  chatHistory: ChatRefinementMessage[] = []
+  chatHistory: ChatRefinementMessage[] = [],
+  metadata: {
+    parentDatasetId?: string;
+    versionLabel?: string;
+  } = {}
 ) {
   return saveGeneratedDataset(
     {
@@ -969,7 +1288,9 @@ async function persistValidDataset(
       ownerId,
       dataset,
       source,
-      chatHistory
+      chatHistory,
+      parentDatasetId: metadata.parentDatasetId,
+      versionLabel: metadata.versionLabel
     },
     {
       findProjectById: deps.projectRepository.findProjectById,
@@ -979,21 +1300,81 @@ async function persistValidDataset(
   );
 }
 
+function truncateVersionLabel(text: string, maxLength = 80): string {
+  const trimmed = text.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, maxLength - 1)}…`;
+}
+
+function lastUserChatMessage(chatHistory: ChatRefinementMessage[]): string | undefined {
+  for (let index = chatHistory.length - 1; index >= 0; index -= 1) {
+    const message = chatHistory[index];
+    if (message.role === "user" && message.content.trim()) {
+      return message.content.trim();
+    }
+  }
+
+  return undefined;
+}
+
+async function snapshotDatasetBeforeRefinement(
+  deps: GenerationRouterDeps,
+  projectId: string,
+  ownerId: string,
+  parentDatasetId: string,
+  dataset: GeneratedDataset,
+  chatHistory: ChatRefinementMessage[],
+  feedback: string
+): Promise<void> {
+  if (dataset.status !== "valid") {
+    return;
+  }
+
+  if (dataset.validationResults.some((result) => result.severity === "error")) {
+    return;
+  }
+
+  await persistValidDataset(
+    deps,
+    projectId,
+    ownerId,
+    dataset,
+    "manual_edit",
+    chatHistory,
+    {
+      parentDatasetId,
+      versionLabel: `Before refine: ${truncateVersionLabel(feedback)}`
+    }
+  );
+}
+
 async function persistRefinementOutcome(
   deps: GenerationRouterDeps,
   projectId: string,
   ownerId: string,
   result: RefineGeneratedDatasetResponse,
-  activeSavedDatasetId?: string
+  activeSavedDatasetId?: string,
+  refinementPrompt?: string
 ): Promise<string | undefined> {
   if (result.mode === "updated_dataset" && result.dataset?.status === "valid") {
+    const prompt =
+      refinementPrompt?.trim() ||
+      lastUserChatMessage(result.chatHistory) ||
+      "refinement";
     const savedDataset = await persistValidDataset(
       deps,
       projectId,
       ownerId,
       result.dataset,
       "refinement",
-      result.chatHistory
+      result.chatHistory,
+      {
+        parentDatasetId: activeSavedDatasetId,
+        versionLabel: `Refined: ${truncateVersionLabel(prompt)}`
+      }
     );
     return savedDataset.id;
   }
@@ -1062,18 +1443,17 @@ function createOpenAIGenerationProvider(deps: GenerationRouterDeps): SeedGenerat
       messages: [
         {
           role: "system",
-          content:
-            "Generate realistic MongoDB seed records as strict JSON. Return only an object with a collections property grouped by collection name. Preserve field types, required fields, enum values, uniqueness, and ObjectId references. Use supplied ObjectId candidates for references. Do not include secrets or explanations."
+          content: GENERATION_SYSTEM_PROMPT
         },
         {
           role: "user",
-          content: JSON.stringify({
-            projectContext: providerRequest.projectContext ?? "",
-            repositoryContext: providerRequest.repositoryContext ?? "",
+          content: buildGenerationUserPromptContent({
             schema: sanitizeSchema(providerRequest.schema),
+            projectContext: providerRequest.projectContext,
+            repositoryContext: providerRequest.repositoryContext,
             collectionCounts: providerRequest.collectionCounts,
             generationOrder: providerRequest.generationOrder,
-            validationFeedback: providerRequest.validationFeedback ?? []
+            validationFeedback: providerRequest.validationFeedback
           })
         }
       ]
@@ -1243,6 +1623,85 @@ function statusForFeedbackMode(mode: FeedbackRegenerationResponse["mode"]): numb
     return 200;
   }
   return 422;
+}
+
+function buildInsertedDocumentIds(
+  dataset: GeneratedDataset,
+  successfulCollections: Array<{ collectionName: string; insertedCount: number }>
+): Record<string, string[]> {
+  return Object.fromEntries(
+    successfulCollections.map((collection) => [
+      collection.collectionName,
+      (dataset.collections[collection.collectionName] ?? [])
+        .slice(0, collection.insertedCount)
+        .map((record) => record._id)
+    ])
+  );
+}
+
+async function resolveDirectSeedSavedDatasetId(
+  deps: GenerationRouterDeps,
+  projectId: string,
+  ownerId: string,
+  dataset: GeneratedDataset,
+  requestedSavedDatasetId?: string
+): Promise<string | undefined> {
+  if (requestedSavedDatasetId) {
+    return requestedSavedDatasetId;
+  }
+
+  const savedDataset = await persistValidDataset(deps, projectId, ownerId, dataset, "manual_edit");
+  return savedDataset.id;
+}
+
+async function ensureSeedBatchesRestorable(
+  deps: GenerationRouterDeps,
+  activeBatches: SeedBatch[],
+  input: {
+    projectId: string;
+    ownerId: string;
+    schemaSnapshotId: string;
+    connectionString: string;
+    targetDatabaseName: string;
+  }
+): Promise<void> {
+  const clientFactory = createMongoNativeDriverClientFactory();
+
+  for (const batch of activeBatches) {
+    if (batch.savedDatasetId) {
+      continue;
+    }
+
+    const snapshot = await snapshotSeedBatchFromMongo(
+      {
+        connectionString: input.connectionString,
+        targetDatabaseName: batch.targetDatabaseName ?? input.targetDatabaseName,
+        projectId: input.projectId,
+        schemaSnapshotId: input.schemaSnapshotId,
+        batch
+      },
+      { clientFactory }
+    );
+
+    if (!snapshot) {
+      continue;
+    }
+
+    const savedDataset = await persistValidDataset(
+      deps,
+      input.projectId,
+      input.ownerId,
+      snapshot,
+      "manual_edit"
+    );
+
+    await deps.projectHistoryRepository.updateSeedBatchSavedDatasetId({
+      projectId: input.projectId,
+      seedBatchId: batch.seedBatchId,
+      savedDatasetId: savedDataset.id
+    });
+    batch.savedDatasetId = savedDataset.id;
+  }
 }
 
 void createGenerationRouter;

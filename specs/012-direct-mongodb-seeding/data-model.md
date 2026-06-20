@@ -65,6 +65,7 @@ Fields:
 - `confirmed`: explicit confirmation flag/action.
 - `connectionTestToken`: token from a successful connection test for the same active connection string.
 - `timeoutMs`: optional connection timeout.
+- `savedDatasetId`: optional dataset version id to link on the seed batch record.
 
 Validation rules:
 
@@ -82,12 +83,15 @@ Represents one direct seeding operation.
 Fields:
 
 - `seedBatchId`: UUID v4 identifier generated once per confirmed operation.
+- `savedDatasetId`: optional link to the dataset version that was seeded (`generated_dataset_records` id).
+- `status`: `active` \| `rolled_back` \| `superseded` (and related metadata).
 - `startedAt`: operation timestamp if exposed by implementation.
 - `orderedCollections`: insertion order used for the operation.
 
 Validation rules:
 
 - Every inserted record receives the same seedBatchId.
+- Re-seeding a dataset version creates a new batch and may supersede the prior active batch.
 - Existing record fields are preserved.
 - The generated dataset object is not mutated.
 

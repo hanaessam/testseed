@@ -78,6 +78,8 @@ export type ProjectEventKind =
   | "generation_requested"
   | "generation_completed"
   | "seed_batch_recorded"
+  | "seed_batch_restored"
+  | "seed_batch_applied"
   | "rollback_requested"
   | "rollback_completed"
   | "repository_context_connected"
@@ -100,9 +102,45 @@ export interface SeedBatch {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
-  status: "pending" | "inserted" | "partially_inserted" | "rolled_back";
+  collectionOrder: string[];
+  status: "pending" | "inserted" | "partially_inserted" | "rolled_back" | "superseded";
   createdAt: Date;
   rolledBackAt?: Date;
+  rollbackDeletedCounts?: Record<string, number>;
+  savedDatasetId?: string;
+  supersededBySeedBatchId?: string;
+  targetDatabaseName?: string;
+}
+
+export type RollbackSeedBatchErrorCode =
+  | "ROLLBACK_SEED_BATCH_ID_REQUIRED"
+  | "ROLLBACK_SEED_BATCH_ID_INVALID"
+  | "ROLLBACK_BATCH_NOT_FOUND"
+  | "ROLLBACK_BATCH_ALREADY_ROLLED_BACK"
+  | "ROLLBACK_BATCH_HAS_NO_RECORDS";
+
+export interface RollbackSeedBatchErrorDetails {
+  code: RollbackSeedBatchErrorCode;
+  message: string;
+}
+
+export type RollbackCollectionStatus = "deleted" | "failed";
+
+export interface RollbackCollectionResult {
+  collectionName: string;
+  status: RollbackCollectionStatus;
+  deletedCount?: number;
+  error?: string;
+}
+
+export interface RollbackSeedBatchReport {
+  seedBatchId: string;
+  status: "rolled_back" | "partial_failure";
+  deletedCounts: Record<string, number>;
+  completedCollections: RollbackCollectionResult[];
+  processedOrder: string[];
+  rolledBackAt?: Date;
+  failedCollection?: RollbackCollectionResult;
 }
 
 export interface ListProjectsResponse {
@@ -197,6 +235,35 @@ export interface ProjectHistoryResponse {
   events: ProjectEvent[];
   seedBatches: SeedBatch[];
 }
+
+export interface RollbackSeedBatchRequest {
+  seedBatchId: string;
+  mongoUri: string;
+}
+
+export interface RollbackSeedBatchResponse {
+  batch: SeedBatch;
+  deletedCounts: Record<string, number>;
+  event?: ProjectEvent;
+  report?: RollbackSeedBatchReport;
+  restoredSeedBatch?: SeedBatch;
+  restoreMessage?: string;
+}
+
+export interface RestoreSeedBatchRequest {
+  seedBatchId: string;
+  mongoUri: string;
+}
+
+export interface RestoreSeedBatchResponse {
+  batch: SeedBatch;
+  message: string;
+  supersededBatchIds: string[];
+  event: ProjectEvent;
+}
+
+export type ApplySeedBatchRequest = RestoreSeedBatchRequest;
+export type ApplySeedBatchResponse = RestoreSeedBatchResponse;
 
 export interface ProjectDetailResponse {
   project: Project | null;

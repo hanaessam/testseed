@@ -6,7 +6,10 @@ export interface RecordSeedBatchRequest {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
+  collectionOrder: string[];
   status: SeedBatch["status"];
+  savedDatasetId?: string;
+  targetDatabaseName?: string;
 }
 
 export interface RecordSeedBatchRecordInput {
@@ -15,9 +18,13 @@ export interface RecordSeedBatchRecordInput {
   seedBatchId: string;
   collectionCounts: Record<string, number>;
   insertedDocumentIds: Record<string, string[]>;
+  collectionOrder: string[];
   status: SeedBatch["status"];
   createdAt: Date;
   rolledBackAt?: Date;
+  rollbackDeletedCounts?: Record<string, number>;
+  savedDatasetId?: string;
+  targetDatabaseName?: string;
 }
 
 export interface RecordSeedBatchDeps {
@@ -44,8 +51,11 @@ export async function recordSeedBatch(
     seedBatchId: request.seedBatchId,
     collectionCounts: request.collectionCounts,
     insertedDocumentIds: request.insertedDocumentIds,
+    collectionOrder: request.collectionOrder,
     status: request.status,
-    createdAt: now
+    createdAt: now,
+    savedDatasetId: request.savedDatasetId,
+    targetDatabaseName: request.targetDatabaseName
   });
 
   const event = await deps.appendProjectEvent({

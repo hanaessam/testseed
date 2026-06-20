@@ -11,6 +11,85 @@ const schema: ParsedSchema = {
 };
 
 describe("generateSeedData", () => {
+  it("replaces generated user _id values with non-semantic decimal identifiers", async () => {
+    const provider = jest.fn().mockResolvedValue({
+      collections: {
+        User: [
+          { _id: "665f1a000000000000000001", email: "maya@example.com" },
+          { _id: "665f1a000000000000000002", email: "hana@example.com" }
+        ]
+      }
+    });
+
+    const result = await generateSeedData(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema,
+        collectionCounts: { User: 2 },
+        maxAttempts: 1
+      },
+      {
+        generateRecords: provider,
+        generateRecordId: ({ recordIndex }) => ["931752408641", "408219736504"][recordIndex] ?? "700000000001"
+      }
+    );
+
+    expect(result.status).toBe("valid");
+    expect(result.collections.User.map((record) => record._id)).toEqual([
+      "931752408641",
+      "408219736504"
+    ]);
+    for (const record of result.collections.User) {
+      expect(record._id).toMatch(/^\d+$/);
+      expect(record._id).not.toMatch(/^[a-f0-9]{24}$/i);
+    }
+  });
+
+  it("repairs references to decimal user ids", async () => {
+    const relationalSchema: ParsedSchema = {
+      collections: [
+        {
+          name: "users",
+          fields: [{ name: "email", type: "String", required: true, unique: true }]
+        },
+        {
+          name: "orders",
+          fields: [
+            { name: "userId", type: "ObjectId", required: true, unique: false, ref: "users" },
+            { name: "total", type: "Number", required: true, unique: false }
+          ]
+        }
+      ]
+    };
+    const provider = jest.fn().mockResolvedValue({
+      collections: {
+        users: [{ email: "maya@example.com" }],
+        orders: [{ userId: "665f1a000000000000000001", total: 24 }]
+      }
+    });
+
+    const result = await generateSeedData(
+      {
+        projectId: "project-1",
+        actorId: "user-1",
+        schemaSnapshotId: "snapshot-1",
+        schema: relationalSchema,
+        collectionCounts: { users: 1, orders: 1 },
+        maxAttempts: 1
+      },
+      {
+        generateRecords: provider,
+        generateRecordId: () => "593104827650"
+      }
+    );
+
+    expect(result.status).toBe("valid");
+    expect(result.collections.users[0]._id).toBe("593104827650");
+    expect(result.collections.orders[0].userId).toBe("593104827650");
+  });
+
   it("retries provider failures before returning valid generated records", async () => {
     const provider = jest
       .fn()
