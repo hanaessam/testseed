@@ -20,6 +20,12 @@ coverage
 # Vercel
 .vercel
 
+# Claude
+
+.claude/
+
+
+
 # Build Outputs
 .next/
 out/
@@ -66,3 +72,4 @@ tree.txt
 # Logs
 *.log
 logs/
+
