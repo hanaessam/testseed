@@ -4,7 +4,7 @@ Living inventory of AI agents, MCP servers, skills, rules, plugins, and planning
 
 **Maintainers:** Update this file when you add/remove MCPs, skills, Spec Kit features, Superpowers docs, or agent rules. Bump **Last updated** and add a row to the changelog at the bottom.
 
-**Last updated:** 2026-06-08
+**Last updated:** 2026-06-24
 
 ---
 
@@ -18,9 +18,10 @@ Living inventory of AI agents, MCP servers, skills, rules, plugins, and planning
 | Project skills | `.agents/skills/` | Slash-command workflows for Spec Kit + TestSeed conventions |
 | Superpowers | `docs/superpowers/` | Older agent-facing plans/workflows (pre–Spec Kit slice) |
 | MCP config | `.mcp.json`, `.cursor/mcp.json` | Model Context Protocol servers for Cursor/Codex |
+| Local stack | `docker-compose.yml` | Reproducible MongoDB + Mailpit + API + web development stack |
 | Active feature | `.specify/feature.json` | Points agents at current Spec Kit feature directory |
 
-**Active Spec Kit feature:** `specs/007-preview-editing` (Preview and Editing — canvas-like cell editing)
+**Active Spec Kit feature:** `specs/014-direct-seeding-integration` (Direct seeding integration — API/UI/history/rollback verification)
 
 ---
 
@@ -39,7 +40,7 @@ Structured product delivery: natural-language feature → `spec.md` → optional
 | `.specify/templates/` | `spec-template.md`, `plan-template.md`, `tasks-template.md` |
 | `.specify/memory/constitution.md` | Project principles template (governance) |
 | `.specify/extensions.yml` | Lifecycle hooks (git branch, auto-commit, agent-context) |
-| `.specify/feature.json` | Current feature directory (`specs/007-preview-editing`) |
+| `.specify/feature.json` | Current feature directory (`specs/014-direct-seeding-integration`) |
 | `.specify/workflows/speckit/workflow.yml` | Full SDD cycle: specify → plan → tasks → implement |
 | `.specify/scripts/powershell/` | `setup-plan.ps1`, `check-prerequisites.ps1`, `create-new-feature.ps1` |
 
@@ -47,7 +48,7 @@ Structured product delivery: natural-language feature → `spec.md` → optional
 
 | Extension | Commands | Used for |
 | --- | --- | --- |
-| **git** | `speckit.git.feature`, `speckit.git.commit`, `speckit.git.initialize`, … | Feature branches (`007-preview-editing`), optional auto-commit after each phase |
+| **git** | `speckit.git.feature`, `speckit.git.commit`, `speckit.git.initialize`, … | Feature branches, optional auto-commit after each phase |
 | **agent-context** | `speckit.agent-context.update` | Syncs `<!-- SPECKIT START -->` block in `AGENTS.md` to latest `plan.md` |
 
 ### Slash commands (repo skills)
@@ -81,9 +82,12 @@ Invoke in Cursor/Codex chat; skills live in `.agents/skills/`.
 | 006 | `specs/006-generation-workbench/` | Shipped (wizard + workbench + dataset versions) |
 | 007 | `specs/007-preview-editing/` | Shipped — canvas editing, fork-on-save, export gating |
 | 008 | `specs/008-feedback-based-regeneration/` | Shipped — feedback regenerate + pre-refine snapshots |
+| 009 | `specs/009-review-regeneration/` | Shipped — review/accept/reject candidate refinements |
+| 010 | `specs/010-export-json/` | Shipped — JSON export UI in the export drawer |
+| 011 | `specs/011-export-js-seed-script/` | Shipped — API-generated JavaScript seed script export |
 | 012 | `specs/012-direct-mongodb-seeding/` | Shipped — direct insert, `savedDatasetId` link |
 | 013 | `specs/013-rollback-seed-batch/` | Shipped — MongoDB batch rollback by `seedBatchId` |
-| 015 | `specs/015-dataset-version-history/` | Planned — design in `docs/dataset-version-history.md` |
+| 014 | `specs/014-direct-seeding-integration/` | Active/current — integration verification for direct seed, rollback, history, and UI |
 
 Roadmap pointer: `docs/generation-ux-roadmap.md` · Version history: `docs/dataset-version-history.md`
 
@@ -150,14 +154,35 @@ Defined in **`.mcp.json`** and **`.cursor/mcp.json`** (same content). Agents cal
 | `github` | `@modelcontextprotocol/server-github` | Issues, PRs, repo metadata | `GITHUB_PERSONAL_ACCESS_TOKEN` |
 | `mongodb` | `mongodb-mcp-server` (read-only) | Queries, schema context against Atlas/local | `MDB_MCP_CONNECTION_STRING` ← `MONGODB_URI` |
 | `context7` | `@upstash/context7-mcp` | Up-to-date library/framework docs | `CONTEXT7_API_KEY` |
-| `chrome-devtools` | `chrome-devtools-mcp` | Browser debugging, performance, DOM | Local Chrome |
 | `next-devtools` | `next-devtools-mcp` | Next.js dev server introspection | Dev server running |
 | `shadcn` | `shadcn@latest mcp` | UI components registry (`apps/web` cwd) | Workbench / generate UI |
 | `figma` | `https://mcp.figma.com/mcp` | Design ↔ code, FigJam diagrams | Figma auth in Cursor |
 | `vercel` | `https://mcp.vercel.com` | Deployments, env, project linking | Vercel account |
-| `v0` | `https://mcp.v0.dev` via `mcp-remote` | v0 component generation | `V0_API_KEY` |
 
 **Security:** MCP MongoDB is **read-only**. Never commit tokens; use env vars or Cursor secret storage.
+
+Removed MCPs: `chrome-devtools` and `v0` were removed on 2026-06-24 because the project no longer uses them in the documented workflow.
+
+---
+
+## 6. Local development tooling
+
+| Tooling file | Purpose |
+| --- | --- |
+| `docker-compose.yml` | Local MongoDB, Mailpit, API, and web stack. Uses `npm ci`, named dependency volumes, and health checks for reproducible startup. |
+| `.env.example` | Local app defaults and placeholder secrets. |
+| `.env.production.example` | Production/Vercel secret template. |
+| `.github/workflows/ci.yml` | Runs `npx turbo build lint test` on pushes and PRs to `main`. |
+| `.github/workflows/deploy.yml` | Builds and deploys separate API and web Vercel projects. |
+
+Docker service URLs:
+
+| Service | URL |
+| --- | --- |
+| Web | `http://localhost:3000` |
+| API | `http://localhost:3001` |
+| Mailpit | `http://localhost:8025` |
+| MongoDB | `mongodb://localhost:27017/testseed` |
 
 ### Cursor marketplace plugins (IDE-level)
 
@@ -165,7 +190,7 @@ Cursor may also load **cached plugins** (Figma, Vercel, MongoDB skill packs) fro
 
 ---
 
-## 6. Cursor built-in agent capabilities
+## 7. Cursor built-in agent capabilities
 
 Used in chat but not stored as repo files:
 
@@ -178,7 +203,7 @@ Used in chat but not stored as repo files:
 
 ---
 
-## 7. Recommended agent workflows
+## 8. Recommended agent workflows
 
 ### New feature (current standard)
 
@@ -200,7 +225,7 @@ Used in chat but not stored as repo files:
 
 ---
 
-## 8. Environment variables for AI / MCP tooling
+## 9. Environment variables for AI / MCP tooling
 
 | Variable | Used by |
 | --- | --- |
@@ -208,7 +233,6 @@ Used in chat but not stored as repo files:
 | `MONGODB_URI` | App DB + MongoDB MCP (read-only) |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub MCP |
 | `CONTEXT7_API_KEY` | Context7 MCP |
-| `V0_API_KEY` | v0 MCP |
 
 See `.env.example` for app defaults; add MCP-only secrets locally as needed.
 
@@ -222,6 +246,7 @@ See `.env.example` for app defaults; add MCP-only secrets locally as needed.
 | 2026-06-08 | Documented 007 UX decisions: edited indicator + enum dropdown (in spec/plan) |
 | 2026-06-08 | `/speckit-tasks` generated `specs/007-preview-editing/tasks.md` (54 tasks) |
 | 2026-06-08 | `/speckit-implement` completed 007: inline editing, dataset-edits API, save/patch, validation UX |
+| 2026-06-24 | Updated active feature to 014, removed unused `chrome-devtools`/`v0` MCPs, documented Docker/CI tooling and current shipped specs |
 
 ### How to update
 

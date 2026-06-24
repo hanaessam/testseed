@@ -1,3 +1,12 @@
+x-node-dev: &node-dev
+  image: node:20-alpine
+  working_dir: /app
+  restart: unless-stopped
+  volumes:
+    - .:/app
+    # Keep container-installed dependencies out of the host checkout for reproducible local runs.
+    - root-node-modules:/app/node_modules
+
 services:
   mongo:
     image: mongo:7
@@ -6,17 +15,23 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   api:
-    image: node:20-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev --workspace @testseed/api"
-    restart: unless-stopped
+    <<: *node-dev
+    command: sh -c "npm ci && npm run dev --workspace @testseed/api"
     ports:
       - "3001:3001"
     environment:
+      NODE_ENV: development
       JWT_SECRET: testseed-local-dev-secret
       MONGODB_URI: mongodb://mongo:27017/testseed
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       NEXT_PUBLIC_API_URL: http://localhost:3001
       OTP_TTL_SECONDS: 600
       OTP_MAX_ATTEMPTS: 5
@@ -36,19 +51,27 @@ services:
       - core-node-modules:/app/packages/core/node_modules
       - db-node-modules:/app/packages/db/node_modules
       - types-node-modules:/app/packages/types/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
-      - mongo
-      - mailpit
+      mongo:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
 
   web:
-    image: node:20-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev --workspace @testseed/web -- --hostname 0.0.0.0"
-    restart: unless-stopped
+    <<: *node-dev
+    command: sh -c "npm ci && npm run dev --workspace @testseed/web -- --hostname 0.0.0.0"
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_GENERATION_WORKBENCH_STREAMING: "true"
+      NEXT_PUBLIC_GENERATION_WORKBENCH_EXPORT: "true"
       WEB_APP_URL: http://localhost:3000
     volumes:
       - .:/app
@@ -56,7 +79,8 @@ services:
       - web-node-modules:/app/apps/web/node_modules
       - types-node-modules:/app/packages/types/node_modules
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   mailpit:
     image: axllent/mailpit:v1.24

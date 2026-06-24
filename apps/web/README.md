@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app).
+# TestSeed Web App
+
+This package is the Next.js 14 frontend for TestSeed. It renders the authenticated workspace, project lifecycle screens, setup wizard, generation workbench, dataset version panel, export drawer, account pages, and GitHub OAuth callback UI.
 
 ## Getting Started
 
-First, run the development server:
+Run from the repository root so workspace packages and shared env values resolve correctly:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```sh
+npm run setup:dev
+npm run dev --workspace @testseed/web
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Or run the full stack from the root:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```sh
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load Inter, a custom Google Font.
+Open [http://localhost:3000](http://localhost:3000). The web app expects the API at `NEXT_PUBLIC_API_URL`, which defaults to `http://localhost:3001` in the root `.env.example`.
 
-## Learn More
+## Key Paths
 
-To learn more about Next.js, take a look at the following resources:
+| Path | Purpose |
+| --- | --- |
+| `app/` | App Router pages, layouts, and route-level UI |
+| `components/generation/` | Setup wizard, workbench, tables, saved dataset versions, export drawer |
+| `components/projects/` | Project detail/history/schema panels |
+| `components/layout/` | Authenticated app shell |
+| `components/ui/` | Local shadcn-style primitives |
+| `src/lib/api-client.ts` | All browser API calls |
+| `src/lib/generation-stream.ts` | Server-Sent Events helpers for generation/refinement |
+| `src/store/` | Redux Toolkit store, including theme state |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture Rules
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `apps/web` may import `@testseed/types` only from workspace packages.
+- Do not import `@testseed/core`, `@testseed/db`, database clients, or server-side business logic.
+- All backend behavior goes through `src/lib/api-client.ts`.
+- Follow [`../../docs/ui-design.md`](../../docs/ui-design.md) for layout, tokens, components, and page patterns.
 
-## Deploy on Vercel
+## Environment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_GENERATION_WORKBENCH_STREAMING=true
+NEXT_PUBLIC_GENERATION_WORKBENCH_EXPORT=true
+WEB_APP_URL=http://localhost:3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Commands
+
+```sh
+npm run dev --workspace @testseed/web
+npm run build --workspace @testseed/web
+npm run lint --workspace @testseed/web
+npm run test --workspace @testseed/web
+```
+
+The production deployment is managed from the repository root through Vercel workflows documented in [`../../README.md`](../../README.md).

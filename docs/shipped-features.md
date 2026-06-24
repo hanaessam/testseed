@@ -1,7 +1,7 @@
 # TestSeed Shipped Features
 
 **Status**: Living inventory of production-ready capabilities  
-**Last updated**: 2026-06-10  
+**Last updated**: 2026-06-24
 **Audience**: Product, engineering, QA, and agents onboarding to the repo
 
 This document lists **everything that ships today** in TestSeed — including areas without a Spec Kit folder (account management, projects, dashboard, etc.). For architecture rules see [`DESIGN.md`](../DESIGN.md). For product requirements see [`docs/requirements.md`](requirements.md).
@@ -49,17 +49,17 @@ API features (export script, direct seed, rollback) exist regardless; the workbe
 | 4 | Logout | Yes | App shell | `POST /auth/logout` | — |
 | 5 | Session / JWT | Yes | Client session storage | `GET /auth/me`, middleware | — |
 | 6 | Account profile (display name) | Yes | `/account` → Profile | `PATCH /auth/me` | `specs/002-account-management/` |
-| 7 | Email change (OTP verify) | Yes | `/account` → Profile | `POST /auth/me/verify-email` | `docs/auth-email-otp.md` |
-| 8 | Password change | Yes | `/account` → Security | `POST /auth/change-password` | `specs/002-account-management/` |
-| 9 | Forgot / reset password (OTP) | Yes | `/forgot-password`, `/reset-password` | `POST /auth/forgot-password`, `reset-password` | `docs/auth-email-otp.md` |
+| 7 | Email change (OTP verify) | Yes | `/account` → Profile | `POST /auth/me/email/verify` | `docs/auth-email-otp.md` |
+| 8 | Password change | Yes | `/account` → Security | `POST /auth/me/password` | `specs/002-account-management/` |
+| 9 | Forgot / reset password (OTP) | Yes | `/forgot-password`, `/reset-password` | `POST /auth/password/forgot`, `POST /auth/password/reset` | `docs/auth-email-otp.md` |
 | 10 | Delete account | Yes | `/account` → Danger zone | `DELETE /auth/me` | `specs/002-account-management/` |
 | **Projects & workspace** |
 | 11 | Create project | Yes | `/generate` wizard, `/projects` | `POST /projects` | `specs/001-project-context-setup/` |
 | 12 | List projects | Yes | `/projects`, `/dashboard` | `GET /projects` | — |
 | 13 | Project detail | Yes | `/projects/[projectId]` | `GET /projects/:id` | — |
 | 14 | Rename / update description | Yes | Project detail → Management | `PATCH /projects/:id` | — |
-| 15 | Archive project | Yes | `/projects` | `DELETE /projects/:id?mode=archive` | — |
-| 16 | Hard delete project | Yes | Project detail | `DELETE /projects/:id?mode=hard` | — |
+| 15 | Archive project | Yes | `/projects` | `DELETE /projects/:id` body `{ "mode": "archive" }` | — |
+| 16 | Hard delete project | Yes | Project detail | `DELETE /projects/:id` body `{ "mode": "hard" }` | — |
 | 17 | Restore archived project | Yes | `/projects` (Archived filter) | `PATCH /projects/:id/restore` | — |
 | 18 | Dashboard overview | Yes | `/dashboard` | Aggregates projects + history | — |
 | **Project context** |
@@ -75,7 +75,7 @@ API features (export script, direct seed, rollback) exist regardless; the workbe
 | 27 | Schema field review UI | Yes | Wizard review, project Schema tab | — | `specs/004-schema-review/` |
 | 28 | Save schema snapshot to project | Yes | Wizard, project Schema tab | `PUT /projects/:id/schema` | `specs/004-schema-review/` |
 | 29 | Versioned schema snapshots | Yes | Project detail | `activeSchemaSnapshotId`, history | `specs/004-schema-review/` |
-| 30 | Archive / restore / delete schema snapshot | Yes | Project Schema tab | `PATCH/DELETE /projects/:id/schema` | — |
+| 30 | Archive / restore / delete schema snapshot | Yes | Project Schema tab | `DELETE /projects/:id/schema`, `PATCH /projects/:id/schema/restore` | — |
 | **AI seed generation** |
 | 31 | Generation plan (dependency order) | Yes | Workbench left rail | `GET /projects/:id/generation-plan` | `specs/005-ai-seed-generation/` |
 | 32 | Generate seed data (sync) | Yes | Workbench Generate | `POST /projects/:id/generations` | `specs/005-ai-seed-generation/` |
@@ -94,7 +94,7 @@ API features (export script, direct seed, rollback) exist regardless; the workbe
 | 43 | Auto-save on successful generation | Yes | — | Creates `generated_dataset_records` | `specs/006-generation-workbench/` |
 | 44 | New saved run on dataset-changing refine | Yes | Saved runs panel | `saveGeneratedDataset` | `specs/006-generation-workbench/` |
 | 45 | List / load saved runs | Yes | Workbench + project overview | `GET .../generated-datasets` | `specs/006-generation-workbench/` |
-| 46 | Patch active saved run (manual edits) | Yes | Save bar | `PATCH .../generated-datasets/:id` | `specs/007-preview-editing/` |
+| 46 | Fork active saved run (manual edits) | Yes | Save bar | `PATCH .../generated-datasets/:id` returns a new `savedDatasetId` | `specs/007-preview-editing/` |
 | 47 | Save as new run | Yes | Save bar | `POST .../generated-datasets` | `specs/007-preview-editing/` |
 | 48 | Persist refinement chat per run | Yes | Agent dock restore on load | `chatHistory` on record | `specs/006-generation-workbench/` |
 | **Preview & editing** |
@@ -119,14 +119,15 @@ API features (export script, direct seed, rollback) exist regardless; the workbe
 | 64 | Record seed batch metadata | Yes | — | `POST /projects/:id/seed-batches` | `docs/superpowers/plans/` |
 | 65 | List project history & seed batches | Yes | Project History tab, dashboard | `GET /projects/:id/history` | — |
 | 66 | Rollback seed batch by ID | Gated | Export drawer after seed | `POST /projects/:id/rollback` | `specs/013-rollback-seed-batch/` |
-| 67 | Append-only project events | Yes | History tab | `appendProjectEvent` | — |
+| 67 | Apply / restore seed batch version | Gated | Seed batch history | `POST /projects/:id/apply-seed-batch`, `POST /projects/:id/restore-seed-batch` | `specs/014-direct-seeding-integration/` |
+| 68 | Append-only project events | Yes | History tab | `appendProjectEvent` | — |
 | **UI platform** |
-| 68 | App shell (sidebar nav) | Yes | All authenticated pages | — | `docs/ui-design.md` |
-| 69 | Light / dark / system theme | Yes | Sidebar toggle | Redux + `localStorage` | `docs/ui-design.md` |
-| 70 | Session expiry banner | Yes | App shell | 401 → login redirect | — |
-| 71 | Branded logos & favicon | Yes | Shell, auth pages | Static assets | `README.md` |
-| 72 | Projects list views (cards/list/compact) | Yes | `/projects` | — | `docs/ui-design.md` |
-| 73 | Projects filters & search | Yes | `/projects` | Client-side | `docs/ui-design.md` |
+| 69 | App shell (sidebar nav) | Yes | All authenticated pages | — | `docs/ui-design.md` |
+| 70 | Light / dark / system theme | Yes | Sidebar toggle | Redux + `localStorage` | `docs/ui-design.md` |
+| 71 | Session expiry banner | Yes | App shell | 401 → login redirect | — |
+| 72 | Branded logos & favicon | Yes | Shell, auth pages | Static assets | `README.md` |
+| 73 | Projects list views (cards/list/compact) | Yes | `/projects` | — | `docs/ui-design.md` |
+| 74 | Projects filters & search | Yes | `/projects` | Client-side | `docs/ui-design.md` |
 
 \* **GitHub OAuth** and **OpenAI** require server env configuration; features degrade gracefully when not configured.
 
@@ -224,7 +225,7 @@ Returning users: `?projectId=…&mode=generate` or `?mode=edit` for wizard.
 
 | Pane | Contents |
 | --- | --- |
-| Left | Setup link, context sources, collection counts, generation plan, **saved runs** |
+| Left | Setup link, context sources, collection counts, generation plan, **dataset versions** |
 | Center | Collection tabs, tables, validation badges, progress |
 | Right | Agent dock (refinement chat), quick prompts |
 
@@ -250,14 +251,14 @@ Returning users: `?projectId=…&mode=generate` or `?mode=edit` for wizard.
 | Dataset updated | New saved run + full chat history |
 | Guidance only | Chat history updated on active run; dataset unchanged |
 | Feedback regenerate | Sends accepted dataset + feedback → **candidate** for review |
-| Accept candidate | Patches active run or creates new; becomes accepted baseline |
+| Accept candidate | Creates/forks a dataset version and makes it the accepted baseline |
 | Reject candidate | Discards candidate; user can revise feedback |
 
 **Specs:** `005-ai-seed-generation`, `008-feedback-based-regeneration`, `009-review-regeneration`
 
 ---
 
-### 7. Saved datasets (“saved runs”)
+### 7. Dataset versions
 
 **Shipped.** Persisted in MongoDB collection `generated_dataset_records`.
 
@@ -266,13 +267,13 @@ Returning users: `?projectId=…&mode=generate` or `?mode=edit` for wizard.
 | Generate success | New record, empty chat |
 | Refine (data changed) | New record with chat |
 | Manual save (first time) | `POST` new record (`manual_edit`) |
-| Manual save (active run) | `PATCH` updates record in place |
-| Save as new | `POST` duplicate |
-| Load run | Restores tables + agent dock chat |
+| Manual save (active version) | `PATCH` forks a new version with `parentDatasetId` |
+| Save as new | `POST` creates a new version |
+| Load version | Restores tables + agent dock chat |
 
-**UI:** Left rail **Saved runs** panel; project overview shows recent summaries.
+**UI:** Left rail **Dataset versions** panel; project overview shows recent summaries.
 
-**Note:** Design for immutable **dataset version history** (fork on every change, re-seed any version) is documented in [`dataset-version-history.md`](dataset-version-history.md) and [`adr/0003-immutable-dataset-versions.md`](adr/0003-immutable-dataset-versions.md). That fork/re-seed UX is **not yet implemented** in the current codebase; saves still patch the active run.
+**Note:** Immutable **dataset version history** ships today and is documented in [`dataset-version-history.md`](dataset-version-history.md) and [`adr/0003-immutable-dataset-versions.md`](adr/0003-immutable-dataset-versions.md). Dataset-changing saves fork a new generated dataset record; guidance-only chat can still update chat history on the active version without creating a data snapshot.
 
 ---
 
@@ -340,7 +341,7 @@ Partial failure: report shows which collections succeeded/failed.
 - **App shell:** Dashboard, New project, Projects; user pane → account.
 - **Theme:** Light, dark, system via Redux.
 - **Projects page:** Lifecycle filter, schema readiness filter, sort, search, cards/list/compact.
-- **Confirmations:** Mix of `window.confirm` (archive, delete, rollback) — AlertDialog migration partial.
+- **Confirmations:** shadcn-style `AlertDialog` for re-seed, rollback, and destructive actions.
 
 ---
 
@@ -365,7 +366,7 @@ Partial failure: report shows which collections succeeded/failed.
 | `/projects` | `projects.ts` | Projects, context, schema snapshots |
 | `/projects` | `generation.ts` | Generation, datasets, export, direct seed |
 | `/projects` | `history.ts` | History, seed batch recording |
-| `/projects` | `rollback.ts` | Seed batch rollback |
+| `/projects` | `rollback.ts` | Seed batch rollback, apply seed batch, restore seed batch |
 
 ---
 
@@ -373,7 +374,6 @@ Partial failure: report shows which collections succeeded/failed.
 
 | Item | Notes |
 | --- | --- |
-| Immutable dataset version history + panel re-seed | Designed in `dataset-version-history.md`; code still uses patch-in-place saved runs |
 | Team workspaces / RBAC | Requirements list as non-core |
 | SQL / Prisma / Sequelize | Out of scope |
 | Long-term cross-project seed analytics | Out of scope |
@@ -389,7 +389,7 @@ Partial failure: report shows which collections succeeded/failed.
 | [`requirements.md`](requirements.md) | Epics, user stories, acceptance criteria |
 | [`generation-ux-roadmap.md`](generation-ux-roadmap.md) | Workbench evolution |
 | [`ui-design.md`](ui-design.md) | Visual system & page patterns |
-| [`dataset-version-history.md`](dataset-version-history.md) | Target versioning design (partial implementation) |
+| [`dataset-version-history.md`](dataset-version-history.md) | Shipped dataset versioning and re-seed behavior |
 | [`auth-email-otp.md`](auth-email-otp.md) | OTP flows |
 | [`github-auth-design.md`](github-auth-design.md) | GitHub OAuth |
 | [`ai-assisted-tooling.md`](ai-assisted-tooling.md) | Spec Kit epic index |

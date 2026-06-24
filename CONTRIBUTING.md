@@ -12,7 +12,7 @@ Be respectful in issues and reviews. Focus feedback on the code and the problem 
 - npm 10+
 - Git
 - OpenAI API key and MongoDB for full local testing
-- Optional: Docker for `npm run dev:docker`
+- Optional: Docker Desktop with Compose v2 for the reproducible local stack
 
 ## Getting Started
 
@@ -32,6 +32,15 @@ npm run dev
 
 - Web: http://localhost:3000
 - API: http://localhost:3001
+
+Or start the reproducible Docker stack, which runs MongoDB, Mailpit, API, and web with lockfile-based `npm ci` installs:
+
+```sh
+npm run dev:docker
+```
+
+- Mailpit: http://localhost:8025
+- MongoDB: `mongodb://localhost:27017/testseed`
 
 Run the full project check before opening a PR:
 
@@ -88,6 +97,8 @@ For larger features, the team uses Spec Kit:
 
 ```text
 /speckit-specify
+/speckit-clarify   # optional
+/speckit-plan
 /speckit-tasks
 /speckit-implement
 ```
@@ -98,7 +109,9 @@ Read the relevant `AGENTS.md` before changing a layer:
 - `apps/api/AGENTS.md`
 - `apps/web/AGENTS.md`
 
-Product docs: `docs/requirements.md`, [`docs/shipped-features.md`](docs/shipped-features.md), `DESIGN.md`.
+Product docs: `docs/requirements.md`, [`docs/shipped-features.md`](docs/shipped-features.md), [`docs/architecture.md`](docs/architecture.md), [`docs/dataset-version-history.md`](docs/dataset-version-history.md), `DESIGN.md`.
+
+Update current-state docs when behavior changes. Historical `specs/**` files can remain as implementation history unless a spec is still used as the active plan in `.specify/feature.json`.
 
 ## Deployment Notes
 

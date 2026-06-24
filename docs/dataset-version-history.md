@@ -1,6 +1,6 @@
 # Dataset Version History
 
-**Status**: Planned (design + partial docs; implementation tracked in `docs/shipped-features.md` §7 note)
+**Status**: Shipped (implementation tracked in `docs/shipped-features.md`; architecture decision in `docs/adr/0003-immutable-dataset-versions.md`)
 
 ## Purpose
 

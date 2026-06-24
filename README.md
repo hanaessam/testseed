@@ -25,8 +25,10 @@ TestSeed helps backend and full-stack developers, QA engineers, and student team
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [Development](#development)
+- [System Dependencies](#system-dependencies)
 - [Environment Variables](#environment-variables)
 - [Architecture](#architecture)
+- [API Reference](#api-reference)
 - [Deployment](#deployment)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
@@ -46,28 +48,75 @@ TestSeed helps backend and full-stack developers, QA engineers, and student team
 
 ## Quick Start
 
-### Prerequisites
+### Setup Instructions
 
-- Node.js 20+
-- npm 10+
-- MongoDB (local, Atlas, or Docker Compose)
-- OpenAI API key
-
-### Install and run
+Install the system dependencies listed below, then clone and prepare the workspace:
 
 ```sh
 git clone https://github.com/hanaessam/testseed.git
 cd testseed
 npm run setup:dev
+```
+
+`npm run setup:dev` installs workspace packages and creates `.env` from `.env.example` when it does not already exist. Fill in the required secrets before starting the app; never commit real values.
+
+At minimum, set these values in `.env` for the full local app:
+
+```env
+OPENAI_API_KEY=sk-your-openai-key
+MONGODB_URI=mongodb://localhost:27017/testseed
+JWT_SECRET=replace-with-a-long-random-string
+NEXT_PUBLIC_API_URL=http://localhost:3001
+WEB_APP_URL=http://localhost:3000
+```
+
+### How to Run the System
+
+Run the app directly on your machine:
+
+```sh
 npm run dev
 ```
 
-`npm run setup:dev` installs workspace packages and creates `.env` from `.env.example` when it does not already exist. Fill in secrets before starting the app.
+Or run the full local stack in Docker:
+
+```sh
+OPENAI_API_KEY=sk-your-openai-key npm run dev:docker
+```
+
+On Windows PowerShell, set the key before starting Docker:
+
+```powershell
+$env:OPENAI_API_KEY="sk-your-openai-key"
+npm run dev:docker
+```
+
+The Docker stack starts MongoDB, Mailpit, the API, and the web app with lockfile-based `npm ci` installs.
 
 | Service | URL |
 | --- | --- |
 | Web app | http://localhost:3000 |
 | API | http://localhost:3001 |
+| API health check | http://localhost:3001/health |
+| Mailpit inbox | http://localhost:8025 |
+| MongoDB | `mongodb://localhost:27017/testseed` |
+
+Stop Docker services with:
+
+```sh
+docker compose down
+```
+
+## System Dependencies
+
+- Node.js 20+
+- npm 10+
+- Docker Desktop with Compose v2, if using `npm run dev:docker`
+- MongoDB 7 locally, MongoDB Atlas, or the Docker Compose `mongo` service
+- OpenAI API key for AI generation and refinement
+- Redis-compatible HTTP endpoint and token for OTP flows; Upstash Redis is the expected production option
+- SMTP server for OTP, password reset, and email-change messages; Docker uses Mailpit locally
+- GitHub OAuth app credentials only when GitHub login or repository context is enabled
 
 ## Development
 
@@ -83,7 +132,7 @@ npx turbo build lint test   # Full CI check
 
 ### Docker
 
-Start MongoDB, Mailpit, the API, and the web app in containers:
+Start MongoDB, Mailpit, the API, and the web app in containers. Compose uses the checked-in lockfile through `npm ci`, named `node_modules` volumes, and health checks so every developer starts the same local stack.
 
 ```sh
 npm run dev:docker
@@ -166,15 +215,255 @@ TestSeed is a Turborepo monorepo with a strict layered architecture:
 
 Sensitive MongoDB connection strings submitted for discovery or direct seeding are transient — they are used for the active operation only and are not stored.
 
-### Key API surfaces
+## API Reference
 
-| Area | Endpoints |
-| --- | --- |
-| Auth | `/auth/*` |
-| Schema discovery | `POST /schemas/mongodb/test-connection`, `POST /schemas/mongodb/discover` |
-| Generation | `POST /projects/:id/generations`, refinements, regenerate, saved datasets (versions) |
-| Direct seeding | `POST /projects/:id/direct-seeding` (links `savedDatasetId` to seed batch) |
-| Rollback | Project-scoped seed batch rollback and apply-version routes |
+Base URL for local development: `http://localhost:3001`.
+
+All endpoints except `GET /health` and authentication entry points expect:
+
+```http
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+### Health
+
+Code locations: `apps/api/src/index.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Confirms the API process is running. |
+
+Example:
+
+```sh
+curl http://localhost:3001/health
+```
+
+### Account Management
+
+Code locations: `apps/api/src/routes/auth.ts`, `apps/api/src/middleware/auth.ts`, `packages/core/src/auth/`, `packages/db/src/repositories/user-repository.ts`, `apps/web/src/lib/auth-session.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/auth/github` | Starts GitHub OAuth login. |
+| `GET` | `/auth/github/callback?code=<code>&state=<state>` | Completes GitHub OAuth login or repository-context authorization. |
+| `POST` | `/auth/register/request-otp` | Starts email/password registration and sends an OTP. |
+| `POST` | `/auth/register/verify-otp` | Verifies registration OTP and creates the user. |
+| `POST` | `/auth/login` | Logs in with email/password and returns a JWT. |
+| `POST` | `/auth/logout` | Returns a logout response for client session cleanup. |
+| `GET` | `/auth/me` | Reads the current account profile. |
+| `PATCH` | `/auth/me` | Updates display name or starts email-change verification. |
+| `POST` | `/auth/me/email/verify` | Confirms a pending account email change. |
+| `POST` | `/auth/me/password` | Changes the current user's password. |
+| `DELETE` | `/auth/me` | Deactivates the account after password and phrase confirmation. |
+| `POST` | `/auth/password/forgot` | Sends a password reset OTP. |
+| `POST` | `/auth/password/reset` | Completes password reset with OTP. |
+
+Example login:
+
+```sh
+curl -X POST http://localhost:3001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dev@example.com","password":"correct-horse-battery-staple"}'
+```
+
+### Project Context Setup
+
+Code locations: `apps/api/src/routes/projects.ts`, `packages/core/src/projects/`, `packages/db/src/repositories/project-repository.ts`, `apps/web/src/lib/api-client.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/projects?includeArchived=false` | Lists the authenticated user's projects. |
+| `POST` | `/projects` | Creates a project. |
+| `GET` | `/projects/:projectId` | Reads project detail and active schema metadata. |
+| `PATCH` | `/projects/:projectId` | Updates project name or description. |
+| `DELETE` | `/projects/:projectId` | Archives or hard-deletes a project. |
+| `PATCH` | `/projects/:projectId/restore` | Restores an archived project. |
+| `PUT` | `/projects/:projectId/context` | Updates plain-language project context or clears repository context. |
+| `POST` | `/projects/:projectId/context/github/authorize` | Starts GitHub repository-context authorization. |
+| `GET` | `/projects/:projectId/context/github/callback?code=<code>&state=<state>` | Completes repository-context authorization. |
+| `DELETE` | `/projects/:projectId/context/github` | Removes saved repository context from a project. |
+
+Example project creation:
+
+```sh
+curl -X POST http://localhost:3001/projects \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Bookstore API","description":"MongoDB app with users, books, carts, and orders"}'
+```
+
+### Manual Schema Input
+
+Code locations: `apps/api/src/routes/schema.ts`, `apps/api/src/routes/projects.ts`, `packages/core/src/schema/`, `packages/core/src/projects/`, `packages/db/src/repositories/project-repository.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/schemas/parse` | Parses pasted schema text or uploaded schema files. |
+| `PUT` | `/projects/:projectId/schema` | Saves a reviewed parsed schema snapshot to a project. |
+| `DELETE` | `/projects/:projectId/schema` | Archives or hard-deletes the active project schema. |
+| `PATCH` | `/projects/:projectId/schema/restore` | Restores the latest archived schema snapshot. |
+
+Example schema parse:
+
+```sh
+curl -X POST http://localhost:3001/schemas/parse \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"schemaText":"const UserSchema = new Schema({ email: { type: String, required: true, unique: true } });"}'
+```
+
+### MongoDB Schema Discovery
+
+Code locations: `apps/api/src/routes/schema.ts`, `packages/core/src/schema/mongodb-discovery.ts`, `packages/db/src/schema-discovery.ts`, `apps/web/src/lib/api-client.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/schemas/mongodb/test-connection` | Tests a transient MongoDB connection string. |
+| `POST` | `/schemas/mongodb/discover` | Inspects collections and samples documents to infer a schema. |
+
+Example discovery:
+
+```sh
+curl -X POST http://localhost:3001/schemas/mongodb/discover \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"connectionString":"mongodb://localhost:27017/shop","sampleSize":10}'
+```
+
+### AI Seed Generation
+
+Code locations: `apps/api/src/routes/generation.ts`, `packages/core/src/generation/`, `packages/core/src/generation/generate-seed-data.ts`, `packages/core/src/generation/generate-seed-data-progressive.ts`, `apps/web/src/lib/generation-stream.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/projects/:projectId/generation-plan?collectionCounts=<json>` | Computes dependency order and total requested records. |
+| `POST` | `/projects/:projectId/generations` | Generates a complete dataset and saves the initial version. |
+| `POST` | `/projects/:projectId/generations/stream` | Streams generation progress with Server-Sent Events. |
+
+Example generation:
+
+```sh
+curl -X POST http://localhost:3001/projects/<projectId>/generations \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"collectionCounts":{"users":3,"orders":5},"projectContext":"Canadian ecommerce demo data"}'
+```
+
+### Feedback-Based Regeneration
+
+Code locations: `apps/api/src/routes/generation.ts`, `packages/core/src/generation/regenerate-with-feedback.ts`, `packages/core/src/generation/refine-generated-dataset.ts`, `packages/core/src/generation/build-refinement-prompt.ts`, `apps/web/src/lib/generation-stream.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/projects/:projectId/generations/regenerate` | Creates a candidate dataset from an accepted dataset plus feedback. |
+| `POST` | `/projects/:projectId/generations/refinements` | Applies AI chat refinement or returns guidance. |
+| `POST` | `/projects/:projectId/generations/refinements/stream` | Streams refinement tokens and completion with Server-Sent Events. |
+
+Example refinement:
+
+```sh
+curl -X POST http://localhost:3001/projects/<projectId>/generations/refinements \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"currentDataset":{...},"message":"Make the product prices more varied","savedDatasetId":"<datasetId>"}'
+```
+
+### Preview, Editing, And Dataset Versions
+
+Code locations: `apps/api/src/routes/generation.ts`, `packages/core/src/generation/apply-cell-edit-to-dataset.ts`, `packages/core/src/generation/validate-generated-dataset.ts`, `packages/core/src/generation/save-generated-dataset.ts`, `packages/db/src/repositories/generated-dataset-repository.ts`, `apps/web/src/lib/generation-workbench-state.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/projects/:projectId/dataset-edits` | Applies one table-cell edit and revalidates the dataset. |
+| `POST` | `/projects/:projectId/datasets/validate` | Validates a generated dataset against the active schema. |
+| `GET` | `/projects/:projectId/generated-datasets` | Lists saved generated dataset versions. |
+| `POST` | `/projects/:projectId/generated-datasets` | Saves a valid dataset as a new version. |
+| `GET` | `/projects/:projectId/generated-datasets/:datasetId` | Loads one saved dataset version. |
+| `PATCH` | `/projects/:projectId/generated-datasets/:datasetId` | Forks an existing saved version after manual edits or refinement. |
+
+Example cell edit:
+
+```sh
+curl -X POST http://localhost:3001/projects/<projectId>/dataset-edits \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"schemaSnapshotId":"<schemaSnapshotId>","collectionCounts":{"users":1},"dataset":{...},"edit":{"collectionName":"users","recordId":"507f1f77bcf86cd799439011","fieldName":"email","rawValue":"hana@example.com"}}'
+```
+
+### Export
+
+Code locations: `apps/api/src/routes/generation.ts`, `packages/core/src/generation/export-js-seed-script.ts`, `apps/web/src/lib/api-client.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/projects/:projectId/datasets/javascript-seed-script` | Exports a runnable JavaScript seed script from a valid dataset. |
+
+Example seed-script export:
+
+```sh
+curl -X POST http://localhost:3001/projects/<projectId>/datasets/javascript-seed-script \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"schemaSnapshotId":"<schemaSnapshotId>","dataset":{...}}'
+```
+
+### Direct MongoDB Seeding
+
+Code locations: `apps/api/src/routes/generation.ts`, `packages/core/src/generation/direct-mongodb-seeding.ts`, `packages/core/src/generation/prepare-dataset-ids-for-insertion.ts`, `packages/core/src/generation/remap-dataset-ids-for-insertion.ts`, `packages/core/src/projects/record-seed-batch.ts`, `packages/db/src/repositories/project-history-repository.ts`.
+
+MongoDB connection strings in these requests are used only for the active operation. They are not persisted in seed batch history or project events.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/projects/:projectId/direct-seeding/test-connection` | Tests the target MongoDB connection and returns a connection test token. |
+| `POST` | `/projects/:projectId/direct-seeding/confirmation` | Builds the confirmation summary before insertion. |
+| `POST` | `/projects/:projectId/direct-seeding` | Inserts or upserts records, tags them with `seedBatchId`, and records seed batch history. |
+
+Example direct seed execution:
+
+```sh
+curl -X POST http://localhost:3001/projects/<projectId>/direct-seeding \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"schemaSnapshotId":"<schemaSnapshotId>","connectionString":"mongodb://localhost:27017/shop","connectionTestToken":"<token>","targetDatabaseName":"shop","dataset":{...},"confirmed":true,"savedDatasetId":"<datasetId>"}'
+```
+
+### History And Seed Batches
+
+Code locations: `apps/api/src/routes/history.ts`, `packages/core/src/projects/list-project-history.ts`, `packages/core/src/projects/record-seed-batch.ts`, `packages/db/src/repositories/project-history-repository.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/projects/:projectId/history` | Lists project events and seed batches. |
+| `POST` | `/projects/:projectId/seed-batches` | Records a seed batch entry from an adapter or integration. |
+
+Example history lookup:
+
+```sh
+curl http://localhost:3001/projects/<projectId>/history \
+  -H "Authorization: Bearer <jwt>"
+```
+
+### Rollback And Re-Seed
+
+Code locations: `apps/api/src/routes/rollback.ts`, `packages/core/src/projects/rollback-seed-batch.ts`, `packages/core/src/projects/apply-seed-batch-version.ts`, `packages/core/src/projects/restore-seed-batch.ts`, `packages/core/src/generation/seed-batch-mongo-snapshot.ts`, `packages/db/src/repositories/project-history-repository.ts`.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/projects/:projectId/rollback` | Deletes records by `seedBatchId` from MongoDB and marks the batch rolled back. |
+| `POST` | `/projects/:projectId/apply-seed-batch` | Applies a saved seed batch version to MongoDB and supersedes other active batches. |
+| `POST` | `/projects/:projectId/restore-seed-batch` | Alias for applying a saved seed batch version. |
+
+Example rollback:
+
+```sh
+curl -X POST http://localhost:3001/projects/<projectId>/rollback \
+  -H "Authorization: Bearer <jwt>" \
+  -H "Content-Type: application/json" \
+  -d '{"seedBatchId":"seed_batch_abc123","mongoUri":"mongodb://localhost:27017/shop"}'
+```
 
 ## Deployment
 
@@ -241,12 +530,11 @@ App secrets (`MONGODB_URI`, `JWT_SECRET`, `GITHUB_*`, etc.) go to **Vercel** onl
 - [**Shipped features**](docs/shipped-features.md) — complete inventory of ready capabilities
 - [Contributing guide](CONTRIBUTING.md)
 - [Requirements & design](docs/requirements.md)
-- [**Shipped features**](docs/shipped-features.md) — complete feature inventory
-- [Dataset version history](docs/dataset-version-history.md) (planned design)
+- [Architecture and diagram prompt](docs/architecture.md)
+- [Dataset version history](docs/dataset-version-history.md)
 - [UI design system](docs/ui-design.md)
 - [GitHub auth design](docs/github-auth-design.md)
 - [Email OTP auth](docs/auth-email-otp.md)
-- [Dataset version history](docs/dataset-version-history.md)
 - [Architecture decisions](docs/adr/)
 - [Product design notes](DESIGN.md)
 

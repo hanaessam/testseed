@@ -34,9 +34,9 @@
 
 ## 1. Executive Summary
 
-TestSeed is a full-stack web application that solves a concrete problem faced by every development team: the slow, manual, and fragile process of populating test databases with realistic data. Using OpenAI's GPT-4 as its reasoning engine, TestSeed accepts a project description and a Mongoose schema, analyzes entity relationships, generates statistically realistic and referentially consistent seed data in dependency order, and either exports it as JSON/JavaScript seed scripts or inserts it directly into a target MongoDB database.
+TestSeed is a full-stack web application that solves a concrete problem faced by every development team: the slow, manual, and fragile process of populating test databases with realistic data. Using OpenAI as its reasoning engine, TestSeed accepts a project description and a Mongoose schema or live MongoDB-discovered schema, analyzes entity relationships, generates realistic and referentially consistent seed data in dependency order, and either exports it as JSON/JavaScript seed scripts or inserts it directly into a target MongoDB database.
 
-Over a four-week sprint, Team 4 shipped **73 production features** across 29 merged pull requests and approximately 90 commits. The application is fully deployed on Vercel and covers the complete user journey: account management, project workspaces, schema input (manual paste or live MongoDB discovery), AI-powered seed data generation with streaming output, chat-based iterative refinement, inline editing, export, direct MongoDB seeding with `seedBatchId` tracking, and one-click rollback.
+Over a four-week sprint, Team 4 shipped **74 production features** across 29 merged pull requests and approximately 90 commits. The application is fully deployed on Vercel and covers the complete user journey: account management, project workspaces, schema input (manual paste or live MongoDB discovery), AI-powered seed data generation with streaming output, immutable dataset versions, chat-based iterative refinement, inline editing, export, direct MongoDB seeding with `seedBatchId` tracking, and rollback/apply seed batch flows.
 
 This report documents how artificial intelligence tools were integrated at every phase of the software development lifecycle, the limitations and failures encountered, how the team made decisions about when to use and when to reject AI-generated output, and the resulting quality of the system.
 
@@ -62,7 +62,7 @@ TestSeed addresses all three problems. The system understands schema semantics u
 |-------|-----------|
 | Frontend | Next.js 14 (App Router), React 18, Redux Toolkit, Tailwind CSS |
 | Backend | Express.js, Node.js 20+, Zod validation |
-| AI Engine | OpenAI GPT-4 (structured JSON generation via function calling) |
+| AI Engine | OpenAI chat completions with structured JSON output |
 | Application Database | MongoDB Atlas (Mongoose 8) |
 | Auth | JWT, bcrypt, email OTP via SMTP, GitHub OAuth |
 | Cache | Upstash Redis (OTP storage) |
@@ -86,7 +86,7 @@ This boundary was deliberate and architecturally significant:
 - **`apps/api`** — Thin Express adapter layer. Validates HTTP inputs, calls core, returns JSON. Contains no business logic.
 - **`apps/web`** — Next.js frontend. Calls the API over HTTP; imports only `@testseed/types`. Never imports backend packages.
 
-This separation was enforced consistently across all 29 pull requests. The architectural decision is documented in `docs/adr/0001-clean-architecture.md` and was initially recommended by Claude during an architecture review session (see Section 4.2).
+This separation was enforced consistently across all 29 pull requests. The architectural decision is documented in `docs/adr/0001-use-clean-architecture.md` and was initially recommended by Claude during an architecture review session (see Section 4.2).
 
 ### 3.3 Monorepo Structure
 
@@ -243,18 +243,16 @@ The team resolved these through three iterative Claude Code sessions with detail
 
 #### Tool: MCP Servers — Integrated Tooling
 
-The team configured nine MCP (Model Context Protocol) servers to give Claude Code access to live system state during development:
+The team currently maintains seven MCP (Model Context Protocol) servers to give coding agents access to live system state during development. Earlier experiments with Chrome DevTools MCP and v0 MCP were removed from the project configuration once they were no longer part of the documented workflow.
 
 | MCP Server | Use during development |
 |-----------|----------------------|
 | `github` | PR reviews, issue tracking, branch management |
 | `mongodb` | Schema inspection, query testing against live dev DB |
 | `context7` | Library documentation lookup (Next.js, Mongoose, OpenAI SDK) |
-| `chrome-devtools` | UI testing, network request inspection |
 | `next-devtools` | Next.js build analysis |
 | `shadcn` | UI component selection and preview |
 | `vercel` | Deployment status, env variable management |
-| `v0` | Rapid UI component prototyping |
 | `figma` | Design asset inspection |
 
 **Notable MCP-assisted workflow:** When debugging a TypeScript 5.9 compatibility issue on Vercel builds (Zod schema inference failing with the newer TypeScript version), the `context7` MCP server was used to pull the exact Zod 3.x documentation on `ZodSchema` assertions, which led directly to the fix committed in `68be8e9` ("Use ZodSchema assertion for SchemaField to satisfy TS 5.9 on Vercel").
@@ -341,7 +339,7 @@ If a team member could not explain why AI-generated code worked, it was either r
 
 ### 5.1 Feature Completeness
 
-TestSeed shipped **73 production features** spanning the complete product surface:
+TestSeed shipped **74 production features** spanning the complete product surface:
 
 | Category | Features Shipped |
 |----------|----------------|
@@ -354,9 +352,9 @@ TestSeed shipped **73 production features** spanning the complete product surfac
 | Saved datasets | 6 |
 | Preview and inline editing | 6 |
 | Export (JSON, JS script, Direct seed) | 8 |
-| Rollback and project history | 4 |
+| Rollback and project history | 5 |
 | UI platform | 7 |
-| **Total** | **73** |
+| **Total** | **74** |
 
 ### 5.2 Code Organization
 
@@ -475,7 +473,7 @@ Fourteen features have complete specification packages. This documentation level
 
 ### 6.4 Shipped Features Inventory
 
-`docs/shipped-features.md` serves as a living inventory of all 73 production capabilities, indexed by feature number, category, UI location, API endpoint, and spec folder. It is maintained as a single source of truth for product/engineering/QA alignment.
+`docs/shipped-features.md` serves as a living inventory of all 74 production capabilities, indexed by feature number, category, UI location, API endpoint, and spec folder. It is maintained as a single source of truth for product/engineering/QA alignment.
 
 ### 6.5 Additional Design Documentation
 

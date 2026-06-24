@@ -10,7 +10,7 @@ Team: Hana, Mariam, Hassan, Mazen.
 
 Full requirements, user stories, acceptance criteria, and alternative flows are in `docs/requirements.md`. Read this file before implementing any feature.
 
-**Dataset versions vs seed batches:** Saved runs (patch in place) ship today; immutable version history is planned in `docs/dataset-version-history.md`. **Seed batch rollback** deletes MongoDB records by `seedBatchId`. See `docs/shipped-features.md` for the full inventory.
+**Dataset versions vs seed batches:** Immutable generated dataset versions ship today and are stored as `generated_dataset_records`; each generation, dataset-changing refinement, accepted candidate, or manual save creates a new version. **Seed batch rollback** is separate: it deletes MongoDB records by `seedBatchId`. See `docs/dataset-version-history.md` and `docs/shipped-features.md` for the full inventory.
 
 ## Dependency Rule
 
@@ -72,5 +72,5 @@ npx turbo build lint test
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/013-rollback-seed-batch/plan.md
+at specs/014-direct-seeding-integration/plan.md
 <!-- SPECKIT END -->
