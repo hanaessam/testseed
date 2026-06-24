@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-09
 
-**Status**: Shipped (core + API + workbench UI for versions/re-seed)
+**Status**: Shipped
 
 **Related**: Dataset **version history** (`docs/dataset-version-history.md`) is the primary way users return to earlier generated data. **Seed batch rollback** (this epic) deletes MongoDB records tagged with a `seedBatchId` — it does not restore in-app dataset versions. Users re-seed a chosen version to replace MongoDB contents after confirmation.
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-06
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "check the requirements.md file in docs and implement MongoDB Schema Discovery"
 

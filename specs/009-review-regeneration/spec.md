@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-08
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "Epic: Feedback-Based Regeneration [core]. As a developer, I want regeneration to consider the previous generated data plus my comments so I can iteratively refine results instead of starting over. Regenerated records preserve useful structure from the previous result where appropriate, apply user comments to the next version, and let the user compare or review the updated result before accepting it. If regeneration creates duplicate unique values or invalid references, the system flags the problem and retries or asks the user to revise the feedback. Scope extends feature 008, adds review/compare-before-accept behavior if not already present, preserves the previous accepted dataset until the user accepts the regenerated result, shows clear differences or summary, and does not modify export, direct seeding, rollback, or unrelated preview editing behavior."
 

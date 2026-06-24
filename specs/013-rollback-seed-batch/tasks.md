@@ -25,14 +25,14 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T005 Add `collectionOrder`, `rollbackDeletedCounts`, rollback report, rollback collection result, and rollback error types in `packages/types/src/projects.ts`
-- [ ] T006 Verify updated rollback and seed batch types are exported from `packages/types/src/index.ts`
-- [ ] T007 Update `SeedBatch` schema fields for `collectionOrder` and `rollbackDeletedCounts` in `packages/db/src/models/seed-batch.ts`
-- [ ] T008 Update `RecordSeedBatchInput`, `recordSeedBatch`, `toSeedBatch`, and `markSeedBatchRolledBack` signatures in `packages/db/src/repositories/project-history-repository.ts`
-- [ ] T009 Update seed batch record input contracts in `packages/core/src/projects/record-seed-batch.ts`
-- [ ] T010 Update direct seeding batch recording to provide original generation order in `packages/core/src/generation/direct-mongodb-seeding.ts`
-- [ ] T011 Update existing direct seeding tests for `collectionOrder` persistence inputs in `packages/core/src/generation/__tests__/direct-mongodb-seeding.test.ts`
-- [ ] T012 Run type-focused checks for foundational contract changes with `npm --workspace @testseed/types test`, `npm --workspace @testseed/db run lint`, and `npm --workspace @testseed/core test`
+- [X] T005 Add `collectionOrder`, `rollbackDeletedCounts`, rollback report, rollback collection result, and rollback error types in `packages/types/src/projects.ts`
+- [X] T006 Verify updated rollback and seed batch types are exported from `packages/types/src/index.ts`
+- [X] T007 Update `SeedBatch` schema fields for `collectionOrder` and `rollbackDeletedCounts` in `packages/db/src/models/seed-batch.ts`
+- [X] T008 Update `RecordSeedBatchInput`, `recordSeedBatch`, `toSeedBatch`, and `markSeedBatchRolledBack` signatures in `packages/db/src/repositories/project-history-repository.ts`
+- [X] T009 Update seed batch record input contracts in `packages/core/src/projects/record-seed-batch.ts`
+- [X] T010 Update direct seeding batch recording to provide original generation order in `packages/core/src/generation/direct-mongodb-seeding.ts`
+- [X] T011 Update existing direct seeding tests for `collectionOrder` persistence inputs in `packages/core/src/generation/__tests__/direct-mongodb-seeding.test.ts`
+- [X] T012 Run type-focused checks for foundational contract changes with `npm --workspace @testseed/types test`, `npm --workspace @testseed/db run lint`, and `npm --workspace @testseed/core test`
 
 **Checkpoint**: Seed batch metadata supports rollback status, deleted counts, and explicit collection order.
 
@@ -48,20 +48,20 @@
 
 > Write these tests first and ensure they fail before implementation.
 
-- [ ] T013 [P] [US1] Add successful rollback report test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
-- [ ] T014 [P] [US1] Add tag-scoped deletion dependency test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
-- [ ] T015 [P] [US1] Add API success contract test for response shape in `apps/api/src/routes/__tests__/rollback.contracts.test.ts`
+- [X] T013 [P] [US1] Add successful rollback report test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
+- [X] T014 [P] [US1] Add tag-scoped deletion dependency test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
+- [X] T015 [P] [US1] Add API success contract test for response shape in `apps/api/src/routes/__tests__/rollback.contracts.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Implement `RollbackSeedBatchReport`, success result, and sanitized error helpers in `packages/core/src/projects/rollback-seed-batch.ts`
-- [ ] T017 [US1] Replace `_id`-based deletion dependency with `deleteRecordsBySeedBatchId` in `packages/core/src/projects/rollback-seed-batch.ts`
-- [ ] T018 [US1] Mark seed batch rolled back with deleted counts and append safe `rollback_completed` project event in `packages/core/src/projects/rollback-seed-batch.ts`
-- [ ] T019 [US1] Update rollback route response mapping to return the core report in `apps/api/src/routes/rollback.ts`
-- [ ] T020 [US1] Update rollback deletion adapter to use MongoDB native-driver `deleteMany({ seedBatchId })` per collection in `apps/api/src/routes/rollback.ts`
-- [ ] T021 [US1] Verify rollback adapter does not use Mongoose document models or `_id`-only deletion in `apps/api/src/routes/rollback.ts`
-- [ ] T022 [US1] Export rollback use case and result types through `packages/core/src/projects/index.ts` and `packages/core/src/index.ts`
-- [ ] T023 [US1] Run `npm --workspace @testseed/core test` and `npm --workspace @testseed/api test` for rollback success behavior
+- [X] T016 [US1] Implement `RollbackSeedBatchReport`, success result, and sanitized error helpers in `packages/core/src/projects/rollback-seed-batch.ts`
+- [X] T017 [US1] Replace `_id`-based deletion dependency with `deleteRecordsBySeedBatchId` in `packages/core/src/projects/rollback-seed-batch.ts`
+- [X] T018 [US1] Mark seed batch rolled back with deleted counts and append safe `rollback_completed` project event in `packages/core/src/projects/rollback-seed-batch.ts`
+- [X] T019 [US1] Update rollback route response mapping to return the core report in `apps/api/src/routes/rollback.ts`
+- [X] T020 [US1] Update rollback deletion adapter to use MongoDB native-driver `deleteMany({ seedBatchId })` per collection in `apps/api/src/routes/rollback.ts`
+- [X] T021 [US1] Verify rollback adapter does not use Mongoose document models or `_id`-only deletion in `apps/api/src/routes/rollback.ts`
+- [X] T022 [US1] Export rollback use case and result types through `packages/core/src/projects/index.ts` and `packages/core/src/index.ts`
+- [X] T023 [US1] Run `npm --workspace @testseed/core test` and `npm --workspace @testseed/api test` for rollback success behavior
 
 **Checkpoint**: User Story 1 is independently functional and returns a structured rollback report.
 
@@ -77,15 +77,15 @@
 
 > Write these tests first and ensure they fail before implementation.
 
-- [ ] T024 [P] [US2] Add reverse collection order core test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
-- [ ] T025 [P] [US2] Add processed order report test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
+- [X] T024 [P] [US2] Add reverse collection order core test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
+- [X] T025 [P] [US2] Add processed order report test in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Derive rollback order from `batch.collectionOrder` reversed in `packages/core/src/projects/rollback-seed-batch.ts`
-- [ ] T027 [US2] Include `processedOrder` and completed collection order in rollback reports from `packages/core/src/projects/rollback-seed-batch.ts`
-- [ ] T028 [US2] Ensure API adapter preserves core collection order without reordering in `apps/api/src/routes/rollback.ts`
-- [ ] T029 [US2] Run `npm --workspace @testseed/core test` for reverse-order rollback behavior
+- [X] T026 [US2] Derive rollback order from `batch.collectionOrder` reversed in `packages/core/src/projects/rollback-seed-batch.ts`
+- [X] T027 [US2] Include `processedOrder` and completed collection order in rollback reports from `packages/core/src/projects/rollback-seed-batch.ts`
+- [X] T028 [US2] Ensure API adapter preserves core collection order without reordering in `apps/api/src/routes/rollback.ts`
+- [X] T029 [US2] Run `npm --workspace @testseed/core test` for reverse-order rollback behavior
 
 **Checkpoint**: User Story 2 is independently testable with multi-collection batch ordering.
 
@@ -101,19 +101,19 @@
 
 > Write these tests first and ensure they fail before implementation.
 
-- [ ] T030 [P] [US3] Add missing, empty, and whitespace seedBatchId rejection tests in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
-- [ ] T031 [P] [US3] Add invalid-format and unknown-batch rejection tests in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
-- [ ] T032 [P] [US3] Add already-rolled-back and no-record batch rejection tests in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
-- [ ] T033 [P] [US3] Add API request validation and sanitized error mapping tests in `apps/api/src/routes/__tests__/rollback.contracts.test.ts`
+- [X] T030 [P] [US3] Add missing, empty, and whitespace seedBatchId rejection tests in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
+- [X] T031 [P] [US3] Add invalid-format and unknown-batch rejection tests in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
+- [X] T032 [P] [US3] Add already-rolled-back and no-record batch rejection tests in `packages/core/src/projects/__tests__/rollback-seed-batch.test.ts`
+- [X] T033 [P] [US3] Add API request validation and sanitized error mapping tests in `apps/api/src/routes/__tests__/rollback.contracts.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] Implement seedBatchId trim and direct-seeding-format validation in `packages/core/src/projects/rollback-seed-batch.ts`
-- [ ] T035 [US3] Implement unknown, already rolled back, pending, and no-record eligibility checks before deletion in `packages/core/src/projects/rollback-seed-batch.ts`
-- [ ] T036 [US3] Implement typed rollback error-to-HTTP mapping in `apps/api/src/routes/rollback.ts`
-- [ ] T037 [US3] Ensure rollback route closes transient MongoDB connections in success, failure, and rejection-after-open paths in `apps/api/src/routes/rollback.ts`
-- [ ] T038 [US3] Verify no rollback report, error, event payload, or metadata includes `mongoUri` in `packages/core/src/projects/rollback-seed-batch.ts` and `apps/api/src/routes/rollback.ts`
-- [ ] T039 [US3] Run `npm --workspace @testseed/core test` and `npm --workspace @testseed/api test` for rejection and connection-closure behavior
+- [X] T034 [US3] Implement seedBatchId trim and direct-seeding-format validation in `packages/core/src/projects/rollback-seed-batch.ts`
+- [X] T035 [US3] Implement unknown, already rolled back, pending, and no-record eligibility checks before deletion in `packages/core/src/projects/rollback-seed-batch.ts`
+- [X] T036 [US3] Implement typed rollback error-to-HTTP mapping in `apps/api/src/routes/rollback.ts`
+- [X] T037 [US3] Ensure rollback route closes transient MongoDB connections in success, failure, and rejection-after-open paths in `apps/api/src/routes/rollback.ts`
+- [X] T038 [US3] Verify no rollback report, error, event payload, or metadata includes `mongoUri` in `packages/core/src/projects/rollback-seed-batch.ts` and `apps/api/src/routes/rollback.ts`
+- [X] T039 [US3] Run `npm --workspace @testseed/core test` and `npm --workspace @testseed/api test` for rejection and connection-closure behavior
 
 **Checkpoint**: User Story 3 is independently functional and blocks unsafe destructive operations.
 
@@ -123,11 +123,11 @@
 
 **Purpose**: Final consistency, documentation, and full quality gate.
 
-- [ ] T040 [P] Update `specs/013-rollback-seed-batch/quickstart.md` if implementation commands or manual verification steps changed
-- [ ] T041 [P] Update `specs/013-rollback-seed-batch/contracts/rollback-seed-batch.md` if final core/API response shapes differ from the planned contract
-- [ ] T042 Review dependency direction and remove any accidental cross-package imports in `packages/types`, `packages/db`, `packages/core`, `apps/api`, and `apps/web`
-- [ ] T043 Run `npx turbo build lint test` from repository root
-- [ ] T044 Document any remaining known issue from `npx turbo build lint test` in `specs/013-rollback-seed-batch/quickstart.md`
+- [X] T040 [P] Update `specs/013-rollback-seed-batch/quickstart.md` if implementation commands or manual verification steps changed
+- [X] T041 [P] Update `specs/013-rollback-seed-batch/contracts/rollback-seed-batch.md` if final core/API response shapes differ from the planned contract
+- [X] T042 Review dependency direction and remove any accidental cross-package imports in `packages/types`, `packages/db`, `packages/core`, `apps/api`, and `apps/web`
+- [X] T043 Run `npx turbo build lint test` from repository root
+- [X] T044 Document any remaining known issue from `npx turbo build lint test` in `specs/013-rollback-seed-batch/quickstart.md`
 
 ---
 

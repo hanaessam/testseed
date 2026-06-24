@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-08
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "Feature: Feedback-Based Regeneration. As a developer, I want to add comments so the next generation improves based on my feedback. Scope: add feedback-based regeneration to the existing generation workbench and preview flow while reusing existing project, schema, counts, generated records, and AI generation infrastructure."
 

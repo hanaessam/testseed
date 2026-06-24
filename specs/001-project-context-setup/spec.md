@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-03
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "create the feature spec for project description plus optional GitHub repo context."
 

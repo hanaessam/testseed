@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-09
 
-**Status**: Draft
+**Status**: Active
 
 **Input**: User description: "I audited the repository against Epic #15 (Direct MongoDB Seeding) and Epic #13 (Rollback). Direct MongoDB seeding core logic exists, but there is no exposed API endpoint for direct seeding. Export currently generates a JavaScript seed script only. No UI action exists for direct MongoDB Seed, Insert Into MongoDB, Seed Dataset, or Execute Seed Batch. Rollback appears partially implemented with an API route and project history references seedBatchId, but no web UI allows selecting a seed batch and executing rollback. Remaining work: expose direct seeding API endpoint, add confirmation screen with database, collections, counts, and warning; execute insert and store seedBatchId; expose rollback UI using the existing rollback route; surface insertion results and rollback results in project history."
 

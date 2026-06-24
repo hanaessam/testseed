@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-03
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "i want to add full acccount managment features like edit account info and edit account password and verify new password . add delete account feature , and create ui components for them , check the md files for account managment"
 

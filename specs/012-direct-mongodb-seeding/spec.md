@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-09
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "User Story 1: As a developer, I want to test a MongoDB connection before inserting data. Acceptance Criteria: The user can test a MongoDB connection string. The system reports success or failure. The connection string is used for the operation only and is not stored. If the connection fails, direct seeding remains disabled until the user provides a working connection string. User Story 2: As a developer, I want to confirm before direct seeding. Acceptance Criteria: Before insertion, the system shows a confirmation screen. The confirmation includes target database name, collections, record counts, and a warning that records will be inserted. The user must explicitly confirm before insertion begins. If the user cancels, no records are inserted. User Story 3: As a developer, I want inserted records tagged with a seedBatchId. Acceptance Criteria: Every inserted record receives the same seedBatchId for the operation. The insertion report includes collection counts and the seedBatchId. If insertion partially fails, the system reports which collections succeeded and which failed. The system preserves enough information to support rollback of inserted records. Scope: Core implementation only. MongoDB native driver. Preserve dependency-order insertion using dataset.generationOrder. Connection strings must never be stored in database records, project history, saved runs, logs, or responses. MongoDB clients must be closed after operations. Insert-only behavior; no rollback implementation in this epic. Rollback support is limited to recording seedBatchId information needed by a future rollback epic."
 

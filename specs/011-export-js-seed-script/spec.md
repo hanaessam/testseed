@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-09
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "Epic #15 Export [core]. As a developer, I want to export a JavaScript seed script so I can run it in a local or CI environment. Acceptance criteria: The user can generate a ready-to-run JavaScript seed script. The generated script inserts records in dependency order. The script includes comments explaining required environment variables or connection setup. If the dataset contains unresolved references, the script is not generated until the issue is fixed. Scope: Implement the export logic in the core package. Do not depend on the web UI. Reuse existing dataset validation and dependency ordering logic where possible. Return a clear error when unresolved references exist. Output should be deterministic and formatted as readable JavaScript."
 

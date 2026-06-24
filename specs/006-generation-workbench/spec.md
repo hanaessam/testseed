@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-08
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "generation workbench"
 

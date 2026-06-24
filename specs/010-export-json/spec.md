@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-09
 
-**Status**: Draft
+**Status**: Shipped
 
 **Input**: User description: "Feature: Export Generated Data as JSON. As a developer, I want to export generated data as JSON so I can use it manually. Acceptance Criteria: The user can download JSON grouped by collection. The user can copy JSON grouped by collection. The JSON includes valid records and references. If records are invalid, the system blocks export and shows validation errors. Important: Before creating implementation tasks, analyze the latest code and determine whether this feature is already implemented. If it is already implemented, the spec should document the existing behavior and recommend marking the sheet row Completed. Do not modify export implementation unless a real gap exists. Do not modify feedback regeneration, direct seeding, rollback, or preview editing."
 
