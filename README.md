@@ -201,7 +201,7 @@ GITHUB_CALLBACK_URL=http://localhost:3001/auth/github/callback
 
 The OAuth app **name and callback URLs** are configured in GitHub — not in this repo. Production `GITHUB_CALLBACK_URL` and `WEB_APP_URL` must match on the **API** Vercel project; `NEXT_PUBLIC_API_URL` must match on **Web**.
 
-The web app reads `NEXT_PUBLIC_*` values from the root `.env` through `apps/web/next.config.js`.
+The web app reads `NEXT_PUBLIC_*` values from the process environment first, then falls back to the root `.env` for local development. This matters on Vercel because `NEXT_PUBLIC_*` values are baked into the browser bundle at build time. If `NEXT_PUBLIC_API_URL` is wrong or missing before the web build, the deployed app can call `http://localhost:3001` from the browser.
 
 ## Architecture
 
@@ -499,6 +499,13 @@ npm run env:production:init
 # 4. Push app secrets to Vercel and deploy secrets to GitHub Actions
 npm run env:production:sync
 
+# 5. Deploy API first, then Web so build-time public values are fresh
+npx vercel deploy --prod --yes --project <VERCEL_API_PROJECT_ID>
+npx vercel deploy --prod --yes --project <VERCEL_WEB_PROJECT_ID>
+
+# 6. Verify production env and the live browser bundle
+npm run env:production:verify
+
 # Optional: also sync preview/development on Vercel
 node scripts/sync-production-env.mjs --all-environments
 
@@ -507,6 +514,14 @@ node scripts/audit-vercel-env.mjs
 ```
 
 Copy `.env.production.example` to `.env.production` if you prefer to fill production values manually instead of `env:production:init`.
+
+Deployment invariants:
+
+1. `NEXT_PUBLIC_API_URL` belongs on the **Web** Vercel project and must be the deployed API origin, for example `https://testseed-api.vercel.app`.
+2. `WEB_APP_URL` and `GITHUB_CALLBACK_URL` belong on the **API** Vercel project; `WEB_APP_URL` should be the deployed web origin and `GITHUB_CALLBACK_URL` should end in `/auth/github/callback` on the API origin.
+3. Run `npm run env:production:sync` before production deploys whenever `.env.production` changes.
+4. Redeploy `testseed-web` after changing any `NEXT_PUBLIC_*` value because those values are compiled into client JavaScript.
+5. Run `npm run env:production:verify` after deployment. It checks Vercel env var presence, API health, GitHub OAuth redirect wiring, and the live `/login` bundle so `http://localhost:3001` cannot silently ship again.
 
 Remove secrets that were copied to the wrong Vercel project:
 

@@ -7,7 +7,10 @@ const rootEnvPath = path.resolve(webAppDir, "../..", ".env");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: readRootPublicEnv(rootEnvPath)
+  env: {
+    ...readRootPublicEnv(rootEnvPath),
+    ...readProcessPublicEnv()
+  }
 };
 
 function readRootPublicEnv(envPath) {
@@ -41,6 +44,14 @@ function normalizeEnvValue(rawValue) {
   }
 
   return value.replace(/\s+#.*$/, "");
+}
+
+function readProcessPublicEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key, value]) => (
+      key.startsWith("NEXT_PUBLIC_") && value !== undefined
+    ))
+  );
 }
 
 export default nextConfig;
